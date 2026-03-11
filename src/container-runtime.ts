@@ -11,19 +11,46 @@ import { logger } from './logger.js';
 /** The container runtime binary name. */
 export const CONTAINER_RUNTIME_BIN = 'container';
 
-/** Hostname containers use to reach the host machine. */
-export const CONTAINER_HOST_GATEWAY = 'host.docker.internal';
+/**
+ * Detect the host IP as seen from Apple Container VMs.
+ * Apple Container uses a 192.168.64.0/24 subnet; the host is always .1.
+ * Returns null if no such interface is found (not using Apple Container).
+ */
+function detectAppleContainerHostIP(): string | null {
+  const ifaces = os.networkInterfaces();
+  for (const addrs of Object.values(ifaces)) {
+    if (!addrs) continue;
+    for (const addr of addrs) {
+      if (addr.family === 'IPv4' && addr.address.startsWith('192.168.64.')) {
+        const parts = addr.address.split('.');
+        parts[3] = '1';
+        return parts.join('.');
+      }
+    }
+  }
+  return null;
+}
+
+const appleContainerHostIP = detectAppleContainerHostIP();
+
+/** Hostname/IP containers use to reach the host machine. */
+export const CONTAINER_HOST_GATEWAY =
+  appleContainerHostIP ?? 'host.docker.internal';
 
 /**
  * Address the credential proxy binds to.
+ * Apple Container (macOS): bind to the bridge IP (192.168.64.1) so only
+ *   container VMs can reach it, not other network clients.
  * Docker Desktop (macOS): 127.0.0.1 — the VM routes host.docker.internal to loopback.
- * Docker (Linux): bind to the docker0 bridge IP so only containers can reach it,
- *   falling back to 0.0.0.0 if the interface isn't found.
+ * Docker (Linux): bind to the docker0 bridge IP.
  */
 export const PROXY_BIND_HOST =
   process.env.CREDENTIAL_PROXY_HOST || detectProxyBindHost();
 
 function detectProxyBindHost(): string {
+  // Apple Container: bind to the bridge interface the VM uses
+  if (appleContainerHostIP) return appleContainerHostIP;
+
   if (os.platform() === 'darwin') return '127.0.0.1';
 
   // WSL uses Docker Desktop (same VM routing as macOS) — loopback is correct.
@@ -42,7 +69,9 @@ function detectProxyBindHost(): string {
 
 /** CLI args needed for the container to resolve the host gateway. */
 export function hostGatewayArgs(): string[] {
-  // On Linux, host.docker.internal isn't built-in — add it explicitly
+  // Apple Container: host is reachable by IP directly, no extra args needed.
+  if (appleContainerHostIP) return [];
+  // Docker on Linux: host.docker.internal isn't built-in — add it explicitly.
   if (os.platform() === 'linux') {
     return ['--add-host=host.docker.internal:host-gateway'];
   }

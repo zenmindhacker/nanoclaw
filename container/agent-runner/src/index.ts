@@ -56,7 +56,35 @@ interface SDKUserMessage {
 
 const IPC_INPUT_DIR = '/workspace/ipc/input';
 const IPC_INPUT_CLOSE_SENTINEL = path.join(IPC_INPUT_DIR, '_close');
+const IPC_STATUS_FILE = '/workspace/ipc/status.txt';
 const IPC_POLL_MS = 500;
+
+/** Map SDK tool names to human-readable status strings for the typing indicator. */
+function toolStatusText(toolName: string): string {
+  const map: Record<string, string> = {
+    Bash: '🔧 running bash',
+    Read: '📖 reading file',
+    Write: '✏️ writing file',
+    Edit: '✏️ editing file',
+    Glob: '🔍 searching files',
+    Grep: '🔍 searching code',
+    WebSearch: '🌐 searching web',
+    WebFetch: '🌐 fetching page',
+    Task: '⚡ spawning task',
+    TaskOutput: '⚡ reading task',
+    TeamCreate: '👥 creating team',
+    SendMessage: '💬 messaging agent',
+    TodoWrite: '📋 updating todos',
+    Skill: '🛠️ running skill',
+    NotebookEdit: '📓 editing notebook',
+  };
+  if (map[toolName]) return map[toolName];
+  // MCP tools like mcp__nanoclaw__something
+  if (toolName.startsWith('mcp__nanoclaw__')) {
+    return `🔌 ${toolName.replace('mcp__nanoclaw__', '').replace(/_/g, ' ')}`;
+  }
+  return `🔧 ${toolName.toLowerCase()}`;
+}
 
 /**
  * Push-based async iterable for streaming user messages to the SDK.
@@ -435,6 +463,20 @@ async function runQuery(
 
     if (message.type === 'assistant' && 'uuid' in message) {
       lastAssistantUuid = (message as { uuid: string }).uuid;
+
+      // Write tool status for Slack typing indicator rotation
+      const msgContent = (message as { message?: { content?: unknown[] } }).message?.content;
+      if (Array.isArray(msgContent)) {
+        const toolUse = msgContent.find(
+          (c): c is { type: 'tool_use'; name: string } =>
+            typeof c === 'object' && c !== null && (c as { type?: string }).type === 'tool_use'
+        );
+        if (toolUse) {
+          try {
+            fs.writeFileSync(IPC_STATUS_FILE, `_${toolStatusText(toolUse.name)}..._`, 'utf-8');
+          } catch { /* ignore */ }
+        }
+      }
     }
 
     if (message.type === 'system' && message.subtype === 'init') {
@@ -451,6 +493,8 @@ async function runQuery(
       resultCount++;
       const textResult = 'result' in message ? (message as { result?: string }).result : null;
       log(`Result #${resultCount}: subtype=${message.subtype}${textResult ? ` text=${textResult.slice(0, 200)}` : ''}`);
+      // Clear status so Slack typing indicator stops showing tool status
+      try { fs.unlinkSync(IPC_STATUS_FILE); } catch { /* ignore */ }
       writeOutput({
         status: 'success',
         result: textResult || null,

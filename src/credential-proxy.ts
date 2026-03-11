@@ -13,9 +13,28 @@
 import { createServer, Server } from 'http';
 import { request as httpsRequest } from 'https';
 import { request as httpRequest, RequestOptions } from 'http';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 
 import { readEnvFile } from './env.js';
 import { logger } from './logger.js';
+
+/**
+ * Read the current OAuth access token from Claude Code's credentials file.
+ * Claude Code auto-refreshes this file, so reading it fresh on each request
+ * ensures we always have a valid token without manual intervention.
+ */
+function readClaudeOAuthToken(): string | null {
+  try {
+    const credPath = path.join(os.homedir(), '.claude', '.credentials.json');
+    const data = JSON.parse(fs.readFileSync(credPath, 'utf-8'));
+    const token = data?.claudeAiOauth?.accessToken;
+    return token || null;
+  } catch {
+    return null;
+  }
+}
 
 export type AuthMode = 'api-key' | 'oauth';
 
@@ -35,7 +54,8 @@ export function startCredentialProxy(
   ]);
 
   const authMode: AuthMode = secrets.ANTHROPIC_API_KEY ? 'api-key' : 'oauth';
-  const oauthToken =
+  // Static token from .env (used only as override; normally read fresh below)
+  const staticOauthToken =
     secrets.CLAUDE_CODE_OAUTH_TOKEN || secrets.ANTHROPIC_AUTH_TOKEN;
 
   const upstreamUrl = new URL(
@@ -73,6 +93,9 @@ export function startCredentialProxy(
           // x-api-key only, so they pass through without token injection.
           if (headers['authorization']) {
             delete headers['authorization'];
+            // Read fresh from ~/.claude/.credentials.json each request so
+            // Claude Code's automatic token refresh is picked up immediately.
+            const oauthToken = staticOauthToken || readClaudeOAuthToken();
             if (oauthToken) {
               headers['authorization'] = `Bearer ${oauthToken}`;
             }
