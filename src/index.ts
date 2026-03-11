@@ -221,6 +221,16 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
         await channel.sendMessage(chatJid, text);
         outputSentToUser = true;
       }
+      // Clear thinking indicator as soon as a result arrives.
+      // The container stays alive for follow-up IPC messages so runAgent()
+      // won't return until idle-timeout; clearing here prevents the indicator
+      // from persisting after the response is already visible.
+      // setTyping(false) is a no-op if no indicator is active.
+      channel
+        .setTyping?.(chatJid, false)
+        ?.catch((err) =>
+          logger.warn({ chatJid, err }, 'Failed to clear typing indicator'),
+        );
       // Only reset idle timer on actual results, not session-update markers (result: null)
       resetIdleTimer();
     }
@@ -234,6 +244,7 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
     }
   });
 
+  // Also clear if container exits without ever sending a result (e.g. error)
   await channel.setTyping?.(chatJid, false);
   if (idleTimer) clearTimeout(idleTimer);
 
