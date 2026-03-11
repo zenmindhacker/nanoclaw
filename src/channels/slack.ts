@@ -15,7 +15,7 @@ import {
   RegisteredGroup,
 } from '../types.js';
 
-// Status messages shown while the agent is working.
+// Fallback status messages used when assistant.threads.setStatus is unavailable.
 // Rotated every STATUS_ROTATE_INTERVAL ms while the container is running.
 const STATUS_ROTATE_INTERVAL = 4000;
 const THINKING_STATUSES = [
@@ -51,7 +51,17 @@ export class SlackChannel implements Channel {
 
   private opts: SlackChannelOpts;
 
-  // Thinking indicator state: ts of the posted "thinking" message per JID
+  // The thread_ts to reply into for each jid.
+  // Set when a non-bot message arrives; cleared when the thread goes idle.
+  private activeThreadTs = new Map<string, string>();
+
+  // Whether the assistant.threads.setStatus API is available (detected at runtime).
+  // undefined = not yet tested, true = works, false = not available (fall back to post/delete).
+  private assistantStatusAvailable: boolean | undefined = undefined;
+
+  // Thinking indicator state.
+  // When using assistant API: stores 'assistant:<thread_ts>' so setTyping(false) knows to clear it.
+  // When using post/delete fallback: stores the ts of the posted "thinking" message.
   private thinkingTs = new Map<string, string>();
   private thinkingTimers = new Map<string, ReturnType<typeof setInterval>>();
 
@@ -94,10 +104,6 @@ export class SlackChannel implements Channel {
 
       if (!msg.text) return;
 
-      // Threaded replies are flattened into the channel conversation.
-      // The agent sees them alongside channel-level messages; responses
-      // always go to the channel, not back into the thread.
-
       const jid = `slack:${msg.channel}`;
       const timestamp = new Date(parseFloat(msg.ts) * 1000).toISOString();
       const isGroup = msg.channel_type !== 'im';
@@ -110,6 +116,15 @@ export class SlackChannel implements Channel {
       if (!groups[jid]) return;
 
       const isBotMessage = !!msg.bot_id || msg.user === this.botUserId;
+
+      // Track the thread to reply into: use the existing thread or start one
+      // from this message's ts. Updated on every non-bot inbound message so
+      // follow-up messages in the same thread continue in that thread.
+      if (!isBotMessage) {
+        const threadTs =
+          (msg as { thread_ts?: string }).thread_ts ?? msg.ts;
+        this.activeThreadTs.set(jid, threadTs);
+      }
 
       let senderName: string;
       if (isBotMessage) {
@@ -184,14 +199,20 @@ export class SlackChannel implements Channel {
     }
 
     try {
+      const threadTs = this.activeThreadTs.get(jid);
       // Slack limits messages to ~4000 characters; split if needed
       if (text.length <= MAX_MESSAGE_LENGTH) {
-        await this.app.client.chat.postMessage({ channel: channelId, text });
+        await this.app.client.chat.postMessage({
+          channel: channelId,
+          text,
+          ...(threadTs ? { thread_ts: threadTs } : {}),
+        });
       } else {
         for (let i = 0; i < text.length; i += MAX_MESSAGE_LENGTH) {
           await this.app.client.chat.postMessage({
             channel: channelId,
             text: text.slice(i, i + MAX_MESSAGE_LENGTH),
+            ...(threadTs ? { thread_ts: threadTs } : {}),
           });
         }
       }
@@ -218,28 +239,58 @@ export class SlackChannel implements Channel {
     await this.app.stop();
   }
 
-  // Slack has no bot typing indicator API, so we post a "thinking" message
-  // and rotate its text while the agent works. When done, the message is deleted.
   async setTyping(jid: string, isTyping: boolean): Promise<void> {
     const channelId = jid.replace(/^slack:/, '');
+    const threadTs = this.activeThreadTs.get(jid);
 
     if (isTyping) {
       if (this.thinkingTs.has(jid)) return; // already showing
+
+      // Try the native Slack assistant typing indicator first.
+      // Requires assistant:write scope + app configured as AI app.
+      if (threadTs && this.assistantStatusAvailable !== false) {
+        try {
+          await (
+            this.app.client as unknown as {
+              apiCall: (
+                method: string,
+                args: Record<string, unknown>,
+              ) => Promise<void>;
+            }
+          ).apiCall('assistant.threads.setStatus', {
+            channel_id: channelId,
+            thread_ts: threadTs,
+            status: 'is typing...',
+          });
+          this.thinkingTs.set(jid, `assistant:${threadTs}`);
+          this.assistantStatusAvailable = true;
+          return;
+        } catch {
+          // API not available — fall through to post/rotate/delete fallback
+          this.assistantStatusAvailable = false;
+          logger.debug(
+            { jid },
+            'assistant.threads.setStatus unavailable, using fallback typing indicator',
+          );
+        }
+      }
+
+      // Fallback: post a "thinking..." message and rotate its text.
       try {
         const result = await this.app.client.chat.postMessage({
           channel: channelId,
           text: THINKING_STATUSES[0],
+          ...(threadTs ? { thread_ts: threadTs } : {}),
         });
         if (!result.ts) return;
         const ts = result.ts as string;
         this.thinkingTs.set(jid, ts);
 
-        // Rotate status text, checking for agent-written status in IPC dir
         let idx = 0;
         const timer = setInterval(async () => {
           idx = (idx + 1) % THINKING_STATUSES.length;
-          // Check if agent wrote a custom status to IPC
-          const statusText = this.readAgentStatus(jid) ?? THINKING_STATUSES[idx];
+          const statusText =
+            this.readAgentStatus(jid) ?? THINKING_STATUSES[idx];
           try {
             await this.app.client.chat.update({
               channel: channelId,
@@ -257,17 +308,43 @@ export class SlackChannel implements Channel {
         logger.warn({ jid, err }, 'Failed to post thinking indicator');
       }
     } else {
-      // Stop rotating
+      // Stop rotation timer (if any)
       const timer = this.thinkingTimers.get(jid);
-      if (timer) { clearInterval(timer); this.thinkingTimers.delete(jid); }
+      if (timer) {
+        clearInterval(timer);
+        this.thinkingTimers.delete(jid);
+      }
 
       const ts = this.thinkingTs.get(jid);
       if (!ts) return;
       this.thinkingTs.delete(jid);
-      try {
-        await this.app.client.chat.delete({ channel: channelId, ts });
-      } catch (err) {
-        logger.warn({ jid, err }, 'Failed to delete thinking indicator');
+
+      if (ts.startsWith('assistant:')) {
+        // Clear the native assistant typing indicator
+        const indicatorThreadTs = ts.slice('assistant:'.length);
+        try {
+          await (
+            this.app.client as unknown as {
+              apiCall: (
+                method: string,
+                args: Record<string, unknown>,
+              ) => Promise<void>;
+            }
+          ).apiCall('assistant.threads.setStatus', {
+            channel_id: channelId,
+            thread_ts: indicatorThreadTs,
+            status: '',
+          });
+        } catch (err) {
+          logger.warn({ jid, err }, 'Failed to clear assistant typing indicator');
+        }
+      } else {
+        // Delete the fallback "thinking..." message
+        try {
+          await this.app.client.chat.delete({ channel: channelId, ts });
+        } catch (err) {
+          logger.warn({ jid, err }, 'Failed to delete thinking indicator');
+        }
       }
     }
   }
