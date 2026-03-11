@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ORG_ID="org-bitter-snow-87149544"
+
+if [[ "${1:-}" == "projects" ]]; then
+  has_org=false
+  for arg in "$@"; do
+    if [[ "$arg" == "--org-id" ]]; then
+      has_org=true
+      break
+    fi
+  done
+
+  if ! $has_org; then
+    exec neonctl "$@" --org-id "$ORG_ID"
+  fi
+fi
+
+exec neonctl "$@"

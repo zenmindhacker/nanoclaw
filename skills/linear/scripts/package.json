@@ -1,0 +1,13 @@
+{
+  "name": "openclaw-linear",
+  "version": "2.0.0",
+  "description": "Linear CLI for OpenClaw — multi-org edition",
+  "type": "module",
+  "dependencies": {
+    "commander": "^12.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.3"
+  }
+}

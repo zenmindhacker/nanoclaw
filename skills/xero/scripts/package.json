@@ -1,0 +1,16 @@
+{
+  "name": "xero-test",
+  "version": "1.0.0",
+  "description": "```bash cd ~/.openclaw/workspace/xero-test node xero-test.js ```",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "xero-node": "^13.4.0"
+  }
+}

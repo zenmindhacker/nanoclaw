@@ -1,0 +1,68 @@
+{
+  "tiers": {
+    "Inner Circle": {
+      "expected_cadence_days": 7,
+      "description": "Best friends, close family",
+      "message_tone": "Deep, vulnerable, casual/intimate"
+    },
+    "Core Network": {
+      "expected_cadence_days": 30,
+      "description": "Good friends, key collaborators",
+      "message_tone": "Meaningful with specific references, warm"
+    },
+    "Regular Contacts": {
+      "expected_cadence_days": 60,
+      "description": "Friends, colleagues, mentors",
+      "message_tone": "Professional-friendly, concise"
+    },
+    "Occasional": {
+      "expected_cadence_days": 120,
+      "description": "Acquaintances, professional network",
+      "message_tone": "Light reconnection with clear reason"
+    },
+    "Archived": {
+      "expected_cadence_days": null,
+      "description": "Past connections, not actively maintaining",
+      "message_tone": null
+    }
+  },
+  "statuses": {
+    "Active": {
+      "threshold_percent": 75,
+      "description": "Within expected cadence"
+    },
+    "Check Soon": {
+      "threshold_percent": 100,
+      "description": "75-100% of cadence elapsed"
+    },
+    "Overdue": {
+      "threshold_percent": 150,
+      "description": "100-150% of cadence elapsed"
+    },
+    "Reconnect": {
+      "threshold_percent": null,
+      "description": "150%+ of cadence elapsed"
+    },
+    "On Pause": {
+      "threshold_percent": null,
+      "description": "Manually paused, skip in digest"
+    }
+  },
+  "matching": {
+    "phone_exact": {
+      "action": "auto_link",
+      "confidence": 1.0
+    },
+    "name_high": {
+      "threshold": 0.95,
+      "action": "auto_link"
+    },
+    "name_medium": {
+      "threshold": 0.85,
+      "action": "ask_user"
+    },
+    "no_match": {
+      "action": "auto_create"
+    }
+  }
+}

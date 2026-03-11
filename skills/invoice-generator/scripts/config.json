@@ -1,0 +1,102 @@
+{
+  "workspace_id": "8629306",
+  "projects": {
+    "work-wranglers": {
+      "id": "204851981",
+      "name": "WW: Consulting",
+      "accountCode": "200",
+      "taxType": "TAX001",
+      "dashboardId": 2443864
+    },
+    "copperteams": {
+      "id": "214367650",
+      "name": "Kora MVP",
+      "accountCode": "200",
+      "taxType": "TAX001",
+      "dashboardId": 2437491
+    },
+    "ganttsy": {
+      "id": "215944745",
+      "name": "Ganttsy MVP",
+      "accountCode": "200",
+      "taxType": "TAX001",
+      "dashboardId": 2437484
+    },
+    "kevin-lee": {
+      "id": "214643451",
+      "name": "Kevin Lee Executive Coaching",
+      "accountCode": "200",
+      "taxType": "TAX001"
+    },
+    "nvs": {
+      "id": "207382186",
+      "name": "NVS: CTO Consulting",
+      "accountCode": "311",
+      "taxType": "TAX002"
+    }
+  },
+  "clients": {
+    "work-wranglers": {
+      "contactName": "Work Wranglers",
+      "retainerHours": null,
+      "retainerRate": null,
+      "excessRate": 150,
+      "description": "WW: Consulting",
+      "personRates": {
+        "cian": {
+          "productCode": "CTOCONSULT",
+          "rate": 175,
+          "description": "Cian - CTO Consulting Services"
+        },
+        "rustam": {
+          "productCode": "SRDEVCONSULT",
+          "rate": 130,
+          "description": "Rustam - Sr Dev Consulting Services"
+        }
+      }
+    },
+    "copperteams": {
+      "contactName": "CopperTeams",
+      "retainerHours": 11,
+      "retainerRate": 275,
+      "excessRate": 225,
+      "retainerDescription": "Monthly retainer services - under 20 hours/month",
+      "excessDescription": "Excess Hours (prior month)"
+    },
+    "ganttsy": {
+      "contactName": "Ganttsy",
+      "retainerHours": 40,
+      "retainerRate": 225,
+      "excessRate": 225,
+      "retainerDescription": "Monthly retainer services",
+      "excessDescription": "Excess Hours (prior month)"
+    },
+    "kevin-lee": {
+      "contactName": "Kevin Lee",
+      "retainerHours": 1,
+      "retainerRate": 1400,
+      "excessRate": null,
+      "retainerDescription": "Executive Coaching Weekly Retainer",
+      "copyFromPriorMonth": true
+    },
+    "nvs": {
+      "contactName": "New Value Solutions",
+      "retainerHours": null,
+      "retainerRate": 661.5,
+      "excessRate": null,
+      "taxType": "TAX002",
+      "accountCode": "311",
+      "copyFromPriorMonth": true,
+      "priorInvoiceNumber": "9213"
+    }
+  },
+  "toggl": {
+    "api_url": "https://api.track.toggl.com/reports/api/v2",
+    "credentials_file": "~/.openclaw/credentials/toggl"
+  },
+  "xero": {
+    "client_id": "748CC12001CF4C89A17B5C7FBD7D9965",
+    "client_secret": "Rfnrjqp9XOHfEShEfZm92XzW4n3ns11Aj5X4EFM3j0Z-ObWh",
+    "tokens_file": "~/.openclaw/credentials/xero-tokens.json"
+  }
+}
