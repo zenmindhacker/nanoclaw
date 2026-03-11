@@ -43,7 +43,7 @@ need_cmd() {
   command -v "$1" >/dev/null 2>&1 || { echo "$1 is required" >&2; exit 1; }
 }
 need_cmd jq
-need_cmd python3
+need_cmd node
 need_cmd curl
 
 get_access_token() {
@@ -73,58 +73,13 @@ normalize_url() {
 }
 
 extract_urls_from_msg() {
-  python3 - <<'PY'
-import sys, json, base64, re
-from typing import List
-
-data = json.load(sys.stdin)
-
-texts: List[str] = []
-
-def walk(part):
-    if not isinstance(part, dict):
-        return
-    mime = part.get('mimeType', '')
-    body = part.get('body', {}) or {}
-    data_b64 = body.get('data')
-    if data_b64 and mime in ('text/plain','text/html'):
-        try:
-            b = data_b64.replace('-', '+').replace('_', '/')
-            pad = '=' * (-len(b) % 4)
-            txt = base64.b64decode(b + pad).decode('utf-8', errors='ignore')
-            texts.append(txt)
-        except Exception:
-            pass
-    for p in part.get('parts', []) or []:
-        walk(p)
-
-payload = data.get('payload', {}) or {}
-walk(payload)
-
-blob = '\n'.join(texts)
-# Basic URL regex
-urls = re.findall(r"https?://[^\s)<>\"']+|www\.[^\s)<>\"']+", blob)
-# De-dup while preserving order
-seen = set()
-clean = []
-for u in urls:
-    u = u.rstrip('.,;:)\"]')
-    if u not in seen:
-        seen.add(u)
-        clean.append(u)
-print("\n".join(clean))
-PY
+  node "$BASEDIR/scripts/lib/email-body.cjs" --urls
 }
 
 is_allowed_domain() {
   local url="$1"
   local host
-  host=$(python3 - <<'PY' "$url"
-import sys, urllib.parse
-u=urllib.parse.urlparse(sys.argv[1])
-print((u.hostname or '').lower())
-PY
-)
+  host=$(node -e "try{const u=new URL(process.argv[1]);process.stdout.write((u.hostname||'').toLowerCase());}catch{process.stdout.write('');}" "$url")
   for d in "${ALLOW_DOMAINS[@]}"; do
     if [[ "$host" == "$d" || "$host" == *".$d" ]]; then
       return 0
@@ -144,67 +99,7 @@ fetch_url() {
 }
 
 sanitize_text() {
-  python3 - <<'PY'
-import re, sys, html
-from html.parser import HTMLParser
-
-raw = sys.stdin.read()
-
-# Strip script/style/iframe blocks early
-raw = re.sub(r"(?is)<(script|style|iframe|noscript)[^>]*>.*?</\1>", " ", raw)
-# Strip on* handlers and javascript: URLs
-raw = re.sub(r"(?is)on\w+\s*=\s*\"[^\"]*\"", " ", raw)
-raw = re.sub(r"(?is)on\w+\s*=\s*'[^']*'", " ", raw)
-raw = re.sub(r"(?is)javascript:\s*[^\s\"']+", " ", raw)
-
-class TextExtractor(HTMLParser):
-    def __init__(self):
-        super().__init__()
-        self.parts = []
-        self.skip = False
-    def handle_starttag(self, tag, attrs):
-        if tag in ('script','style','iframe','noscript'):
-            self.skip = True
-    def handle_endtag(self, tag):
-        if tag in ('script','style','iframe','noscript'):
-            self.skip = False
-    def handle_data(self, data):
-        if not self.skip:
-            self.parts.append(data)
-
-parser = TextExtractor()
-parser.feed(raw)
-text = "\n".join(parser.parts)
-text = html.unescape(text)
-
-# Remove prompt injection-like lines
-patterns = [
-    r"ignore previous",
-    r"disregard (all|previous) instructions",
-    r"system prompt",
-    r"developer message",
-    r"you are (an|a) ai",
-    r"act as",
-    r"jailbreak",
-    r"prompt injection",
-    r"do not follow",
-    r"override",
-]
-lines = []
-for line in text.splitlines():
-    l = line.strip()
-    if not l:
-        continue
-    low = l.lower()
-    if any(re.search(p, low) for p in patterns):
-        continue
-    lines.append(l)
-
-# Collapse excessive whitespace
-out = "\n".join(lines)
-out = re.sub(r"[ \t]+", " ", out)
-print(out.strip())
-PY
+  node "$BASEDIR/scripts/lib/html-sanitize.cjs"
 }
 
 main() {

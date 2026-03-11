@@ -43,14 +43,36 @@ server.tool(
   'send_message',
   "Send a message to the user or group immediately while you're still running. Use this for progress updates or to send multiple messages. You can call this multiple times.",
   {
-    text: z.string().describe('The message text to send'),
+    text: z.string().default('').describe('The message text to send (can be empty when sending media only)'),
     sender: z.string().optional().describe('Your role/identity name (e.g. "Researcher"). When set, messages appear from a dedicated bot in Telegram.'),
+    mediaPath: z.string().optional().describe('Absolute path to a local audio/video file to attach (e.g. "/tmp/voice.mp3"). The file will be uploaded to the chat.'),
   },
   async (args) => {
+    // If a mediaPath is provided, copy the file into the IPC media directory
+    // so the host can find it (container FS is isolated after process exits).
+    let ipcMediaPath: string | undefined;
+    if (args.mediaPath) {
+      const MEDIA_DIR = path.join(IPC_DIR, 'media');
+      fs.mkdirSync(MEDIA_DIR, { recursive: true });
+      const ext = path.extname(args.mediaPath) || '.bin';
+      const mediaFilename = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`;
+      const destPath = path.join(MEDIA_DIR, mediaFilename);
+      try {
+        fs.copyFileSync(args.mediaPath, destPath);
+        ipcMediaPath = `media/${mediaFilename}`;
+      } catch (err) {
+        return {
+          content: [{ type: 'text' as const, text: `Failed to stage media file: ${err instanceof Error ? err.message : String(err)}` }],
+          isError: true,
+        };
+      }
+    }
+
     const data: Record<string, string | undefined> = {
       type: 'message',
       chatJid,
-      text: args.text,
+      text: args.text || undefined,
+      mediaPath: ipcMediaPath,
       sender: args.sender || undefined,
       groupFolder,
       timestamp: new Date().toISOString(),

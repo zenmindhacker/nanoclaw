@@ -95,14 +95,27 @@ export class SlackChannel implements Channel {
     // message subtypes including bot_message (needed to track our own output)
     this.app.event('message', async ({ event }) => {
       // Bolt's event type is the full MessageEvent union (17+ subtypes).
-      // We filter on subtype first, then narrow to the two types we handle.
+      // We handle: regular messages (no subtype), bot_message, slack_audio, and file_share.
+      // Voice notes from the Slack mobile app arrive as file_share (with files[].subtype = 'slack_audio').
       const subtype = (event as { subtype?: string }).subtype;
-      if (subtype && subtype !== 'bot_message') return;
+      logger.info({ subtype, channel: (event as { channel?: string }).channel, hasFiles: !!(event as { files?: unknown[] }).files?.length }, 'Slack message event received');
+      const ALLOWED_SUBTYPES = new Set(['bot_message', 'slack_audio', 'file_share']);
+      if (subtype && !ALLOWED_SUBTYPES.has(subtype)) return;
 
       // After filtering, event is either GenericMessageEvent or BotMessageEvent
       const msg = event as HandledMessageEvent;
 
-      if (!msg.text) return;
+      // Check for attached files (e.g. voice notes, images)
+      const files = (event as { files?: Array<{
+        url_private?: string;
+        mimetype?: string;
+        name?: string;
+        subtype?: string;
+        title?: string;
+      }> }).files;
+
+      // Require text OR attached files — drop empty messages
+      if (!msg.text && (!files || files.length === 0)) return;
 
       const jid = `slack:${msg.channel}`;
       const timestamp = new Date(parseFloat(msg.ts) * 1000).toISOString();
@@ -121,8 +134,7 @@ export class SlackChannel implements Channel {
       // from this message's ts. Updated on every non-bot inbound message so
       // follow-up messages in the same thread continue in that thread.
       if (!isBotMessage) {
-        const threadTs =
-          (msg as { thread_ts?: string }).thread_ts ?? msg.ts;
+        const threadTs = (msg as { thread_ts?: string }).thread_ts ?? msg.ts;
         this.activeThreadTs.set(jid, threadTs);
       }
 
@@ -139,7 +151,7 @@ export class SlackChannel implements Channel {
       // Translate Slack <@UBOTID> mentions into TRIGGER_PATTERN format.
       // Slack encodes @mentions as <@U12345>, which won't match TRIGGER_PATTERN
       // (e.g., ^@<ASSISTANT_NAME>\b), so we prepend the trigger when the bot is @mentioned.
-      let content = msg.text;
+      let content = msg.text ?? '';
       if (this.botUserId && !isBotMessage) {
         const mentionPattern = `<@${this.botUserId}>`;
         if (
@@ -149,6 +161,40 @@ export class SlackChannel implements Channel {
           content = `@${ASSISTANT_NAME} ${content}`;
         }
       }
+
+      // Transcribe audio/voice files and download images so the agent can analyze them.
+      // Slack voice notes: message subtype = 'file_share', file.subtype = 'slack_audio', mimetype = 'video/mp4'
+      if (!isBotMessage && files && files.length > 0) {
+        const groupFolder = this.opts.registeredGroups()[jid]?.folder;
+        for (const file of files) {
+          const isAudio =
+            file.url_private &&
+            (file.subtype === 'slack_audio' ||
+              file.mimetype?.startsWith('audio/') ||
+              file.mimetype?.startsWith('video/')); // Slack sends voice memos as video/mp4
+          const isImage = file.url_private && file.mimetype?.startsWith('image/');
+          if (isAudio) {
+            const transcript = await this.transcribeSlackAudio(file.url_private!);
+            if (transcript) {
+              content = content ? `${transcript}\n${content}` : transcript;
+            }
+          } else if (isImage && groupFolder) {
+            const imagePath = await this.downloadSlackImage(
+              file.url_private!,
+              file.name || `image-${Date.now()}.jpg`,
+              groupFolder,
+            );
+            if (imagePath) {
+              // imagePath is the container-visible path under /workspace/ipc/
+              const imageNote = `[Image attached: ${imagePath} — use the Read tool to view and analyze it]`;
+              content = content ? `${content}\n${imageNote}` : imageNote;
+            }
+          }
+        }
+      }
+
+      // After transcription, drop if still empty (e.g. non-audio file with no text)
+      if (!content) return;
 
       this.opts.onMessage(jid, {
         id: msg.ts,
@@ -161,6 +207,98 @@ export class SlackChannel implements Channel {
         is_bot_message: isBotMessage,
       });
     });
+  }
+
+  /** Download a Slack-hosted audio file and transcribe it via OpenAI Whisper. */
+  private async transcribeSlackAudio(fileUrl: string): Promise<string | null> {
+    const env = readEnvFile(['OPENAI_API_KEY', 'SLACK_BOT_TOKEN']);
+    const openaiKey = env.OPENAI_API_KEY;
+    const botToken = env.SLACK_BOT_TOKEN;
+
+    if (!openaiKey) {
+      logger.warn('OPENAI_API_KEY not set — cannot transcribe voice message');
+      return '[Voice message — transcription unavailable: set OPENAI_API_KEY in .env]';
+    }
+
+    try {
+      // Download the audio file using the bot token for auth
+      const downloadRes = await fetch(fileUrl, {
+        headers: { Authorization: `Bearer ${botToken}` },
+      });
+      if (!downloadRes.ok) {
+        throw new Error(`Slack download failed: ${downloadRes.status}`);
+      }
+      const audioBuffer = Buffer.from(await downloadRes.arrayBuffer());
+
+      // Determine a reasonable file extension for Whisper
+      // Slack voice memos are typically M4A wrapped in a MP4 container
+      const ext = fileUrl.includes('.') ? fileUrl.split('.').pop()!.split('?')[0] : 'mp4';
+
+      // Send to OpenAI Whisper
+      const formData = new FormData();
+      const blob = new Blob([audioBuffer], { type: 'audio/mpeg' });
+      formData.append('file', blob, `voice.${ext}`);
+      formData.append('model', 'whisper-1');
+
+      const whisperRes = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${openaiKey}` },
+        body: formData,
+      });
+
+      if (!whisperRes.ok) {
+        const errText = await whisperRes.text();
+        throw new Error(`Whisper API error ${whisperRes.status}: ${errText}`);
+      }
+
+      const result = await whisperRes.json() as { text: string };
+      logger.info({ fileUrl }, 'Voice message transcribed');
+      return `[Voice message]: ${result.text}`;
+    } catch (err) {
+      logger.error({ fileUrl, err }, 'Failed to transcribe voice message');
+      return '[Voice message — transcription failed]';
+    }
+  }
+
+  /**
+   * Download a Slack-hosted image and save it to the IPC directory so the agent can
+   * read it via the Read tool (which supports multimodal image content).
+   * Returns the container-visible path (e.g. /workspace/ipc/images/foo.jpg) or null on error.
+   */
+  private async downloadSlackImage(
+    fileUrl: string,
+    filename: string,
+    groupFolder: string,
+  ): Promise<string | null> {
+    const env = readEnvFile(['SLACK_BOT_TOKEN']);
+    const botToken = env.SLACK_BOT_TOKEN;
+
+    try {
+      const downloadRes = await fetch(fileUrl, {
+        headers: { Authorization: `Bearer ${botToken}` },
+      });
+      if (!downloadRes.ok) {
+        throw new Error(`Slack image download failed: ${downloadRes.status}`);
+      }
+      const imageBuffer = Buffer.from(await downloadRes.arrayBuffer());
+
+      // Save to the group's IPC images dir — mounted into the container at /workspace/ipc/
+      const imagesDir = path.join(DATA_DIR, 'ipc', groupFolder, 'images');
+      fs.mkdirSync(imagesDir, { recursive: true });
+
+      // Sanitize filename: keep only safe characters
+      const safe = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const destFilename = `${Date.now()}-${safe}`;
+      const destPath = path.join(imagesDir, destFilename);
+      fs.writeFileSync(destPath, imageBuffer);
+
+      logger.info({ fileUrl, destPath }, 'Slack image saved for agent analysis');
+      // Return the container-visible path
+      return `/workspace/ipc/images/${destFilename}`;
+    } catch (err) {
+      logger.error({ fileUrl, err }, 'Failed to download Slack image');
+      return null;
+    }
   }
 
   async connect(): Promise<void> {
@@ -223,6 +361,27 @@ export class SlackChannel implements Channel {
         { jid, err, queueSize: this.outgoingQueue.length },
         'Failed to send Slack message, queued',
       );
+    }
+  }
+
+  async sendMedia(jid: string, filePath: string, filename?: string): Promise<void> {
+    const channelId = jid.replace(/^slack:/, '');
+    const threadTs = this.activeThreadTs.get(jid);
+    const fname = filename || path.basename(filePath);
+
+    try {
+      const fileBuffer = fs.readFileSync(filePath);
+      await this.app.client.files.uploadV2({
+        channel_id: channelId,
+        filename: fname,
+        file: fileBuffer,
+        // thread_ts must be string if present; cast via record to satisfy the union type
+        ...(threadTs ? ({ thread_ts: threadTs } as Record<string, unknown>) : {}),
+      } as Parameters<typeof this.app.client.files.uploadV2>[0]);
+      logger.info({ jid, filePath, fname }, 'Slack media uploaded');
+    } catch (err) {
+      logger.error({ jid, filePath, err }, 'Failed to upload Slack media');
+      throw err;
     }
   }
 
@@ -336,7 +495,10 @@ export class SlackChannel implements Channel {
             status: '',
           });
         } catch (err) {
-          logger.warn({ jid, err }, 'Failed to clear assistant typing indicator');
+          logger.warn(
+            { jid, err },
+            'Failed to clear assistant typing indicator',
+          );
         }
       } else {
         // Delete the fallback "thinking..." message

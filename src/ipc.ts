@@ -12,6 +12,7 @@ import { RegisteredGroup } from './types.js';
 
 export interface IpcDeps {
   sendMessage: (jid: string, text: string) => Promise<void>;
+  sendMedia: (jid: string, filePath: string, filename?: string) => Promise<void>;
   registeredGroups: () => Record<string, RegisteredGroup>;
   registerGroup: (jid: string, group: RegisteredGroup) => void;
   syncGroups: (force: boolean) => Promise<void>;
@@ -52,10 +53,15 @@ export function startIpcWatcher(deps: IpcDeps): void {
 
     const registeredGroups = deps.registeredGroups();
 
-    // Build folder→isMain lookup from registered groups
+    // Build folder→isMain and folder→allowedOutbound lookups from registered groups
     const folderIsMain = new Map<string, boolean>();
+    const folderAllowedOutbound = new Map<string, Set<string>>();
     for (const group of Object.values(registeredGroups)) {
       if (group.isMain) folderIsMain.set(group.folder, true);
+      const allowed = group.containerConfig?.allowedOutboundJids;
+      if (allowed?.length) {
+        folderAllowedOutbound.set(group.folder, new Set(allowed));
+      }
     }
 
     for (const sourceGroup of groupFolders) {
@@ -73,18 +79,45 @@ export function startIpcWatcher(deps: IpcDeps): void {
             const filePath = path.join(messagesDir, file);
             try {
               const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-              if (data.type === 'message' && data.chatJid && data.text) {
+              if (data.type === 'message' && data.chatJid && (data.text || data.mediaPath)) {
                 // Authorization: verify this group can send to this chatJid
                 const targetGroup = registeredGroups[data.chatJid];
+                const allowedOutbound = folderAllowedOutbound.get(sourceGroup);
                 if (
                   isMain ||
-                  (targetGroup && targetGroup.folder === sourceGroup)
+                  (targetGroup && targetGroup.folder === sourceGroup) ||
+                  allowedOutbound?.has(data.chatJid)
                 ) {
-                  await deps.sendMessage(data.chatJid, data.text);
-                  logger.info(
-                    { chatJid: data.chatJid, sourceGroup },
-                    'IPC message sent',
-                  );
+                  if (data.text) {
+                    await deps.sendMessage(data.chatJid, data.text);
+                    logger.info(
+                      { chatJid: data.chatJid, sourceGroup },
+                      'IPC message sent',
+                    );
+                  }
+                  if (data.mediaPath) {
+                    // Resolve relative media path to absolute host path
+                    // mediaPath is relative to the group's IPC dir (e.g. "media/voice.mp3")
+                    const ipcGroupDir = path.join(DATA_DIR, 'ipc', sourceGroup);
+                    const hostMediaPath = path.resolve(ipcGroupDir, data.mediaPath);
+                    // Security: ensure the resolved path stays within the IPC dir
+                    const rel = path.relative(ipcGroupDir, hostMediaPath);
+                    if (!rel.startsWith('..') && !path.isAbsolute(rel)) {
+                      const filename = path.basename(hostMediaPath);
+                      await deps.sendMedia(data.chatJid, hostMediaPath, filename);
+                      logger.info(
+                        { chatJid: data.chatJid, sourceGroup, mediaPath: data.mediaPath },
+                        'IPC media sent',
+                      );
+                      // Clean up the staged media file after sending
+                      try { fs.unlinkSync(hostMediaPath); } catch { /* ignore */ }
+                    } else {
+                      logger.warn(
+                        { chatJid: data.chatJid, sourceGroup, mediaPath: data.mediaPath },
+                        'IPC media path escape attempt blocked',
+                      );
+                    }
+                  }
                 } else {
                   logger.warn(
                     { chatJid: data.chatJid, sourceGroup },

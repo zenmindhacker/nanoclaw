@@ -3,10 +3,11 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
-const baseDir = path.resolve(__dirname, '..');
-const candidatesDir = path.join(baseDir, 'candidates', 'md');
-const stateDir = path.join(baseDir, '.state');
-const targetDir = process.env.TARGET_DIR || path.resolve('/Users/cian/Documents/GitHub/ganttsy/ganttsy-strategy/team/designer-resumes');
+const githubRoot = process.env.GITHUB_ROOT || '/workspace/extra/github';
+const workDir = process.env.WORK_DIR || '/workspace/group/ganttsy-resume';
+const candidatesDir = process.env.MD_DIR || path.join(workDir, 'candidates', 'md');
+const stateDir = process.env.STATE_DIR || path.join(workDir, '.state');
+const targetDir = process.env.TARGET_DIR || path.join(githubRoot, 'ganttsy/ganttsy-strategy/team/designer-resumes');
 const jobPostingPath = process.env.JOB_POSTING || path.join(targetDir, 'JOB-POSTING-Product-Designer.md');
 const evalGridPath = process.env.EVAL_GRID || path.join(targetDir, 'EVALUATION-GRID.md');
 let apiKey = process.env.OPENROUTER_API_KEY;

@@ -135,10 +135,14 @@ This is the **main channel** with elevated privileges.
 | `/workspace/extra/skills` | `~/nanoclaw/skills/` | read-only |
 | `/workspace/extra/credentials` | `~/.config/nanoclaw/credentials/services/` | read-only |
 | `/workspace/extra/memory` | `~/nanoclaw/memory/` | read-only |
+| `/workspace/extra/github` | `~/Documents/GitHub/` | read-write |
+| `/workspace/extra/shadow` | Shadow app data (`com.taperlabs.shadow`) | read-only |
 
 Key paths inside container:
 - `/workspace/project/store/messages.db` — SQLite database (registered_groups table)
 - `/workspace/project/groups/` — All group folders
+- `/workspace/extra/github/<repo>/` — Git repos (read-write; use git commands normally)
+- `/workspace/extra/shadow/shadow.db` — Shadow meeting transcripts SQLite (open read-only: `sqlite3 -readonly`)
 
 ---
 
