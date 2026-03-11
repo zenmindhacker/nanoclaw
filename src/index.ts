@@ -208,8 +208,10 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
   let outputSentToUser = false;
 
   const output = await runAgent(group, prompt, chatJid, async (result) => {
-    // Streaming output callback — called for each agent result
     if (result.result) {
+      // Text result — send to user. Keep typing indicator active: the agent
+      // may still be working (e.g. running a voice-note skill after a short
+      // first reply). Only clear it on the session-update below.
       const raw =
         typeof result.result === 'string'
           ? result.result
@@ -221,18 +223,17 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
         await channel.sendMessage(chatJid, text);
         outputSentToUser = true;
       }
-      // Clear thinking indicator as soon as a result arrives.
-      // The container stays alive for follow-up IPC messages so runAgent()
-      // won't return until idle-timeout; clearing here prevents the indicator
-      // from persisting after the response is already visible.
-      // setTyping(false) is a no-op if no indicator is active.
+      // Only reset idle timer on actual results, not session-update markers (result: null)
+      resetIdleTimer();
+    } else {
+      // result: null is the session-update marker emitted by the agent runner
+      // after each query loop ends — the agent is now idle between turns.
+      // This is the right moment to clear the typing indicator.
       channel
         .setTyping?.(chatJid, false)
         ?.catch((err) =>
           logger.warn({ chatJid, err }, 'Failed to clear typing indicator'),
         );
-      // Only reset idle timer on actual results, not session-update markers (result: null)
-      resetIdleTimer();
     }
 
     if (result.status === 'success') {
