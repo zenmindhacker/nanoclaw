@@ -266,21 +266,25 @@ export function validateMount(
     };
   }
 
-  // Check against blocked patterns
-  const blockedMatch = matchesBlockedPattern(
-    realPath,
-    allowlist.blockedPatterns,
-  );
-  if (blockedMatch !== null) {
-    return {
-      allowed: false,
-      reason: `Path matches blocked pattern "${blockedMatch}": "${realPath}"`,
-    };
-  }
-
-  // Check if under an allowed root
+  // Check if under an allowed root. Explicit allowlist entries take precedence
+  // over blocked patterns — a path the admin explicitly permitted should not be
+  // blocked just because it contains a word like "credentials" in its name.
+  // Blocked patterns only apply to paths that are NOT under any allowed root,
+  // catching accidental attempts to mount system credential stores
+  // (e.g. ~/.aws/credentials) that would never appear in allowedRoots.
   const allowedRoot = findAllowedRoot(realPath, allowlist.allowedRoots);
   if (allowedRoot === null) {
+    // Not under any allowed root — also check blocked patterns for a clearer error.
+    const blockedMatch = matchesBlockedPattern(
+      realPath,
+      allowlist.blockedPatterns,
+    );
+    if (blockedMatch !== null) {
+      return {
+        allowed: false,
+        reason: `Path matches blocked pattern "${blockedMatch}": "${realPath}"`,
+      };
+    }
     return {
       allowed: false,
       reason: `Path "${realPath}" is not under any allowed root. Allowed roots: ${allowlist.allowedRoots

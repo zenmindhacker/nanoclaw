@@ -1,7 +1,9 @@
 import { App, LogLevel } from '@slack/bolt';
 import type { GenericMessageEvent, BotMessageEvent } from '@slack/types';
+import fs from 'fs';
+import path from 'path';
 
-import { ASSISTANT_NAME, TRIGGER_PATTERN } from '../config.js';
+import { ASSISTANT_NAME, DATA_DIR, TRIGGER_PATTERN } from '../config.js';
 import { updateChatName } from '../db.js';
 import { readEnvFile } from '../env.js';
 import { logger } from '../logger.js';
@@ -12,6 +14,15 @@ import {
   OnChatMetadata,
   RegisteredGroup,
 } from '../types.js';
+
+// Status messages shown while the agent is working.
+// Rotated every STATUS_ROTATE_INTERVAL ms while the container is running.
+const STATUS_ROTATE_INTERVAL = 4000;
+const THINKING_STATUSES = [
+  `_${ASSISTANT_NAME} is thinking..._`,
+  `_${ASSISTANT_NAME} is working on it..._`,
+  `_just a moment..._`,
+];
 
 // Slack's chat.postMessage API limits text to ~4000 characters per call.
 // Messages exceeding this are split into sequential chunks.
@@ -39,6 +50,10 @@ export class SlackChannel implements Channel {
   private userNameCache = new Map<string, string>();
 
   private opts: SlackChannelOpts;
+
+  // Thinking indicator state: ts of the posted "thinking" message per JID
+  private thinkingTs = new Map<string, string>();
+  private thinkingTimers = new Map<string, ReturnType<typeof setInterval>>();
 
   constructor(opts: SlackChannelOpts) {
     this.opts = opts;
@@ -94,8 +109,7 @@ export class SlackChannel implements Channel {
       const groups = this.opts.registeredGroups();
       if (!groups[jid]) return;
 
-      const isBotMessage =
-        !!msg.bot_id || msg.user === this.botUserId;
+      const isBotMessage = !!msg.bot_id || msg.user === this.botUserId;
 
       let senderName: string;
       if (isBotMessage) {
@@ -113,7 +127,10 @@ export class SlackChannel implements Channel {
       let content = msg.text;
       if (this.botUserId && !isBotMessage) {
         const mentionPattern = `<@${this.botUserId}>`;
-        if (content.includes(mentionPattern) && !TRIGGER_PATTERN.test(content)) {
+        if (
+          content.includes(mentionPattern) &&
+          !TRIGGER_PATTERN.test(content)
+        ) {
           content = `@${ASSISTANT_NAME} ${content}`;
         }
       }
@@ -142,10 +159,7 @@ export class SlackChannel implements Channel {
       this.botUserId = auth.user_id as string;
       logger.info({ botUserId: this.botUserId }, 'Connected to Slack');
     } catch (err) {
-      logger.warn(
-        { err },
-        'Connected to Slack but failed to get bot user ID',
-      );
+      logger.warn({ err }, 'Connected to Slack but failed to get bot user ID');
     }
 
     this.connected = true;
@@ -204,11 +218,74 @@ export class SlackChannel implements Channel {
     await this.app.stop();
   }
 
-  // Slack does not expose a typing indicator API for bots.
-  // This no-op satisfies the Channel interface so the orchestrator
-  // doesn't need channel-specific branching.
-  async setTyping(_jid: string, _isTyping: boolean): Promise<void> {
-    // no-op: Slack Bot API has no typing indicator endpoint
+  // Slack has no bot typing indicator API, so we post a "thinking" message
+  // and rotate its text while the agent works. When done, the message is deleted.
+  async setTyping(jid: string, isTyping: boolean): Promise<void> {
+    const channelId = jid.replace(/^slack:/, '');
+
+    if (isTyping) {
+      if (this.thinkingTs.has(jid)) return; // already showing
+      try {
+        const result = await this.app.client.chat.postMessage({
+          channel: channelId,
+          text: THINKING_STATUSES[0],
+        });
+        if (!result.ts) return;
+        const ts = result.ts as string;
+        this.thinkingTs.set(jid, ts);
+
+        // Rotate status text, checking for agent-written status in IPC dir
+        let idx = 0;
+        const timer = setInterval(async () => {
+          idx = (idx + 1) % THINKING_STATUSES.length;
+          // Check if agent wrote a custom status to IPC
+          const statusText = this.readAgentStatus(jid) ?? THINKING_STATUSES[idx];
+          try {
+            await this.app.client.chat.update({
+              channel: channelId,
+              ts,
+              text: statusText,
+            });
+          } catch {
+            // message may have been deleted already; stop rotating
+            clearInterval(timer);
+            this.thinkingTimers.delete(jid);
+          }
+        }, STATUS_ROTATE_INTERVAL);
+        this.thinkingTimers.set(jid, timer);
+      } catch (err) {
+        logger.warn({ jid, err }, 'Failed to post thinking indicator');
+      }
+    } else {
+      // Stop rotating
+      const timer = this.thinkingTimers.get(jid);
+      if (timer) { clearInterval(timer); this.thinkingTimers.delete(jid); }
+
+      const ts = this.thinkingTs.get(jid);
+      if (!ts) return;
+      this.thinkingTs.delete(jid);
+      try {
+        await this.app.client.chat.delete({ channel: channelId, ts });
+      } catch (err) {
+        logger.warn({ jid, err }, 'Failed to delete thinking indicator');
+      }
+    }
+  }
+
+  /** Read a one-line status string the agent writes to its IPC dir, if present. */
+  private readAgentStatus(jid: string): string | null {
+    try {
+      // Map jid → group folder via registered groups
+      const groups = this.opts.registeredGroups();
+      const group = groups[jid];
+      if (!group) return null;
+      const statusFile = path.join(DATA_DIR, 'ipc', group.folder, 'status.txt');
+      if (!fs.existsSync(statusFile)) return null;
+      const text = fs.readFileSync(statusFile, 'utf-8').trim();
+      return text || null;
+    } catch {
+      return null;
+    }
   }
 
   /**
@@ -245,9 +322,7 @@ export class SlackChannel implements Channel {
     }
   }
 
-  private async resolveUserName(
-    userId: string,
-  ): Promise<string | undefined> {
+  private async resolveUserName(userId: string): Promise<string | undefined> {
     if (!userId) return undefined;
 
     const cached = this.userNameCache.get(userId);
