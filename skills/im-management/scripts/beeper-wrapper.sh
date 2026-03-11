@@ -3,7 +3,7 @@
 # Auto-loads token from credentials file
 
 BEEPER_TOKEN=$(cat /workspace/extra/credentials/beeper)
-BASE_URL="http://localhost:23373"
+BASE_URL="http://host.containers.internal:23373"
 
 # Helper function
 beeper_api() {

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-LINEAR="node --experimental-strip-types /workspace/extra/skills/linear/scripts/linear.ts"
+_SKILLS_ROOT="${SKILLS_ROOT:-/workspace/extra/skills}"
+LINEAR="node --experimental-strip-types ${_SKILLS_ROOT}/linear/scripts/linear.ts"
 ENVF=""  # Linear API keys come from environment (set by NC container)
 
 if [[ -f "$ENVF" ]]; then

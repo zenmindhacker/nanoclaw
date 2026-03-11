@@ -4,9 +4,10 @@
 set -uo pipefail
 
 BASEDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-STATE_DIR="$BASEDIR/.state"
+# Use writable dirs exported by run-daily.sh; fall back to group workspace defaults
+STATE_DIR="${STATE_DIR:-/workspace/group/ganttsy-resume/.state}"
+RAW_DIR="${RAW_DIR:-/workspace/group/ganttsy-resume/candidates/raw}"
 STATE_FILE="$STATE_DIR/processed_ids.txt"
-RAW_DIR="$BASEDIR/candidates/raw"
 TOKEN_FILE="/workspace/extra/credentials/ganttsy-google-token.json"
 
 QUERY_DEFAULT='to:careers@ganttsy.com'
@@ -39,7 +40,7 @@ get_access_token() {
 }
 
 urlencode() {
-  python -c "import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))" "$1"
+  node -e "process.stdout.write(encodeURIComponent(process.argv[1]))" "$1"
 }
 
 ACCESS_TOKEN=$(get_access_token)
@@ -89,15 +90,15 @@ for id in $MSG_IDS; do
 
     att_json=$(curl -s -H "Authorization: Bearer $ACCESS_TOKEN" \
       "https://gmail.googleapis.com/gmail/v1/users/me/messages/$id/attachments/$attId")
-    echo "$att_json" | jq -r '.data' | python3 -c "
-import base64,sys
-b=sys.stdin.read().strip()
-if not b:
-    sys.exit(0)
-b=b.replace('-','+').replace('_','/')
-pad='=' * (-len(b) % 4)
-sys.stdout.buffer.write(base64.b64decode(b+pad))
-" > "$out_file"
+    echo "$att_json" | jq -r '.data' | \
+      node -e "
+let d='';
+process.stdin.on('data',c=>{d+=c;});
+process.stdin.on('end',()=>{
+  d=d.trim().replace(/-/g,'+').replace(/_/g,'/');
+  const pad='='.repeat((-d.length%4+4)%4);
+  process.stdout.write(Buffer.from(d+pad,'base64'));
+});" > "$out_file"
 
     if [[ -s "$out_file" ]]; then
       downloaded=$((downloaded+1))
@@ -120,27 +121,7 @@ sys.stdout.buffer.write(base64.b64decode(b+pad))
       echo "$msg" > "$temp_msg_file"
 
       # Extract all text content from email (plain text and html parts)
-      email_body=$(python3 -c "
-import sys, json, base64, re
-with open(sys.argv[1]) as f:
-    data = json.load(f)
-texts = []
-def walk(part):
-    if not isinstance(part, dict): return
-    mime = part.get('mimeType', '')
-    body = part.get('body', {}) or {}
-    data_b64 = body.get('data')
-    if data_b64 and mime in ('text/plain','text/html'):
-        try:
-            b = data_b64.replace('-', '+').replace('_', '/')
-            pad = '=' * (-len(b) % 4)
-            txt = base64.b64decode(b + pad).decode('utf-8', errors='ignore')
-            texts.append(txt)
-        except: pass
-    for p in part.get('parts', []) or []: walk(p)
-walk(data.get('payload', {}))
-print('\n---\n'.join(texts))
-" "$temp_msg_file" 2>/dev/null || echo "(Could not extract email body)")
+      email_body=$(node "$BASEDIR/scripts/lib/email-body.cjs" --body "$temp_msg_file" 2>/dev/null || echo "(Could not extract email body)")
 
       rm -f "$temp_msg_file"
 
@@ -161,16 +142,14 @@ $email_body
 EOF
 
       # Basic metadata from sender
-      python3 - <<'PY' "$sender" "$no_resume_json"
-import re,sys,json
-sender=sys.argv[1]
-email_match=re.search(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", sender)
-email=email_match.group(0) if email_match else ""
-name=sender
-name=re.sub(r"<[^>]+>", "", name).strip().strip('"')
-meta={"name":name,"email":email,"experience":"No resume - manual review required","skills":[]}
-open(sys.argv[2],"w").write(json.dumps(meta,indent=2))
-PY
+      node -e "
+const sender=process.argv[1];
+const m=sender.match(/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/);
+const email=m?m[0]:'';
+const name=sender.replace(/<[^>]+>/g,'').trim().replace(/^\"+|\"+$/g,'').replace(/^'+|'+$/g,'');
+const meta={name,email,experience:'No resume - manual review required',skills:[]};
+require('fs').writeFileSync(process.argv[2],JSON.stringify(meta,null,2));
+" "$sender" "$no_resume_json"
 
       new_count=$((new_count+1))
       echo "NO_ATTACHMENT: Saved full email body for $id" >&2

@@ -56,7 +56,7 @@ if (!LINEAR_API_KEY) {
   process.exit(1);
 }
 
-const CACHE_DIR = join('/workspace/extra/skills/linear/.cache');
+const CACHE_DIR = join(process.env.SKILLS_ROOT || '/workspace/extra/skills', 'linear/.cache');
 if (!existsSync(CACHE_DIR)) mkdirSync(CACHE_DIR, { recursive: true });
 const CACHE_FILE = join(CACHE_DIR, `${CURRENT_ORG}.json`);
 

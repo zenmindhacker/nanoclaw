@@ -33,7 +33,7 @@ sync_beeper() {
     
     # Get all chats for this network
     CHATS=$(curl -s -H "Authorization: Bearer $BEEPER_TOKEN" \
-        "http://localhost:23373/v1/chats?limit=100" | \
+        "http://host.containers.internal:23373/v1/chats?limit=100" | \
         jq -c "[.items[] | select(.network == \"$NETWORK\")]")
     
     CHAT_COUNT=$(echo "$CHATS" | jq 'length')
@@ -67,40 +67,6 @@ sync_beeper() {
     done
 }
 
-# Function to sync WhatsApp via wacli
-sync_whatsapp() {
-    echo "Syncing WhatsApp via wacli..." >&2
-    
-    # Check if wacli is available
-    if ! command -v wacli &> /dev/null; then
-        echo "{\"type\":\"error\",\"source\":\"whatsapp\",\"message\":\"wacli not found\"}"
-        return
-    fi
-    
-    # Get recent messages
-    MESSAGES=$(wacli messages list --limit 50 --json 2>/dev/null || echo "[]")
-    
-    if [ "$MESSAGES" = "[]" ]; then
-        echo "  No WhatsApp messages found" >&2
-        return
-    fi
-    
-    # Process messages and group by contact
-    echo "$MESSAGES" | jq -c '.[] | select(.timestamp > "'$SINCE'")' 2>/dev/null | while read -r msg; do
-        CONTACT_JID=$(echo "$msg" | jq -r '.remoteJid // ""')
-        CONTACT_NAME=$(echo "$msg" | jq -r '.pushName // .remoteJid')
-        MSG_TEXT=$(echo "$msg" | jq -r '.message.conversation // .message.extendedTextMessage.text // ""')
-        MSG_TIME=$(echo "$msg" | jq -r '.timestamp')
-        IS_FROM_ME=$(echo "$msg" | jq -r '.fromMe // false')
-        
-        if [ -n "$CONTACT_NAME" ] && [ "$CONTACT_NAME" != "null" ]; then
-            # Extract phone from JID
-            PHONE=$(echo "$CONTACT_JID" | sed 's/@s.whatsapp.net//' | sed 's/^/+/')
-            
-            echo "{\"type\":\"message\",\"network\":\"WhatsApp\",\"contact_name\":\"$CONTACT_NAME\",\"phone\":\"$PHONE\",\"last_activity\":\"$MSG_TIME\",\"last_message\":$(echo "$MSG_TEXT" | jq -Rs '.[:200]'),\"is_from_me\":$IS_FROM_ME}"
-        fi
-    done
-}
 
 # Run syncs and collect output
 echo "{"
@@ -115,7 +81,6 @@ FIRST=true
     sync_beeper "Instagram"
     sync_beeper "Facebook/Messenger"
     sync_beeper "LinkedIn"
-    sync_whatsapp
 } | while read -r line; do
     if [ "$FIRST" = true ]; then
         FIRST=false
