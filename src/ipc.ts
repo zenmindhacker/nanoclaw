@@ -12,7 +12,11 @@ import { RegisteredGroup } from './types.js';
 
 export interface IpcDeps {
   sendMessage: (jid: string, text: string) => Promise<void>;
-  sendMedia: (jid: string, filePath: string, filename?: string) => Promise<void>;
+  sendMedia: (
+    jid: string,
+    filePath: string,
+    filename?: string,
+  ) => Promise<void>;
   registeredGroups: () => Record<string, RegisteredGroup>;
   registerGroup: (jid: string, group: RegisteredGroup) => void;
   syncGroups: (force: boolean) => Promise<void>;
@@ -79,7 +83,11 @@ export function startIpcWatcher(deps: IpcDeps): void {
             const filePath = path.join(messagesDir, file);
             try {
               const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-              if (data.type === 'message' && data.chatJid && (data.text || data.mediaPath)) {
+              if (
+                data.type === 'message' &&
+                data.chatJid &&
+                (data.text || data.mediaPath)
+              ) {
                 // Authorization: verify this group can send to this chatJid
                 const targetGroup = registeredGroups[data.chatJid];
                 const allowedOutbound = folderAllowedOutbound.get(sourceGroup);
@@ -99,21 +107,40 @@ export function startIpcWatcher(deps: IpcDeps): void {
                     // Resolve relative media path to absolute host path
                     // mediaPath is relative to the group's IPC dir (e.g. "media/voice.mp3")
                     const ipcGroupDir = path.join(DATA_DIR, 'ipc', sourceGroup);
-                    const hostMediaPath = path.resolve(ipcGroupDir, data.mediaPath);
+                    const hostMediaPath = path.resolve(
+                      ipcGroupDir,
+                      data.mediaPath,
+                    );
                     // Security: ensure the resolved path stays within the IPC dir
                     const rel = path.relative(ipcGroupDir, hostMediaPath);
                     if (!rel.startsWith('..') && !path.isAbsolute(rel)) {
                       const filename = path.basename(hostMediaPath);
-                      await deps.sendMedia(data.chatJid, hostMediaPath, filename);
+                      await deps.sendMedia(
+                        data.chatJid,
+                        hostMediaPath,
+                        filename,
+                      );
                       logger.info(
-                        { chatJid: data.chatJid, sourceGroup, mediaPath: data.mediaPath },
+                        {
+                          chatJid: data.chatJid,
+                          sourceGroup,
+                          mediaPath: data.mediaPath,
+                        },
                         'IPC media sent',
                       );
                       // Clean up the staged media file after sending
-                      try { fs.unlinkSync(hostMediaPath); } catch { /* ignore */ }
+                      try {
+                        fs.unlinkSync(hostMediaPath);
+                      } catch {
+                        /* ignore */
+                      }
                     } else {
                       logger.warn(
-                        { chatJid: data.chatJid, sourceGroup, mediaPath: data.mediaPath },
+                        {
+                          chatJid: data.chatJid,
+                          sourceGroup,
+                          mediaPath: data.mediaPath,
+                        },
                         'IPC media path escape attempt blocked',
                       );
                     }

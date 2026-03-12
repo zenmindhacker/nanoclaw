@@ -163,70 +163,87 @@ async function generateTogglPdf(invoiceNumber, clientName, projectId, since, unt
 }
 
 /**
- * Fetch dashboard configuration from Toggl
- * Note: The track.toggl.com API may not be accessible from all environments
- * @param {number} dashboardId - The dashboard ID
- * @returns {Promise<object>} Dashboard configuration JSON
+ * Export a PDF from Toggl using the dashboard export API.
+ * Builds a synthetic dashboard body matching what the Toggl web UI sends —
+ * id: 0, date range in preferences.datePeriod + each chart's query.period,
+ * project filter in dashboard.filters + each chart's query.filters.
+ *
+ * Reverse-engineered by intercepting browser network calls (2026-03-11).
  */
-async function getTogglDashboardJson(dashboardId) {
+async function exportTogglPdf(projectId, since, until, clientName) {
   const apiToken = toggl.getTogglCredentials();
   const auth = Buffer.from(`${apiToken}:api_token`).toString('base64');
-  
-  return new Promise((resolve, reject) => {
-    const options = {
-      hostname: 'track.toggl.com',
-      path: `/api/v1/dashboards/${dashboardId}`,
-      method: 'GET',
-      headers: {
-        'Authorization': `Basic ${auth}`,
-        'Content-Type': 'application/json'
-      },
-      timeout: 10000 // 10 second timeout
-    };
 
-    const req = https.request(options, (res) => {
-      let data = '';
-      res.on('data', chunk => data += chunk);
-      res.on('end', () => {
-        if (res.statusCode >= 200 && res.statusCode < 300) {
-          try {
-            const parsed = JSON.parse(data);
-            // Check if we got actual dashboard data or HTML (indicates wrong endpoint)
-            if (typeof parsed === 'string' || !parsed.dashboard) {
-              reject(new Error('Invalid dashboard response - endpoint may not be accessible'));
-              return;
-            }
-            resolve(parsed);
-          } catch {
-            resolve(data);
-          }
-        } else {
-          reject(new Error(`Toggl API error: ${res.statusCode} - ${data}`));
-        }
-      });
-    });
+  const WORKSPACE_ID = 8629306;
+  const ORG_ID = 8630437;
+  const filename = `Toggl-Report-${clientName}-${since}-${until}.pdf`;
 
-    req.on('error', reject);
-    req.on('timeout', () => {
-      req.destroy();
-      reject(new Error('Toggl API request timed out'));
-    });
-    req.end();
+  const projectFilter = {
+    operator: 'and',
+    conditions: [{ property: 'project_id', operator: 'in', value: [Number(projectId)] }]
+  };
+
+  // Each chart gets workspace_id + project filter in query.filters, and the date in query.period
+  const makeChart = (id, type, name, groupings, preferences = {}) => ({
+    type,
+    query: {
+      aggregations: [{ function: 'sum', property: 'duration' }],
+      groupings,
+      filters: [
+        { property: 'workspace_id', operator: '=', value: WORKSPACE_ID },
+        projectFilter
+      ],
+      modifiers: {},
+      period: { from: since, to: until },
+      attributes: [],
+      ordinations: []
+    },
+    id,
+    organization_id: ORG_ID,
+    created_by: 0,
+    created_at: '',
+    creator_name: '',
+    updated_at: '',
+    permissions: [],
+    name,
+    preferences: { collapseToOther: false, currency: 'CAD', ...preferences }
   });
-}
 
-/**
- * Download PDF report from Toggl Dashboard API
- * @param {object} dashboardJson - Dashboard configuration JSON
- * @param {string} filename - Filename for the PDF
- * @returns {Promise<Buffer>} PDF buffer
- */
-async function downloadTogglPdf(dashboardJson, filename) {
-  const apiToken = toggl.getTogglCredentials();
-  const auth = Buffer.from(`${apiToken}:api_token`).toString('base64');
-  
-  const postData = JSON.stringify(dashboardJson);
-  
+  const chart1001 = makeChart(1001, 'stacked_bar', 'Duration by day',
+    [{ property: 'day' }, { property: 'billable' }]);
+  const chart1003 = makeChart(1003, 'donut', 'Member distribution',
+    [{ property: 'user_id' }]);
+  const chart1002 = makeChart(1002, 'table', 'Member and description breakdown',
+    [{ property: 'user_id' }, { property: 'description' }],
+    { columnWidths: {}, dateFormat: 'MM/DD/YYYY', timeFormat: 'h:mm A', durationFormat: 'improved', hideWeekends: false });
+
+  const body = {
+    dashboard: {
+      id: 0,
+      name: `${clientName} report (${since} to ${until})`,
+      organization_id: ORG_ID,
+      filters: [projectFilter],
+      grid_items: [
+        { height: 12, width: 8,  x_position: 1, y_position: 2,  chart_id: 1001 },
+        { height: 12, width: 4,  x_position: 9, y_position: 2,  chart_id: 1003 },
+        { height: 12, width: 12, x_position: 1, y_position: 14, chart_id: 1002 }
+      ],
+      charts: [chart1001, chart1003, chart1002],
+      created_by: 0, created_at: '', creator_name: '', updated_at: '',
+      permissions: [], link: { external: false, token: '' }, version: 1,
+      preferences: {
+        datePeriod: { from: since, to: until },
+        rounding: { type: 'roundUp', minutes: '15', level: 'time_entry', enabled: false, mode: 1 },
+        totalsMetrics: ['duration', 'billable_duration', 'amount', 'average_daily_hours'],
+        splitByRates: false
+      }
+    },
+    // Top-level charts object (keyed by ID) — required by export endpoint
+    charts: { '1001': chart1001, '1003': chart1003, '1002': chart1002 }
+  };
+
+  const postData = JSON.stringify(body);
+
   return new Promise((resolve, reject) => {
     const options = {
       hostname: 'track.toggl.com',
@@ -237,27 +254,23 @@ async function downloadTogglPdf(dashboardJson, filename) {
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(postData)
       },
-      timeout: 30000 // 30 second timeout for PDF generation
+      timeout: 30000
     };
 
     const req = https.request(options, (res) => {
       if (res.statusCode !== 200) {
         let data = '';
         res.on('data', chunk => data += chunk);
-        res.on('end', () => reject(new Error(`Toggl PDF API error: ${res.statusCode} - ${data}`)));
+        res.on('end', () => reject(new Error(`Toggl PDF API error: ${res.statusCode} - ${data.slice(0, 200)}`)));
         return;
       }
-      
       const chunks = [];
       res.on('data', chunk => chunks.push(chunk));
       res.on('end', () => resolve(Buffer.concat(chunks)));
     });
 
     req.on('error', reject);
-    req.on('timeout', () => {
-      req.destroy();
-      reject(new Error('Toggl PDF request timed out'));
-    });
+    req.on('timeout', () => { req.destroy(); reject(new Error('Toggl PDF request timed out')); });
     req.write(postData);
     req.end();
   });
@@ -266,7 +279,7 @@ async function downloadTogglPdf(dashboardJson, filename) {
 /**
  * Attach Toggl PDF to Xero invoice
  */
-async function attachTogglPdf(invoice, clientName, projectId, since, until, dashboardId = null) {
+async function attachTogglPdf(invoice, clientName, projectId, since, until) {
   console.log('   📎 Generating and attaching Toggl PDF report...');
   try {
     const pdfDir = '/workspace/group/toggl-reports';
@@ -276,20 +289,15 @@ async function attachTogglPdf(invoice, clientName, projectId, since, until, dash
     let pdfBuffer;
     let pdfSource = 'generated';
     
-    // Try to download PDF from Toggl Dashboard API if dashboardId provided
-    if (dashboardId) {
-      try {
-        console.log('   🔄 Fetching dashboard from Toggl (dashboard ID: ' + dashboardId + ')...');
-        const dashboardJson = await getTogglDashboardJson(dashboardId);
-        console.log('   📥 Downloading PDF from Toggl export API...');
-        const filename = `Toggl-Report-${clientName}-${since}-${until}.pdf`;
-        pdfBuffer = await downloadTogglPdf(dashboardJson, filename);
-        pdfSource = 'toggl-export';
-        console.log('   ✅ Downloaded PDF from Toggl (' + pdfBuffer.length + ' bytes)');
-      } catch (togglError) {
-        console.log('   ⚠️ Toggl PDF export failed: ' + togglError.message);
-        console.log('   🔄 Falling back to generated PDF...');
-      }
+    // Export PDF directly from Toggl using the dashboard export API
+    try {
+      console.log('   🔄 Exporting PDF from Toggl...');
+      pdfBuffer = await exportTogglPdf(projectId, since, until, clientName);
+      pdfSource = 'toggl-export';
+      console.log('   ✅ Downloaded PDF from Toggl (' + pdfBuffer.length + ' bytes)');
+    } catch (togglError) {
+      console.log('   ⚠️ Toggl PDF export failed: ' + togglError.message);
+      console.log('   🔄 Falling back to generated PDF...');
     }
     
     // Fall back to generated PDF if Toggl export didn't work
@@ -357,7 +365,7 @@ async function generateWorkWranglersInvoice(year, month) {
   }
   
   const invoice = await xero.createDraftInvoice(clientConfig.contactName, lineItems, 'WW: Consulting - ' + year + '-' + String(month).padStart(2, '0'), month, year);
-  await attachTogglPdf(invoice, 'Work Wranglers', projectConfig.id, since, until, projectConfig.dashboardId);
+  await attachTogglPdf(invoice, 'Work Wranglers', projectConfig.id, since, until);
   return invoice;
 }
 
@@ -386,7 +394,7 @@ async function generateCopperTeamsInvoice(year, month) {
   }
   
   const invoice = await xero.createDraftInvoice(clientConfig.contactName, lineItems, 'Kora MVP - ' + year + '-' + String(month).padStart(2, '0'), month, year);
-  await attachTogglPdf(invoice, 'CopperTeams', projectConfig.id, since, until, projectConfig.dashboardId);
+  await attachTogglPdf(invoice, 'CopperTeams', projectConfig.id, since, until);
   return invoice;
 }
 
@@ -415,7 +423,7 @@ async function generateGanttsyInvoice(year, month) {
   }
   
   const invoice = await xero.createDraftInvoice(clientConfig.contactName, lineItems, 'Ganttsy MVP - ' + year + '-' + String(month).padStart(2, '0'), month, year);
-  await attachTogglPdf(invoice, 'Ganttsy', projectConfig.id, since, until, projectConfig.dashboardId);
+  await attachTogglPdf(invoice, 'Ganttsy', projectConfig.id, since, until);
   return invoice;
 }
 

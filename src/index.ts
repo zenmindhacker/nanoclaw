@@ -65,6 +65,10 @@ let registeredGroups: Record<string, RegisteredGroup> = {};
 let lastAgentTimestamp: Record<string, string> = {};
 let messageLoopRunning = false;
 
+// Debounce: only send missing-secrets notification once per process lifetime
+// to avoid flooding the user if every container start is missing creds.
+let missingSecretsNotified = false;
+
 const channels: Channel[] = [];
 const queue = new GroupQueue();
 
@@ -209,9 +213,9 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
 
   const output = await runAgent(group, prompt, chatJid, async (result) => {
     if (result.result) {
-      // Text result — send to user. Keep typing indicator active: the agent
-      // may still be working (e.g. running a voice-note skill after a short
-      // first reply). Only clear it on the session-update below.
+      // Text result — send to user, then immediately clear the typing indicator.
+      // Clearing here (rather than on result: null) ensures the indicator doesn't
+      // stay stuck when thread replies arrive before the idle session marker fires.
       const raw =
         typeof result.result === 'string'
           ? result.result
@@ -223,12 +227,17 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
         await channel.sendMessage(chatJid, text);
         outputSentToUser = true;
       }
+      channel
+        .setTyping?.(chatJid, false)
+        ?.catch((err) =>
+          logger.warn({ chatJid, err }, 'Failed to clear typing indicator'),
+        );
       // Only reset idle timer on actual results, not session-update markers (result: null)
       resetIdleTimer();
     } else {
-      // result: null is the session-update marker emitted by the agent runner
-      // after each query loop ends — the agent is now idle between turns.
-      // This is the right moment to clear the typing indicator.
+      // result: null is the session-update marker — agent is idle between turns.
+      // Typing indicator was already cleared on text result above; this is a no-op
+      // in the normal case but handles edge cases (e.g. agent sends no text).
       channel
         .setTyping?.(chatJid, false)
         ?.catch((err) =>
@@ -331,6 +340,27 @@ async function runAgent(
       (proc, containerName) =>
         queue.registerProcess(chatJid, proc, containerName, group.folder),
       wrappedOnOutput,
+      (missing) => {
+        if (missingSecretsNotified) return;
+        missingSecretsNotified = true;
+        // Notify main group that Keychain secrets are missing
+        const mainEntry = Object.entries(registeredGroups).find(
+          ([, g]) => g.isMain,
+        );
+        if (!mainEntry) return;
+        const [mainJid] = mainEntry;
+        const mainChannel = findChannel(channels, mainJid);
+        if (!mainChannel) return;
+        const names = missing.join(', ');
+        mainChannel
+          .sendMessage(
+            mainJid,
+            `⚠️ *Keychain secrets missing or locked*\n\nThe following credentials are not available: \`${names}\`\n\nRun \`npm run secrets status\` to check, or unlock your Keychain. Agents will run without these credentials until they are available.`,
+          )
+          .catch((err) =>
+            logger.warn({ err }, 'Failed to send missing-secrets notification'),
+          );
+      },
     );
 
     if (output.newSessionId) {
@@ -578,7 +608,8 @@ async function main(): Promise<void> {
     sendMedia: async (jid, filePath, filename) => {
       const channel = findChannel(channels, jid);
       if (!channel) throw new Error(`No channel for JID: ${jid}`);
-      if (!channel.sendMedia) throw new Error(`Channel does not support media for JID: ${jid}`);
+      if (!channel.sendMedia)
+        throw new Error(`Channel does not support media for JID: ${jid}`);
       return channel.sendMedia(jid, filePath, filename);
     },
     registeredGroups: () => registeredGroups,
