@@ -25,8 +25,9 @@ import {
   readonlyMountArgs,
   stopContainer,
 } from './container-runtime.js';
-import { detectAuthMode } from './credential-proxy.js';
+import { detectAuthMode, readCurrentAccessToken } from './credential-proxy.js';
 import { validateAdditionalMounts } from './mount-security.js';
+import { getSecretsForGroup, MANIFEST_PATH } from './secrets.js';
 import { RegisteredGroup } from './types.js';
 
 // Sentinel markers for robust output parsing (must match agent-runner)
@@ -48,6 +49,7 @@ export interface ContainerOutput {
   result: string | null;
   newSessionId?: string;
   error?: string;
+  missingSecrets?: string[];
 }
 
 interface VolumeMount {
@@ -203,6 +205,23 @@ function buildVolumeMounts(
     readonly: false,
   });
 
+  // Secrets manifest (read-only): agents can see what credentials exist without values.
+  // Apple Container only supports directory mounts, so we copy the manifest into a
+  // dedicated staging directory and mount that at a consistent path in all groups.
+  if (fs.existsSync(MANIFEST_PATH)) {
+    const manifestMountDir = path.join(DATA_DIR, 'manifest-mount');
+    fs.mkdirSync(manifestMountDir, { recursive: true });
+    fs.copyFileSync(
+      MANIFEST_PATH,
+      path.join(manifestMountDir, 'secrets-manifest.json'),
+    );
+    mounts.push({
+      hostPath: manifestMountDir,
+      containerPath: '/workspace/secrets-info',
+      readonly: true,
+    });
+  }
+
   // Additional mounts validated against external allowlist (tamper-proof from containers)
   if (group.containerConfig?.additionalMounts) {
     const validatedMounts = validateAdditionalMounts(
@@ -220,6 +239,7 @@ function buildContainerArgs(
   mounts: VolumeMount[],
   containerName: string,
   isMain: boolean,
+  secretEnv: Record<string, string>,
 ): string[] {
   const args: string[] = ['run', '-i', '--rm', '--name', containerName];
 
@@ -232,15 +252,22 @@ function buildContainerArgs(
     `ANTHROPIC_BASE_URL=http://${CONTAINER_HOST_GATEWAY}:${CREDENTIAL_PROXY_PORT}`,
   );
 
-  // Mirror the host's auth method with a placeholder value.
-  // API key mode: SDK sends x-api-key, proxy replaces with real key.
-  // OAuth mode:   SDK exchanges placeholder token for temp API key,
-  //               proxy injects real OAuth token on that exchange request.
+  // Inject auth credentials so the container Claude Code CLI can authenticate.
+  // API key mode: any placeholder works — proxy replaces x-api-key on every request.
+  // OAuth mode:   Claude Code validates token format locally before making any
+  //               network request, so we inject the real current token. The proxy
+  //               intercepts requests and refreshes the token when it nears expiry.
   const authMode = detectAuthMode();
   if (authMode === 'api-key') {
     args.push('-e', 'ANTHROPIC_API_KEY=placeholder');
   } else {
-    args.push('-e', 'CLAUDE_CODE_OAUTH_TOKEN=placeholder');
+    const oauthToken = readCurrentAccessToken() ?? 'placeholder';
+    args.push('-e', `CLAUDE_CODE_OAUTH_TOKEN=${oauthToken}`);
+  }
+
+  // Inject service credentials from Keychain (Linear, OpenAI, etc.)
+  for (const [envVar, value] of Object.entries(secretEnv)) {
+    args.push('-e', `${envVar}=${value}`);
   }
 
   // Runtime-specific args for host gateway resolution
@@ -281,6 +308,7 @@ export async function runContainerAgent(
   input: ContainerInput,
   onProcess: (proc: ChildProcess, containerName: string) => void,
   onOutput?: (output: ContainerOutput) => Promise<void>,
+  onMissingSecrets?: (missing: string[]) => void,
 ): Promise<ContainerOutput> {
   const startTime = Date.now();
 
@@ -290,7 +318,26 @@ export async function runContainerAgent(
   const mounts = buildVolumeMounts(group, input.isMain);
   const safeName = group.folder.replace(/[^a-zA-Z0-9-]/g, '-');
   const containerName = `nanoclaw-${safeName}-${Date.now()}`;
-  const containerArgs = buildContainerArgs(mounts, containerName, input.isMain);
+
+  // Load secrets for this group from Keychain. Missing secrets are logged inside
+  // getSecretsForGroup; the caller is responsible for notifying the user.
+  const { env: secretEnv, missing: missingSecrets } = getSecretsForGroup(
+    group.folder,
+  );
+  if (missingSecrets.length > 0) {
+    logger.warn(
+      { group: group.name, missing: missingSecrets },
+      'Some Keychain secrets missing — containers will run without them',
+    );
+    onMissingSecrets?.(missingSecrets);
+  }
+
+  const containerArgs = buildContainerArgs(
+    mounts,
+    containerName,
+    input.isMain,
+    secretEnv,
+  );
 
   logger.debug(
     {
@@ -477,6 +524,8 @@ export async function runContainerAgent(
               status: 'success',
               result: null,
               newSessionId,
+              missingSecrets:
+                missingSecrets.length > 0 ? missingSecrets : undefined,
             });
           });
           return;
@@ -585,6 +634,8 @@ export async function runContainerAgent(
             status: 'success',
             result: null,
             newSessionId,
+            missingSecrets:
+              missingSecrets.length > 0 ? missingSecrets : undefined,
           });
         });
         return;
@@ -619,7 +670,11 @@ export async function runContainerAgent(
           'Container completed',
         );
 
-        resolve(output);
+        resolve({
+          ...output,
+          missingSecrets:
+            missingSecrets.length > 0 ? missingSecrets : undefined,
+        });
       } catch (err) {
         logger.error(
           {

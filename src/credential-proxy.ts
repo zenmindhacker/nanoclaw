@@ -13,6 +13,7 @@
 import { createServer, Server } from 'http';
 import { request as httpsRequest } from 'https';
 import { request as httpRequest, RequestOptions } from 'http';
+import { execSync as nodeExecSync } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -38,8 +39,7 @@ interface OAuthCreds {
 }
 
 function execSync(cmd: string): string {
-  const { execSync: exec } = require('child_process') as typeof import('child_process');
-  return exec(cmd, { encoding: 'utf-8' }).trim();
+  return nodeExecSync(cmd, { encoding: 'utf-8' }).trim();
 }
 
 function readCredentials(): OAuthCreds | null {
@@ -49,15 +49,21 @@ function readCredentials(): OAuthCreds | null {
       `security find-generic-password -s ${JSON.stringify(KC_SERVICE)} -a ${JSON.stringify(KC_ACCOUNT)} -w`,
     );
     const o = JSON.parse(raw)?.claudeAiOauth;
-    if (o?.accessToken && o?.refreshToken && o?.expiresAt) return o as OAuthCreds;
-  } catch { /* fall through */ }
+    if (o?.accessToken && o?.refreshToken && o?.expiresAt)
+      return o as OAuthCreds;
+  } catch {
+    /* fall through */
+  }
 
   // Fallback: flat file (Claude Code < 2.1)
   try {
     const data = JSON.parse(fs.readFileSync(CRED_FILE, 'utf-8'));
     const o = data?.claudeAiOauth;
-    if (o?.accessToken && o?.refreshToken && o?.expiresAt) return o as OAuthCreds;
-  } catch { /* ignore */ }
+    if (o?.accessToken && o?.refreshToken && o?.expiresAt)
+      return o as OAuthCreds;
+  } catch {
+    /* ignore */
+  }
 
   return null;
 }
@@ -71,14 +77,23 @@ function writeCredentials(creds: OAuthCreds): void {
         `security find-generic-password -s ${JSON.stringify(KC_SERVICE)} -a ${JSON.stringify(KC_ACCOUNT)} -w`,
       );
       existing = JSON.parse(raw);
-    } catch { /* ok — may not exist yet */ }
+    } catch {
+      /* ok — may not exist yet */
+    }
 
-    existing.claudeAiOauth = { ...(existing.claudeAiOauth as object || {}), ...creds };
+    existing.claudeAiOauth = {
+      ...((existing.claudeAiOauth as object) || {}),
+      ...creds,
+    };
     const json = JSON.stringify(existing);
     // delete then add — `add-generic-password` fails if item exists
     try {
-      execSync(`security delete-generic-password -s ${JSON.stringify(KC_SERVICE)} -a ${JSON.stringify(KC_ACCOUNT)}`);
-    } catch { /* not found — that's fine */ }
+      execSync(
+        `security delete-generic-password -s ${JSON.stringify(KC_SERVICE)} -a ${JSON.stringify(KC_ACCOUNT)}`,
+      );
+    } catch {
+      /* not found — that's fine */
+    }
     execSync(
       `security add-generic-password -s ${JSON.stringify(KC_SERVICE)} -a ${JSON.stringify(KC_ACCOUNT)} -w ${JSON.stringify(json)}`,
     );
@@ -91,8 +106,15 @@ function writeCredentials(creds: OAuthCreds): void {
   // Fallback: write to file
   try {
     let data: Record<string, unknown> = {};
-    try { data = JSON.parse(fs.readFileSync(CRED_FILE, 'utf-8')); } catch { /* ok */ }
-    data.claudeAiOauth = { ...(data.claudeAiOauth as object || {}), ...creds };
+    try {
+      data = JSON.parse(fs.readFileSync(CRED_FILE, 'utf-8'));
+    } catch {
+      /* ok */
+    }
+    data.claudeAiOauth = {
+      ...((data.claudeAiOauth as object) || {}),
+      ...creds,
+    };
     fs.writeFileSync(CRED_FILE, JSON.stringify(data, null, 2));
     logger.info('Refreshed credentials written to file');
   } catch (err) {
@@ -100,7 +122,10 @@ function writeCredentials(creds: OAuthCreds): void {
   }
 }
 
-function fetchJson(url: string, body: string): Promise<Record<string, unknown>> {
+function fetchJson(
+  url: string,
+  body: string,
+): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
     const u = new URL(url);
     const req = httpsRequest(
@@ -116,10 +141,15 @@ function fetchJson(url: string, body: string): Promise<Record<string, unknown>> 
       },
       (res) => {
         let raw = '';
-        res.on('data', (c: Buffer) => { raw += c.toString(); });
+        res.on('data', (c: Buffer) => {
+          raw += c.toString();
+        });
         res.on('end', () => {
-          try { resolve(JSON.parse(raw)); }
-          catch { reject(new Error(`Non-JSON response: ${raw.slice(0, 200)}`)); }
+          try {
+            resolve(JSON.parse(raw));
+          } catch {
+            reject(new Error(`Non-JSON response: ${raw.slice(0, 200)}`));
+          }
         });
       },
     );
@@ -127,6 +157,14 @@ function fetchJson(url: string, body: string): Promise<Record<string, unknown>> 
     req.write(body);
     req.end();
   });
+}
+
+/**
+ * Synchronously read the current access token (no refresh).
+ * Used by the container runner to inject a valid token at startup.
+ */
+export function readCurrentAccessToken(): string | null {
+  return readCredentials()?.accessToken ?? null;
 }
 
 /** In-flight refresh promise — prevents concurrent refresh storms. */
@@ -172,12 +210,17 @@ async function refreshToken(creds: OAuthCreds): Promise<string | null> {
 async function getOAuthToken(): Promise<string | null> {
   const creds = readCredentials();
   if (!creds) {
-    logger.warn('No OAuth credentials found in ~/.claude/.credentials.json');
+    logger.warn(
+      'No OAuth credentials found (checked Keychain and ~/.claude/.credentials.json)',
+    );
     return null;
   }
   const expiresIn = creds.expiresAt - Date.now();
   if (expiresIn < REFRESH_BUFFER_MS) {
-    logger.info({ expiresInMs: expiresIn }, 'OAuth token expiring soon, refreshing...');
+    logger.info(
+      { expiresInMs: expiresIn },
+      'OAuth token expiring soon, refreshing...',
+    );
     const refreshed = await refreshToken(creds);
     return refreshed ?? creds.accessToken; // fall back to existing if refresh fails
   }
@@ -194,10 +237,7 @@ export function startCredentialProxy(
   port: number,
   host = '127.0.0.1',
 ): Promise<Server> {
-  const secrets = readEnvFile([
-    'ANTHROPIC_API_KEY',
-    'ANTHROPIC_BASE_URL',
-  ]);
+  const secrets = readEnvFile(['ANTHROPIC_API_KEY', 'ANTHROPIC_BASE_URL']);
 
   const authMode: AuthMode = secrets.ANTHROPIC_API_KEY ? 'api-key' : 'oauth';
 

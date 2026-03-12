@@ -11,36 +11,35 @@ import { logger } from './logger.js';
 /** The container runtime binary name. */
 export const CONTAINER_RUNTIME_BIN = 'container';
 
+/** Fixed host IP used by Apple Container VMs. The subnet is always 192.168.64.0/24. */
+const APPLE_CONTAINER_HOST_IP = '192.168.64.1';
+
 /**
- * Detect the host IP as seen from Apple Container VMs.
- * Apple Container uses a 192.168.64.0/24 subnet; the host is always .1.
- * Returns null if no such interface is found (not using Apple Container).
+ * Returns true if the Apple Container runtime binary is installed.
+ * We detect by binary presence, not by whether a VM is currently running —
+ * the VM comes up on the first `container run`, which happens after NanoClaw
+ * starts, so the 192.168.64.x interface isn't visible at startup.
  */
-function detectAppleContainerHostIP(): string | null {
-  const ifaces = os.networkInterfaces();
-  for (const addrs of Object.values(ifaces)) {
-    if (!addrs) continue;
-    for (const addr of addrs) {
-      if (addr.family === 'IPv4' && addr.address.startsWith('192.168.64.')) {
-        const parts = addr.address.split('.');
-        parts[3] = '1';
-        return parts.join('.');
-      }
-    }
+function isAppleContainerRuntime(): boolean {
+  try {
+    execSync(`which ${CONTAINER_RUNTIME_BIN}`, { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
   }
-  return null;
 }
 
-const appleContainerHostIP = detectAppleContainerHostIP();
+const usingAppleContainer = isAppleContainerRuntime();
 
 /** Hostname/IP containers use to reach the host machine. */
-export const CONTAINER_HOST_GATEWAY =
-  appleContainerHostIP ?? 'host.docker.internal';
+export const CONTAINER_HOST_GATEWAY = usingAppleContainer
+  ? APPLE_CONTAINER_HOST_IP
+  : 'host.docker.internal';
 
 /**
  * Address the credential proxy binds to.
- * Apple Container (macOS): bind to the bridge IP (192.168.64.1) so only
- *   container VMs can reach it, not other network clients.
+ * Apple Container: bind to 0.0.0.0 so the proxy is reachable on the
+ *   192.168.64.1 bridge even when the VM starts after NanoClaw does.
  * Docker Desktop (macOS): 127.0.0.1 — the VM routes host.docker.internal to loopback.
  * Docker (Linux): bind to the docker0 bridge IP.
  */
@@ -48,8 +47,9 @@ export const PROXY_BIND_HOST =
   process.env.CREDENTIAL_PROXY_HOST || detectProxyBindHost();
 
 function detectProxyBindHost(): string {
-  // Apple Container: bind to the bridge interface the VM uses
-  if (appleContainerHostIP) return appleContainerHostIP;
+  // Apple Container: bind to all interfaces so the proxy is reachable
+  // via 192.168.64.1 regardless of when the VM subnet comes up.
+  if (usingAppleContainer) return '0.0.0.0';
 
   if (os.platform() === 'darwin') return '127.0.0.1';
 
@@ -70,7 +70,7 @@ function detectProxyBindHost(): string {
 /** CLI args needed for the container to resolve the host gateway. */
 export function hostGatewayArgs(): string[] {
   // Apple Container: host is reachable by IP directly, no extra args needed.
-  if (appleContainerHostIP) return [];
+  if (usingAppleContainer) return [];
   // Docker on Linux: host.docker.internal isn't built-in — add it explicitly.
   if (os.platform() === 'linux') {
     return ['--add-host=host.docker.internal:host-gateway'];

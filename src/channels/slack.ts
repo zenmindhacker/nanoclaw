@@ -15,14 +15,9 @@ import {
   RegisteredGroup,
 } from '../types.js';
 
-// Fallback status messages used when assistant.threads.setStatus is unavailable.
-// Rotated every STATUS_ROTATE_INTERVAL ms while the container is running.
-const STATUS_ROTATE_INTERVAL = 4000;
-const THINKING_STATUSES = [
-  `_${ASSISTANT_NAME} is thinking..._`,
-  `_${ASSISTANT_NAME} is working on it..._`,
-  `_just a moment..._`,
-];
+// Emoji reaction added to the user's message while the bot is processing.
+// Requires reactions:write scope. Visible from the channel without opening the thread.
+const THINKING_REACTION = 'hourglass_flowing_sand';
 
 // Slack's chat.postMessage API limits text to ~4000 characters per call.
 // Messages exceeding this are split into sequential chunks.
@@ -55,15 +50,24 @@ export class SlackChannel implements Channel {
   // Set when a non-bot message arrives; cleared when the thread goes idle.
   private activeThreadTs = new Map<string, string>();
 
-  // Whether the assistant.threads.setStatus API is available (detected at runtime).
+  // The ts of the latest inbound user message per jid.
+  // Used to add/remove a thinking emoji reaction while processing.
+  private lastUserMessageTs = new Map<string, string>();
+
+  // Whether the assistant.threads.setStatus API is available per channel (detected at runtime).
   // undefined = not yet tested, true = works, false = not available (fall back to post/delete).
-  private assistantStatusAvailable: boolean | undefined = undefined;
+  // Keyed by channelId because the API only works in AI-app DM threads, not regular channels.
+  private assistantStatusAvailable = new Map<string, boolean>();
+
+  // Threads where the bot has previously replied, keyed by jid → Set<thread_ts>.
+  // Used to auto-trigger responses when the user replies to an existing bot thread
+  // without @mentioning the bot.
+  private botParticipatedThreads = new Map<string, Set<string>>();
 
   // Thinking indicator state.
   // When using assistant API: stores 'assistant:<thread_ts>' so setTyping(false) knows to clear it.
   // When using post/delete fallback: stores the ts of the posted "thinking" message.
   private thinkingTs = new Map<string, string>();
-  private thinkingTimers = new Map<string, ReturnType<typeof setInterval>>();
 
   constructor(opts: SlackChannelOpts) {
     this.opts = opts;
@@ -98,21 +102,36 @@ export class SlackChannel implements Channel {
       // We handle: regular messages (no subtype), bot_message, slack_audio, and file_share.
       // Voice notes from the Slack mobile app arrive as file_share (with files[].subtype = 'slack_audio').
       const subtype = (event as { subtype?: string }).subtype;
-      logger.info({ subtype, channel: (event as { channel?: string }).channel, hasFiles: !!(event as { files?: unknown[] }).files?.length }, 'Slack message event received');
-      const ALLOWED_SUBTYPES = new Set(['bot_message', 'slack_audio', 'file_share']);
+      logger.info(
+        {
+          subtype,
+          channel: (event as { channel?: string }).channel,
+          hasFiles: !!(event as { files?: unknown[] }).files?.length,
+        },
+        'Slack message event received',
+      );
+      const ALLOWED_SUBTYPES = new Set([
+        'bot_message',
+        'slack_audio',
+        'file_share',
+      ]);
       if (subtype && !ALLOWED_SUBTYPES.has(subtype)) return;
 
       // After filtering, event is either GenericMessageEvent or BotMessageEvent
       const msg = event as HandledMessageEvent;
 
       // Check for attached files (e.g. voice notes, images)
-      const files = (event as { files?: Array<{
-        url_private?: string;
-        mimetype?: string;
-        name?: string;
-        subtype?: string;
-        title?: string;
-      }> }).files;
+      const files = (
+        event as {
+          files?: Array<{
+            url_private?: string;
+            mimetype?: string;
+            name?: string;
+            subtype?: string;
+            title?: string;
+          }>;
+        }
+      ).files;
 
       // Require text OR attached files — drop empty messages
       if (!msg.text && (!files || files.length === 0)) return;
@@ -136,6 +155,20 @@ export class SlackChannel implements Channel {
       if (!isBotMessage) {
         const threadTs = (msg as { thread_ts?: string }).thread_ts ?? msg.ts;
         this.activeThreadTs.set(jid, threadTs);
+        this.lastUserMessageTs.set(jid, msg.ts);
+      }
+
+      // Track threads where the bot has replied so we can auto-trigger
+      // responses to thread replies without an @mention.
+      // Note: BotMessageEvent has bot_id but not user, so check isBotMessage only.
+      if (isBotMessage) {
+        const threadTs = (msg as { thread_ts?: string }).thread_ts;
+        if (threadTs) {
+          if (!this.botParticipatedThreads.has(jid)) {
+            this.botParticipatedThreads.set(jid, new Set());
+          }
+          this.botParticipatedThreads.get(jid)!.add(threadTs);
+        }
       }
 
       let senderName: string;
@@ -151,13 +184,18 @@ export class SlackChannel implements Channel {
       // Translate Slack <@UBOTID> mentions into TRIGGER_PATTERN format.
       // Slack encodes @mentions as <@U12345>, which won't match TRIGGER_PATTERN
       // (e.g., ^@<ASSISTANT_NAME>\b), so we prepend the trigger when the bot is @mentioned.
+      // Also auto-trigger when the user replies to a thread where the bot has already replied
+      // (no @mention needed — they're already in a conversation with the bot).
       let content = msg.text ?? '';
-      if (this.botUserId && !isBotMessage) {
-        const mentionPattern = `<@${this.botUserId}>`;
-        if (
-          content.includes(mentionPattern) &&
-          !TRIGGER_PATTERN.test(content)
-        ) {
+      if (!isBotMessage && !TRIGGER_PATTERN.test(content)) {
+        const messageThreadTs = (msg as { thread_ts?: string }).thread_ts;
+        const isMentioned =
+          this.botUserId && content.includes(`<@${this.botUserId}>`);
+        const isThreadReplyWithBot =
+          messageThreadTs &&
+          this.botParticipatedThreads.get(jid)?.has(messageThreadTs);
+
+        if (isMentioned || isThreadReplyWithBot) {
           content = `@${ASSISTANT_NAME} ${content}`;
         }
       }
@@ -172,9 +210,12 @@ export class SlackChannel implements Channel {
             (file.subtype === 'slack_audio' ||
               file.mimetype?.startsWith('audio/') ||
               file.mimetype?.startsWith('video/')); // Slack sends voice memos as video/mp4
-          const isImage = file.url_private && file.mimetype?.startsWith('image/');
+          const isImage =
+            file.url_private && file.mimetype?.startsWith('image/');
           if (isAudio) {
-            const transcript = await this.transcribeSlackAudio(file.url_private!);
+            const transcript = await this.transcribeSlackAudio(
+              file.url_private!,
+            );
             if (transcript) {
               content = content ? `${transcript}\n${content}` : transcript;
             }
@@ -232,7 +273,9 @@ export class SlackChannel implements Channel {
 
       // Determine a reasonable file extension for Whisper
       // Slack voice memos are typically M4A wrapped in a MP4 container
-      const ext = fileUrl.includes('.') ? fileUrl.split('.').pop()!.split('?')[0] : 'mp4';
+      const ext = fileUrl.includes('.')
+        ? fileUrl.split('.').pop()!.split('?')[0]
+        : 'mp4';
 
       // Send to OpenAI Whisper
       const formData = new FormData();
@@ -240,18 +283,21 @@ export class SlackChannel implements Channel {
       formData.append('file', blob, `voice.${ext}`);
       formData.append('model', 'whisper-1');
 
-      const whisperRes = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${openaiKey}` },
-        body: formData,
-      });
+      const whisperRes = await fetch(
+        'https://api.openai.com/v1/audio/transcriptions',
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${openaiKey}` },
+          body: formData,
+        },
+      );
 
       if (!whisperRes.ok) {
         const errText = await whisperRes.text();
         throw new Error(`Whisper API error ${whisperRes.status}: ${errText}`);
       }
 
-      const result = await whisperRes.json() as { text: string };
+      const result = (await whisperRes.json()) as { text: string };
       logger.info({ fileUrl }, 'Voice message transcribed');
       return `[Voice message]: ${result.text}`;
     } catch (err) {
@@ -292,7 +338,10 @@ export class SlackChannel implements Channel {
       const destPath = path.join(imagesDir, destFilename);
       fs.writeFileSync(destPath, imageBuffer);
 
-      logger.info({ fileUrl, destPath }, 'Slack image saved for agent analysis');
+      logger.info(
+        { fileUrl, destPath },
+        'Slack image saved for agent analysis',
+      );
       // Return the container-visible path
       return `/workspace/ipc/images/${destFilename}`;
     } catch (err) {
@@ -354,6 +403,14 @@ export class SlackChannel implements Channel {
           });
         }
       }
+      // Record that the bot has now replied in this thread so future replies
+      // from the user auto-trigger without needing an @mention.
+      if (threadTs) {
+        if (!this.botParticipatedThreads.has(jid)) {
+          this.botParticipatedThreads.set(jid, new Set());
+        }
+        this.botParticipatedThreads.get(jid)!.add(threadTs);
+      }
       logger.info({ jid, length: text.length }, 'Slack message sent');
     } catch (err) {
       this.outgoingQueue.push({ jid, text });
@@ -364,7 +421,11 @@ export class SlackChannel implements Channel {
     }
   }
 
-  async sendMedia(jid: string, filePath: string, filename?: string): Promise<void> {
+  async sendMedia(
+    jid: string,
+    filePath: string,
+    filename?: string,
+  ): Promise<void> {
     const channelId = jid.replace(/^slack:/, '');
     const threadTs = this.activeThreadTs.get(jid);
     const fname = filename || path.basename(filePath);
@@ -376,7 +437,9 @@ export class SlackChannel implements Channel {
         filename: fname,
         file: fileBuffer,
         // thread_ts must be string if present; cast via record to satisfy the union type
-        ...(threadTs ? ({ thread_ts: threadTs } as Record<string, unknown>) : {}),
+        ...(threadTs
+          ? ({ thread_ts: threadTs } as Record<string, unknown>)
+          : {}),
       } as Parameters<typeof this.app.client.files.uploadV2>[0]);
       logger.info({ jid, filePath, fname }, 'Slack media uploaded');
     } catch (err) {
@@ -401,13 +464,16 @@ export class SlackChannel implements Channel {
   async setTyping(jid: string, isTyping: boolean): Promise<void> {
     const channelId = jid.replace(/^slack:/, '');
     const threadTs = this.activeThreadTs.get(jid);
+    // DM channels have IDs starting with 'D'. Regular channels (C/G) are group chats.
+    const isDmChannel = channelId.startsWith('D');
 
     if (isTyping) {
       if (this.thinkingTs.has(jid)) return; // already showing
 
-      // Try the native Slack assistant typing indicator first.
-      // Requires assistant:write scope + app configured as AI app.
-      if (threadTs && this.assistantStatusAvailable !== false) {
+      // Try the native assistant typing indicator for all channels/DMs.
+      // Requires assistant:write scope + "Agents & AI Apps" feature enabled in the Slack app.
+      // Falls back to emoji reaction if unavailable.
+      if (threadTs && this.assistantStatusAvailable.get(channelId) !== false) {
         try {
           await (
             this.app.client as unknown as {
@@ -422,58 +488,34 @@ export class SlackChannel implements Channel {
             status: 'is typing...',
           });
           this.thinkingTs.set(jid, `assistant:${threadTs}`);
-          this.assistantStatusAvailable = true;
+          this.assistantStatusAvailable.set(channelId, true);
           return;
-        } catch {
-          // API not available — fall through to post/rotate/delete fallback
-          this.assistantStatusAvailable = false;
-          logger.debug(
-            { jid },
-            'assistant.threads.setStatus unavailable, using fallback typing indicator',
+        } catch (err) {
+          this.assistantStatusAvailable.set(channelId, false);
+          logger.info(
+            { jid, err },
+            'assistant.threads.setStatus unavailable, falling back to reaction',
           );
         }
       }
 
-      // Fallback: post a "thinking..." message and rotate its text.
-      try {
-        const result = await this.app.client.chat.postMessage({
-          channel: channelId,
-          text: THINKING_STATUSES[0],
-          ...(threadTs ? { thread_ts: threadTs } : {}),
-        });
-        if (!result.ts) return;
-        const ts = result.ts as string;
-        this.thinkingTs.set(jid, ts);
-
-        let idx = 0;
-        const timer = setInterval(async () => {
-          idx = (idx + 1) % THINKING_STATUSES.length;
-          const statusText =
-            this.readAgentStatus(jid) ?? THINKING_STATUSES[idx];
-          try {
-            await this.app.client.chat.update({
-              channel: channelId,
-              ts,
-              text: statusText,
-            });
-          } catch {
-            // message may have been deleted already; stop rotating
-            clearInterval(timer);
-            this.thinkingTimers.delete(jid);
-          }
-        }, STATUS_ROTATE_INTERVAL);
-        this.thinkingTimers.set(jid, timer);
-      } catch (err) {
-        logger.warn({ jid, err }, 'Failed to post thinking indicator');
+      // Fallback: add a thinking emoji reaction to the user's message.
+      // Visible in the channel without needing the thread open.
+      // Requires reactions:write scope.
+      const userMsgTs = this.lastUserMessageTs.get(jid);
+      if (userMsgTs) {
+        try {
+          await this.app.client.reactions.add({
+            channel: channelId,
+            timestamp: userMsgTs,
+            name: THINKING_REACTION,
+          });
+          this.thinkingTs.set(jid, `reaction:${channelId}:${userMsgTs}`);
+        } catch (err) {
+          logger.warn({ jid, err }, 'Failed to add thinking reaction');
+        }
       }
     } else {
-      // Stop rotation timer (if any)
-      const timer = this.thinkingTimers.get(jid);
-      if (timer) {
-        clearInterval(timer);
-        this.thinkingTimers.delete(jid);
-      }
-
       const ts = this.thinkingTs.get(jid);
       if (!ts) return;
       this.thinkingTs.delete(jid);
@@ -500,12 +542,19 @@ export class SlackChannel implements Channel {
             'Failed to clear assistant typing indicator',
           );
         }
-      } else {
-        // Delete the fallback "thinking..." message
+      } else if (ts.startsWith('reaction:')) {
+        // Remove the thinking emoji reaction
+        const parts = ts.split(':');
+        const rxChannel = parts[1];
+        const rxTs = parts[2];
         try {
-          await this.app.client.chat.delete({ channel: channelId, ts });
+          await this.app.client.reactions.remove({
+            channel: rxChannel,
+            timestamp: rxTs,
+            name: THINKING_REACTION,
+          });
         } catch (err) {
-          logger.warn({ jid, err }, 'Failed to delete thinking indicator');
+          logger.warn({ jid, err }, 'Failed to remove thinking reaction');
         }
       }
     }

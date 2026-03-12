@@ -47,6 +47,27 @@ When you learn something important:
 - Split files larger than 500 lines into folders
 - Keep an index in your memory for the files you create
 
+## Credentials & Secrets
+
+Secrets arrive in two ways at container startup:
+
+**1. Environment variables** — injected from NanoClaw's macOS Keychain (`nanoclaw-secrets` service):
+- `LINEAR_API_KEY_COGNITIVE`, `LINEAR_API_KEY_CT`, `LINEAR_API_KEY_GANTTSY`
+- `OPENAI_API_KEY`
+- Check with: `printenv | grep -E "_KEY|_TOKEN|_SECRET"`
+
+**2. File credentials** — read-only at `/workspace/extra/credentials/`:
+- Plain text API keys/tokens: `attio`, `elevenlabs`, `toggl`, `beeper`, `fathom-api-key`, `ganttsy-github-token`, `github-transcript-token`, etc.
+- JSON token files: `xero-tokens.json`, `ganttsy-google-token.json`, `shadow-google-token.json`, etc.
+- Read with: `cat /workspace/extra/credentials/<name>`
+
+**Full credential index** — `/workspace/secrets-info/secrets-manifest.json`:
+Lists every available credential, its env var name, file path, which groups have access, and a description. Read this first when you need to know what's available or when adding a new skill that needs auth.
+
+**If a credential is missing:** check the manifest to confirm it should exist for your group, then tell Cian — secrets are managed via `nanoclaw-secrets` CLI on the host.
+
+Note: the `.env` path in the main container is an internal implementation detail (character device), not a credential source.
+
 ## Message Formatting
 
 NEVER use markdown. Only use WhatsApp/Telegram formatting:
