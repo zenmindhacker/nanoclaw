@@ -17,7 +17,7 @@ const DEFAULT_CONFIG = {
  * Load Toggl API token from credentials file
  */
 export function getTogglCredentials() {
-  const credPath = '/workspace/extra/credentials/toggl';
+  const credPath = resolve(homedir(), '.openclaw/credentials/toggl');
   return readFileSync(credPath, 'utf8').trim();
 }
 
@@ -136,57 +136,93 @@ export async function getProjectHoursByUser(workspaceId, projectId, since, until
 }
 
 /**
- * Get hours for Work Wranglers (Cian + Rustam)
+ * Get hours for Work Wranglers broken down by person and task.
+ * Cian's hours are split into regular (CTO Consulting @ $175) and
+ * discounted (Management/Sales Consulting @ $125) buckets.
  * @param {string} since - Start date (YYYY-MM-DD)
  * @param {string} until - End date (YYYY-MM-DD)
  */
 export async function getWorkWranglersHours(since, until) {
   const workspaceId = '8629306';
   const projectId = '204851981'; // WW: Consulting
-  
-  const users = await getProjectHoursByUser(workspaceId, projectId, since, until);
-  
-  // Normalize user names (Toggl might have different formats)
+  const apiToken = getTogglCredentials();
+
+  const endpoint = `/reports/api/v2/details?workspace_id=${workspaceId}&since=${since}&until=${until}&project_ids=${projectId}`;
+  const response = await togglRequest(endpoint, apiToken);
+  const entries = response.data || [];
+
+  const DISCOUNTED_TASKS = ['Management Consulting', 'Sales Consulting'];
+
   const result = {
-    cian: 0,
+    cian: 0,             // CTO Consulting seconds
+    cianDiscounted: 0,   // Management + Sales Consulting seconds
     rustam: 0,
     total: 0,
-    breakdown: users
+    breakdown: entries
   };
-  
-  for (const entry of users) {
-    const userLower = entry.user.toLowerCase();
-    
-    // Match Cian
+
+  for (const entry of entries) {
+    const userLower = (entry.user || '').toLowerCase();
+    const task = entry.task || '';
+    const dur = Math.round((entry.dur || 0) / 1000); // ms → seconds
+
     if (userLower.includes('cian') || userLower.includes('kenshin')) {
-      result.cian += entry.totalSeconds;
+      if (DISCOUNTED_TASKS.includes(task)) {
+        result.cianDiscounted += dur;
+      } else {
+        result.cian += dur;
+      }
+    } else if (userLower.includes('rustam') || userLower.includes('rustom')) {
+      result.rustam += dur;
     }
-    // Match Rustam
-    else if (userLower.includes('rustam') || userLower.includes('rustom')) {
-      result.rustam += entry.totalSeconds;
-    }
-    
-    result.total += entry.totalSeconds;
+
+    result.total += dur;
   }
-  
+
   return result;
 }
 
 /**
- * Get total hours for a project (for CopperTeams, Ganttsx excess calculation)
+ * Get total hours for a project, optionally filtered to specific users.
  * @param {string} projectId - Toggl project ID
  * @param {string} since - Start date (YYYY-MM-DD)
  * @param {string} until - End date (YYYY-MM-DD)
+ * @param {string[]} [billableUsers] - If provided, only count hours for these users (case-insensitive partial match)
  */
-export async function getTotalProjectHours(projectId, since, until) {
+export async function getTotalProjectHours(projectId, since, until, billableUsers) {
   const workspaceId = '8629306';
-  
-  const result = await getProjectHours(workspaceId, projectId, since, until);
-  
+
+  if (!billableUsers || billableUsers.length === 0) {
+    // No user filter — use the fast summary endpoint
+    const result = await getProjectHours(workspaceId, projectId, since, until);
+    return {
+      totalHours: Math.round(result.totalSeconds / 3600 * 100) / 100,
+      totalSeconds: result.totalSeconds,
+      projectFound: result.projectFound
+    };
+  }
+
+  // User filter — need detailed entries to filter by person
+  const apiToken = getTogglCredentials();
+  const endpoint = `/reports/api/v2/details?workspace_id=${workspaceId}&since=${since}&until=${until}&project_ids=${projectId}`;
+  const response = await togglRequest(endpoint, apiToken);
+  const entries = response.data || [];
+
+  const filters = billableUsers.map(u => u.toLowerCase());
+  let totalMs = 0;
+
+  for (const entry of entries) {
+    const user = (entry.user || '').toLowerCase();
+    if (filters.some(f => user.includes(f))) {
+      totalMs += entry.dur || 0;
+    }
+  }
+
+  const totalSeconds = Math.round(totalMs / 1000);
   return {
-    totalHours: Math.round(result.totalSeconds / 3600 * 100) / 100,
-    totalSeconds: result.totalSeconds,
-    projectFound: result.projectFound
+    totalHours: Math.round(totalSeconds / 3600 * 100) / 100,
+    totalSeconds,
+    projectFound: entries.length > 0
   };
 }
 

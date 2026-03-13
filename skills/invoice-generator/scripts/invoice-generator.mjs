@@ -164,83 +164,42 @@ async function generateTogglPdf(invoiceNumber, clientName, projectId, since, unt
 
 /**
  * Export a PDF from Toggl using the dashboard export API.
- * Builds a synthetic dashboard body matching what the Toggl web UI sends —
- * id: 0, date range in preferences.datePeriod + each chart's query.period,
- * project filter in dashboard.filters + each chart's query.filters.
+ * Loads the saved custom report template (captured from browser) and injects
+ * the billing period date range before posting.
  *
- * Reverse-engineered by intercepting browser network calls (2026-03-11).
+ * Templates live at skills/invoice-generator/templates/{ww,ct,ganttsy}.json
+ * and were captured by intercepting browser network calls (2026-03-11).
  */
 async function exportTogglPdf(projectId, since, until, clientName) {
   const apiToken = toggl.getTogglCredentials();
   const auth = Buffer.from(`${apiToken}:api_token`).toString('base64');
-
-  const WORKSPACE_ID = 8629306;
-  const ORG_ID = 8630437;
   const filename = `Toggl-Report-${clientName}-${since}-${until}.pdf`;
 
-  const projectFilter = {
-    operator: 'and',
-    conditions: [{ property: 'project_id', operator: 'in', value: [Number(projectId)] }]
+  // Map project IDs to saved dashboard template files
+  const TEMPLATE_MAP = {
+    '204851981': 'ww.json',      // Work Wranglers
+    '214367650': 'ct.json',      // CopperTeams
+    '215944745': 'ganttsy.json'  // Ganttsy
   };
 
-  // Each chart gets workspace_id + project filter in query.filters, and the date in query.period
-  const makeChart = (id, type, name, groupings, preferences = {}) => ({
-    type,
-    query: {
-      aggregations: [{ function: 'sum', property: 'duration' }],
-      groupings,
-      filters: [
-        { property: 'workspace_id', operator: '=', value: WORKSPACE_ID },
-        projectFilter
-      ],
-      modifiers: {},
-      period: { from: since, to: until },
-      attributes: [],
-      ordinations: []
-    },
-    id,
-    organization_id: ORG_ID,
-    created_by: 0,
-    created_at: '',
-    creator_name: '',
-    updated_at: '',
-    permissions: [],
-    name,
-    preferences: { collapseToOther: false, currency: 'CAD', ...preferences }
-  });
+  const templateFile = TEMPLATE_MAP[String(projectId)];
+  if (!templateFile) {
+    throw new Error(`No Toggl template for project ${projectId}`);
+  }
 
-  const chart1001 = makeChart(1001, 'stacked_bar', 'Duration by day',
-    [{ property: 'day' }, { property: 'billable' }]);
-  const chart1003 = makeChart(1003, 'donut', 'Member distribution',
-    [{ property: 'user_id' }]);
-  const chart1002 = makeChart(1002, 'table', 'Member and description breakdown',
-    [{ property: 'user_id' }, { property: 'description' }],
-    { columnWidths: {}, dateFormat: 'MM/DD/YYYY', timeFormat: 'h:mm A', durationFormat: 'improved', hideWeekends: false });
+  const templatePath = resolve(__dirname, '..', 'templates', templateFile);
+  const body = JSON.parse(readFileSync(templatePath, 'utf8'));
 
-  const body = {
-    dashboard: {
-      id: 0,
-      name: `${clientName} report (${since} to ${until})`,
-      organization_id: ORG_ID,
-      filters: [projectFilter],
-      grid_items: [
-        { height: 12, width: 8,  x_position: 1, y_position: 2,  chart_id: 1001 },
-        { height: 12, width: 4,  x_position: 9, y_position: 2,  chart_id: 1003 },
-        { height: 12, width: 12, x_position: 1, y_position: 14, chart_id: 1002 }
-      ],
-      charts: [chart1001, chart1003, chart1002],
-      created_by: 0, created_at: '', creator_name: '', updated_at: '',
-      permissions: [], link: { external: false, token: '' }, version: 1,
-      preferences: {
-        datePeriod: { from: since, to: until },
-        rounding: { type: 'roundUp', minutes: '15', level: 'time_entry', enabled: false, mode: 1 },
-        totalsMetrics: ['duration', 'billable_duration', 'amount', 'average_daily_hours'],
-        splitByRates: false
-      }
-    },
-    // Top-level charts object (keyed by ID) — required by export endpoint
-    charts: { '1001': chart1001, '1003': chart1003, '1002': chart1002 }
-  };
+  // Inject billing period date range into dashboard preferences
+  body.dashboard.preferences.datePeriod = { from: since, to: until };
+
+  // Update each chart's query.period in both dashboard.charts array and top-level charts object
+  for (const chart of (body.dashboard.charts || [])) {
+    if (chart.query) chart.query.period = { from: since, to: until };
+  }
+  for (const chart of Object.values(body.charts || {})) {
+    if (chart.query) chart.query.period = { from: since, to: until };
+  }
 
   const postData = JSON.stringify(body);
 
@@ -282,7 +241,7 @@ async function exportTogglPdf(projectId, since, until, clientName) {
 async function attachTogglPdf(invoice, clientName, projectId, since, until) {
   console.log('   📎 Generating and attaching Toggl PDF report...');
   try {
-    const pdfDir = '/workspace/group/toggl-reports';
+    const pdfDir = resolve(homedir(), '.openclaw/toggl-reports');
     if (!existsSync(pdfDir)) mkdirSync(pdfDir, { recursive: true });
     const pdfPath = pdfDir + '/Toggl-Report-' + invoice.invoiceNumber + '.pdf';
     
@@ -314,7 +273,7 @@ async function attachTogglPdf(invoice, clientName, projectId, since, until) {
     const filename = 'Toggl-Report-' + invoice.invoiceNumber + '.pdf';
     
     // Read PDF and upload to Xero
-    const tokensPath = '/workspace/extra/credentials/xero-tokens.json';
+    const tokensPath = resolve(homedir(), '.openclaw/credentials/xero-tokens.json');
     const tokens = JSON.parse(readFileSync(tokensPath, 'utf8'));
     
     const { client, tenantId } = await xero.getXeroClient();
@@ -344,25 +303,30 @@ async function generateWorkWranglersInvoice(year, month) {
   
   const hours = await toggl.getWorkWranglersHours(since, until);
   console.log('   Hours for ' + since + ' to ' + until + ':');
-  console.log('   - Cian: ' + toggl.secondsToHours(hours.cian) + ' hours');
+  console.log('   - Cian (CTO): ' + toggl.secondsToHours(hours.cian) + ' hours');
+  console.log('   - Cian (Discounted): ' + toggl.secondsToHours(hours.cianDiscounted) + ' hours');
   console.log('   - Rustam: ' + toggl.secondsToHours(hours.rustam) + ' hours');
-  
+
   const lineItems = [];
   const personRates = clientConfig.personRates;
-  
+  const period = priorYear + '-' + String(priorMonth).padStart(2, '0');
+
+  // Cian CTO Consulting — always included even at 0 hours
   const cianHours = toggl.secondsToHours(hours.cian);
-  if (cianHours > 0) {
-    const rate = personRates.cian.rate;
-    lineItems.push({ description: personRates.cian.description + ' (' + priorYear + '-' + priorMonth + ')', quantity: cianHours, unitAmount: rate, taxType: projectConfig.taxType, accountCode: projectConfig.accountCode });
-    console.log('   - Cian: ' + cianHours + 'h @ $' + rate + '/hr');
+  lineItems.push({ itemCode: personRates.cian.productCode, description: personRates.cian.description + ' (' + period + ')', quantity: cianHours, unitAmount: personRates.cian.rate, taxType: projectConfig.taxType, accountCode: projectConfig.accountCode });
+  console.log('   - Cian CTO: ' + cianHours + 'h @ $' + personRates.cian.rate + '/hr');
+
+  // Cian Discounted (Management / Sales Consulting) — only if hours logged
+  const cianDiscountedHours = toggl.secondsToHours(hours.cianDiscounted);
+  if (cianDiscountedHours > 0) {
+    lineItems.push({ itemCode: personRates.cianDiscounted.productCode, description: personRates.cianDiscounted.description + ' (' + period + ')', quantity: cianDiscountedHours, unitAmount: personRates.cianDiscounted.rate, taxType: projectConfig.taxType, accountCode: projectConfig.accountCode });
+    console.log('   - Cian Discounted: ' + cianDiscountedHours + 'h @ $' + personRates.cianDiscounted.rate + '/hr');
   }
-  
+
+  // Rustam — always included even at 0 hours
   const rustamHours = toggl.secondsToHours(hours.rustam);
-  if (rustamHours > 0) {
-    const rate = personRates.rustam.rate;
-    lineItems.push({ description: personRates.rustam.description + ' (' + priorYear + '-' + priorMonth + ')', quantity: rustamHours, unitAmount: rate, taxType: projectConfig.taxType, accountCode: projectConfig.accountCode });
-    console.log('   - Rustam: ' + rustamHours + 'h @ $' + rate + '/hr');
-  }
+  lineItems.push({ itemCode: personRates.rustam.productCode, description: personRates.rustam.description + ' (' + period + ')', quantity: rustamHours, unitAmount: personRates.rustam.rate, taxType: projectConfig.taxType, accountCode: projectConfig.accountCode });
+  console.log('   - Rustam: ' + rustamHours + 'h @ $' + personRates.rustam.rate + '/hr');
   
   const invoice = await xero.createDraftInvoice(clientConfig.contactName, lineItems, 'WW: Consulting - ' + year + '-' + String(month).padStart(2, '0'), month, year);
   await attachTogglPdf(invoice, 'Work Wranglers', projectConfig.id, since, until);
@@ -378,21 +342,17 @@ async function generateCopperTeamsInvoice(year, month) {
   const clientConfig = config.clients['copperteams'];
   const projectConfig = config.projects['copperteams'];
   
-  const hours = await toggl.getTotalProjectHours(projectConfig.id, since, until);
-  console.log('   Hours for ' + since + ' to ' + until + ': ' + hours.totalHours + ' hours');
+  const hours = await toggl.getTotalProjectHours(projectConfig.id, since, until, clientConfig.billableUsers);
+  console.log('   Hours for ' + since + ' to ' + until + ': ' + hours.totalHours + ' hours' + (clientConfig.billableUsers ? ' (filtered to: ' + clientConfig.billableUsers.join(', ') + ')' : ''));
   console.log('   Retainer: ' + clientConfig.retainerHours + ' hours @ $' + clientConfig.retainerRate + '/hr');
-  
+
   const lineItems = [];
-  lineItems.push({ description: clientConfig.retainerDescription, quantity: clientConfig.retainerHours, unitAmount: clientConfig.retainerRate, taxType: projectConfig.taxType, accountCode: projectConfig.accountCode });
-  
-  if (hours.totalHours > clientConfig.retainerHours) {
-    const excessHours = hours.totalHours - clientConfig.retainerHours;
-    console.log('   Excess: ' + excessHours + ' hours @ $' + clientConfig.excessRate + '/hr');
-    lineItems.push({ description: clientConfig.excessDescription, quantity: Math.round(excessHours * 100) / 100, unitAmount: clientConfig.excessRate, taxType: projectConfig.taxType, accountCode: projectConfig.accountCode });
-  } else {
-    console.log('   No excess hours');
-  }
-  
+  lineItems.push({ itemCode: clientConfig.retainerItemCode, description: clientConfig.retainerDescription, quantity: clientConfig.retainerHours, unitAmount: clientConfig.retainerRate, taxType: projectConfig.taxType, accountCode: projectConfig.accountCode });
+
+  const excessHours = Math.max(0, Math.round((hours.totalHours - clientConfig.retainerHours) * 100) / 100);
+  console.log('   Excess: ' + excessHours + ' hours @ $' + clientConfig.excessRate + '/hr');
+  lineItems.push({ itemCode: clientConfig.excessItemCode, description: clientConfig.excessDescription, quantity: excessHours, unitAmount: clientConfig.excessRate, taxType: projectConfig.taxType, accountCode: projectConfig.accountCode });
+
   const invoice = await xero.createDraftInvoice(clientConfig.contactName, lineItems, 'Kora MVP - ' + year + '-' + String(month).padStart(2, '0'), month, year);
   await attachTogglPdf(invoice, 'CopperTeams', projectConfig.id, since, until);
   return invoice;
@@ -407,21 +367,17 @@ async function generateGanttsyInvoice(year, month) {
   const clientConfig = config.clients['ganttsy'];
   const projectConfig = config.projects['ganttsy'];
   
-  const hours = await toggl.getTotalProjectHours(projectConfig.id, since, until);
-  console.log('   Hours for ' + since + ' to ' + until + ': ' + hours.totalHours + ' hours');
+  const hours = await toggl.getTotalProjectHours(projectConfig.id, since, until, clientConfig.billableUsers);
+  console.log('   Hours for ' + since + ' to ' + until + ': ' + hours.totalHours + ' hours' + (clientConfig.billableUsers ? ' (filtered to: ' + clientConfig.billableUsers.join(', ') + ')' : ''));
   console.log('   Retainer: ' + clientConfig.retainerHours + ' hours @ $' + clientConfig.retainerRate + '/hr');
-  
+
   const lineItems = [];
-  lineItems.push({ description: clientConfig.retainerDescription, quantity: clientConfig.retainerHours, unitAmount: clientConfig.retainerRate, taxType: projectConfig.taxType, accountCode: projectConfig.accountCode });
-  
-  if (hours.totalHours > clientConfig.retainerHours) {
-    const excessHours = hours.totalHours - clientConfig.retainerHours;
-    console.log('   Excess: ' + excessHours + ' hours @ $' + clientConfig.excessRate + '/hr');
-    lineItems.push({ description: clientConfig.excessDescription, quantity: Math.round(excessHours * 100) / 100, unitAmount: clientConfig.excessRate, taxType: projectConfig.taxType, accountCode: projectConfig.accountCode });
-  } else {
-    console.log('   No excess hours');
-  }
-  
+  lineItems.push({ itemCode: clientConfig.retainerItemCode, description: clientConfig.retainerDescription, quantity: clientConfig.retainerHours, unitAmount: clientConfig.retainerRate, taxType: projectConfig.taxType, accountCode: projectConfig.accountCode });
+
+  const excessHours = Math.max(0, Math.round((hours.totalHours - clientConfig.retainerHours) * 100) / 100);
+  console.log('   Excess: ' + excessHours + ' hours @ $' + clientConfig.excessRate + '/hr');
+  lineItems.push({ itemCode: clientConfig.excessItemCode, description: clientConfig.excessDescription, quantity: excessHours, unitAmount: clientConfig.excessRate, taxType: projectConfig.taxType, accountCode: projectConfig.accountCode });
+
   const invoice = await xero.createDraftInvoice(clientConfig.contactName, lineItems, 'Ganttsy MVP - ' + year + '-' + String(month).padStart(2, '0'), month, year);
   await attachTogglPdf(invoice, 'Ganttsy', projectConfig.id, since, until);
   return invoice;
@@ -435,7 +391,7 @@ async function generateKevinLeeInvoice(year, month) {
   const clientConfig = config.clients['kevin-lee'];
   const projectConfig = config.projects['kevin-lee'];
   
-  const lineItems = [{ description: clientConfig.retainerDescription, quantity: clientConfig.retainerHours, unitAmount: clientConfig.retainerRate, taxType: projectConfig.taxType, accountCode: projectConfig.accountCode }];
+  const lineItems = [{ itemCode: clientConfig.itemCode, description: clientConfig.retainerDescription, quantity: clientConfig.retainerHours, unitAmount: clientConfig.retainerRate, taxType: projectConfig.taxType, accountCode: projectConfig.accountCode }];
   const invoice = await xero.createDraftInvoice(clientConfig.contactName, lineItems, 'Executive Coaching - ' + year + '-' + String(month).padStart(2, '0'), month, year);
   return invoice;
 }
