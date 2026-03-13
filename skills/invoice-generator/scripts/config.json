@@ -46,12 +46,20 @@
         "cian": {
           "productCode": "CTOCONSULT",
           "rate": 175,
-          "description": "Cian - CTO Consulting Services"
+          "description": "Cian - CTO Consulting Services",
+          "tasks": ["CTO Consulting"]
+        },
+        "cianDiscounted": {
+          "productCode": "SALESCONSULT",
+          "rate": 125,
+          "description": "Cian - Sales Consulting (Discounted)",
+          "tasks": ["Management Consulting", "Sales Consulting"]
         },
         "rustam": {
           "productCode": "SRDEVCONSULT",
           "rate": 130,
-          "description": "Rustam - Sr Dev Consulting Services"
+          "description": "Rustam - Sr Dev Consulting Services",
+          "tasks": ["Sr Dev Consulting"]
         }
       }
     },
@@ -61,7 +69,10 @@
       "retainerRate": 275,
       "excessRate": 225,
       "retainerDescription": "Monthly retainer services - under 20 hours/month",
-      "excessDescription": "Excess Hours (prior month)"
+      "excessDescription": "Excess Hours (prior month)",
+      "retainerItemCode": "FCTO-LOW",
+      "excessItemCode": "FCTO-TIER3",
+      "billableUsers": ["Cian"]
     },
     "ganttsy": {
       "contactName": "Ganttsy",
@@ -69,7 +80,10 @@
       "retainerRate": 225,
       "excessRate": 225,
       "retainerDescription": "Monthly retainer services",
-      "excessDescription": "Excess Hours (prior month)"
+      "excessDescription": "Excess Hours (prior month)",
+      "retainerItemCode": "FCTO-TIER3",
+      "excessItemCode": "FCTO-TIER3",
+      "billableUsers": ["Cian"]
     },
     "kevin-lee": {
       "contactName": "Kevin Lee",
@@ -77,6 +91,7 @@
       "retainerRate": 1400,
       "excessRate": null,
       "retainerDescription": "Executive Coaching Weekly Retainer",
+      "itemCode": "EXEC-COACH-BI-WEEK",
       "copyFromPriorMonth": true
     },
     "nvs": {

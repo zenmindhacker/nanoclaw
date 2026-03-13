@@ -1,0 +1,544 @@
+{
+  "dashboard": {
+    "id": 2437484,
+    "organization_id": 8630437,
+    "name": "Ganttsy Monthy",
+    "plan": "free",
+    "pinned": false,
+    "locked": false,
+    "preferences": {
+      "begginingOfWeek": 1,
+      "datePeriod": {
+        "from": "2026-03-01",
+        "to": "2026-03-31"
+      },
+      "lockDatesInSharedView": true,
+      "rounding": {
+        "enabled": true,
+        "level": "time_entry",
+        "minutes": "15",
+        "mode": 1,
+        "type": "roundUp"
+      },
+      "totalsMetrics": [
+        "duration",
+        "billable_duration",
+        "amount",
+        "average_daily_hours"
+      ]
+    },
+    "filters": [
+      {
+        "operator": "and",
+        "value": null,
+        "conditions": [
+          {
+            "property": "user_id",
+            "operator": "in",
+            "value": [
+              11184653
+            ]
+          },
+          {
+            "property": "project_id",
+            "operator": "in",
+            "value": [
+              215944745
+            ]
+          }
+        ]
+      }
+    ],
+    "grid_items": [
+      {
+        "id": 5552073,
+        "dashboard_id": 2437484,
+        "chart_id": 5243760,
+        "x_position": 1,
+        "y_position": 2,
+        "width": 8,
+        "height": 12,
+        "v3_query_params": null
+      },
+      {
+        "id": 5552074,
+        "dashboard_id": 2437484,
+        "chart_id": 5243761,
+        "x_position": 9,
+        "y_position": 2,
+        "width": 4,
+        "height": 12,
+        "v3_query_params": null
+      },
+      {
+        "id": 5552075,
+        "dashboard_id": 2437484,
+        "chart_id": 5243762,
+        "x_position": 1,
+        "y_position": 14,
+        "width": 12,
+        "height": 12,
+        "v3_query_params": null
+      }
+    ],
+    "created_at": "2026-01-29T20:51:19.180964Z",
+    "updated_at": "2026-03-11T21:33:55.137932Z",
+    "chart_summary": {
+      "chart_details": [
+        {
+          "chart_type": "stacked_bar",
+          "chart_id": 5243760
+        },
+        {
+          "chart_type": "donut",
+          "chart_id": 5243761
+        },
+        {
+          "chart_type": "table",
+          "chart_id": 5243762
+        }
+      ]
+    },
+    "charts": [
+      {
+        "id": 5243762,
+        "organization_id": 8630437,
+        "name": "Member and description breakdown",
+        "plan": "free",
+        "type": "table",
+        "pinned": false,
+        "locked": false,
+        "preferences": {
+          "collapseToOther": false,
+          "currency": "CAD",
+          "splitByRates": false,
+          "dateFormat": "MM/DD/YYYY",
+          "timeFormat": "h:mm A",
+          "durationFormat": "improved"
+        },
+        "query": {
+          "groupings": [
+            {
+              "property": "user_id",
+              "show_empty": false
+            },
+            {
+              "property": "description",
+              "show_empty": false
+            }
+          ],
+          "attributes": [
+            {
+              "property": "duration"
+            },
+            {
+              "property": "duration_percentage"
+            },
+            {
+              "property": "amount"
+            }
+          ],
+          "filters": [
+            {
+              "property": "workspace_id",
+              "operator": "=",
+              "value": 8629306
+            }
+          ],
+          "pagination": {
+            "page": null,
+            "per_page": null
+          },
+          "v3_query_params": null
+        },
+        "created_at": "2026-01-29T20:51:18.986311Z",
+        "updated_at": "2026-01-29T20:51:18.986311Z",
+        "created_by": 11184653,
+        "creator_name": "Cian Whalley",
+        "creator_avatar_url": ""
+      },
+      {
+        "id": 5243761,
+        "organization_id": 8630437,
+        "name": "Description distribution",
+        "plan": "free",
+        "type": "donut",
+        "pinned": false,
+        "locked": false,
+        "preferences": {
+          "collapseToOther": false,
+          "currency": "CAD",
+          "splitByRates": false,
+          "dateFormat": "MM/DD/YYYY",
+          "timeFormat": "h:mm A",
+          "durationFormat": "improved"
+        },
+        "query": {
+          "groupings": [
+            {
+              "property": "description",
+              "show_empty": false
+            }
+          ],
+          "aggregations": [
+            {
+              "function": "sum",
+              "property": "duration"
+            }
+          ],
+          "filters": [
+            {
+              "property": "workspace_id",
+              "operator": "=",
+              "value": 8629306
+            }
+          ],
+          "pagination": {
+            "page": null,
+            "per_page": null
+          },
+          "v3_query_params": null
+        },
+        "created_at": "2026-01-29T20:51:18.961511Z",
+        "updated_at": "2026-01-29T20:51:18.961511Z",
+        "created_by": 11184653,
+        "creator_name": "Cian Whalley",
+        "creator_avatar_url": ""
+      },
+      {
+        "id": 5243760,
+        "organization_id": 8630437,
+        "name": "Duration by day",
+        "plan": "free",
+        "type": "stacked_bar",
+        "pinned": false,
+        "locked": false,
+        "preferences": {
+          "collapseToOther": false,
+          "currency": "CAD",
+          "splitByRates": false,
+          "dateFormat": "MM/DD/YYYY",
+          "timeFormat": "h:mm A",
+          "durationFormat": "improved"
+        },
+        "query": {
+          "groupings": [
+            {
+              "property": "day",
+              "show_empty": false
+            },
+            {
+              "property": "billable",
+              "show_empty": false
+            }
+          ],
+          "aggregations": [
+            {
+              "function": "sum",
+              "property": "duration"
+            }
+          ],
+          "filters": [
+            {
+              "property": "workspace_id",
+              "operator": "=",
+              "value": 8629306
+            }
+          ],
+          "pagination": {
+            "page": null,
+            "per_page": null
+          },
+          "v3_query_params": null
+        },
+        "created_at": "2026-01-29T20:51:18.957625Z",
+        "updated_at": "2026-01-29T20:51:18.957625Z",
+        "created_by": 11184653,
+        "creator_name": "Cian Whalley",
+        "creator_avatar_url": ""
+      }
+    ],
+    "permissions": [
+      {
+        "user_id": 11184653,
+        "permission_type": "full",
+        "allowed_actions": [
+          "view",
+          "delete",
+          "edit",
+          "grant_access"
+        ]
+      }
+    ],
+    "link": {
+      "external": false,
+      "token": "82746ad1-9b82-4d6c-84d3-a67ef00531e5"
+    },
+    "created_by": 11184653,
+    "creator_name": "Cian Whalley",
+    "creator_avatar_url": ""
+  },
+  "charts": {
+    "5243760": {
+      "id": 5243760,
+      "organization_id": 8630437,
+      "name": "Duration by day",
+      "plan": "free",
+      "type": "stacked_bar",
+      "pinned": false,
+      "locked": false,
+      "preferences": {
+        "collapseToOther": false,
+        "columnWidths": {},
+        "dateFormat": "MM/DD/YYYY",
+        "timeFormat": "h:mm A",
+        "durationFormat": "improved",
+        "hideWeekends": false,
+        "groupByEntityName": false,
+        "showEmptyGroups": false,
+        "splitByRates": false,
+        "pivotGroup": "day",
+        "currency": "CAD"
+      },
+      "query": {
+        "groupings": [
+          {
+            "property": "day",
+            "show_empty": false
+          },
+          {
+            "property": "billable",
+            "show_empty": false
+          }
+        ],
+        "aggregations": [
+          {
+            "function": "sum",
+            "property": "duration"
+          }
+        ],
+        "filters": [
+          {
+            "property": "workspace_id",
+            "operator": "=",
+            "value": 8629306
+          },
+          {
+            "operator": "and",
+            "value": null,
+            "conditions": [
+              {
+                "property": "user_id",
+                "operator": "in",
+                "value": [
+                  11184653
+                ]
+              },
+              {
+                "property": "project_id",
+                "operator": "in",
+                "value": [
+                  215944745
+                ]
+              }
+            ]
+          }
+        ],
+        "pagination": {
+          "page": null,
+          "per_page": null
+        },
+        "v3_query_params": null,
+        "period": {
+          "from": "2026-03-01",
+          "to": "2026-03-31"
+        },
+        "attributes": [],
+        "ordinations": []
+      },
+      "created_at": "2026-01-29T20:51:18.957625Z",
+      "updated_at": "2026-01-29T20:51:18.957625Z",
+      "created_by": 11184653,
+      "creator_name": "Cian Whalley",
+      "creator_avatar_url": ""
+    },
+    "5243761": {
+      "id": 5243761,
+      "organization_id": 8630437,
+      "name": "Description distribution",
+      "plan": "free",
+      "type": "donut",
+      "pinned": false,
+      "locked": false,
+      "preferences": {
+        "collapseToOther": false,
+        "columnWidths": {},
+        "dateFormat": "MM/DD/YYYY",
+        "timeFormat": "h:mm A",
+        "durationFormat": "improved",
+        "hideWeekends": false,
+        "groupByEntityName": false,
+        "showEmptyGroups": false,
+        "splitByRates": false,
+        "pivotGroup": "description",
+        "currency": "CAD"
+      },
+      "query": {
+        "groupings": [
+          {
+            "property": "description",
+            "show_empty": false
+          }
+        ],
+        "aggregations": [
+          {
+            "function": "sum",
+            "property": "duration"
+          }
+        ],
+        "filters": [
+          {
+            "property": "workspace_id",
+            "operator": "=",
+            "value": 8629306
+          },
+          {
+            "operator": "and",
+            "value": null,
+            "conditions": [
+              {
+                "property": "user_id",
+                "operator": "in",
+                "value": [
+                  11184653
+                ]
+              },
+              {
+                "property": "project_id",
+                "operator": "in",
+                "value": [
+                  215944745
+                ]
+              }
+            ]
+          }
+        ],
+        "pagination": {
+          "page": null,
+          "per_page": null
+        },
+        "v3_query_params": null,
+        "period": {
+          "from": "2026-03-01",
+          "to": "2026-03-31"
+        },
+        "attributes": [
+          {
+            "property": "duration"
+          },
+          {
+            "property": "billable_duration"
+          }
+        ],
+        "ordinations": [
+          {
+            "property": "duration",
+            "direction": "desc"
+          }
+        ]
+      },
+      "created_at": "2026-01-29T20:51:18.961511Z",
+      "updated_at": "2026-01-29T20:51:18.961511Z",
+      "created_by": 11184653,
+      "creator_name": "Cian Whalley",
+      "creator_avatar_url": ""
+    },
+    "5243762": {
+      "id": 5243762,
+      "organization_id": 8630437,
+      "name": "Member and description breakdown",
+      "plan": "free",
+      "type": "table",
+      "pinned": false,
+      "locked": false,
+      "preferences": {
+        "collapseToOther": false,
+        "columnWidths": {},
+        "dateFormat": "MM/DD/YYYY",
+        "timeFormat": "h:mm A",
+        "durationFormat": "improved",
+        "hideWeekends": false,
+        "groupByEntityName": false,
+        "showEmptyGroups": false,
+        "splitByRates": false,
+        "pivotGroup": "user_id",
+        "currency": "CAD"
+      },
+      "query": {
+        "groupings": [
+          {
+            "property": "user_id",
+            "show_empty": false
+          },
+          {
+            "property": "description",
+            "show_empty": false
+          }
+        ],
+        "attributes": [
+          {
+            "property": "duration"
+          },
+          {
+            "property": "duration_percentage"
+          },
+          {
+            "property": "amount"
+          }
+        ],
+        "filters": [
+          {
+            "property": "workspace_id",
+            "operator": "=",
+            "value": 8629306
+          },
+          {
+            "operator": "and",
+            "value": null,
+            "conditions": [
+              {
+                "property": "user_id",
+                "operator": "in",
+                "value": [
+                  11184653
+                ]
+              },
+              {
+                "property": "project_id",
+                "operator": "in",
+                "value": [
+                  215944745
+                ]
+              }
+            ]
+          }
+        ],
+        "pagination": {
+          "page": null,
+          "per_page": null
+        },
+        "v3_query_params": null,
+        "period": {
+          "from": "2026-03-01",
+          "to": "2026-03-31"
+        },
+        "ordinations": []
+      },
+      "created_at": "2026-01-29T20:51:18.986311Z",
+      "updated_at": "2026-01-29T20:51:18.986311Z",
+      "created_by": 11184653,
+      "creator_name": "Cian Whalley",
+      "creator_avatar_url": ""
+    }
+  }
+}
