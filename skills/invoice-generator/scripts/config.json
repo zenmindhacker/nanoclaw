@@ -95,15 +95,35 @@
       "copyFromPriorMonth": true
     },
     "nvs": {
-      "contactName": "New Value Solutions",
+      "contactName": "NEW VALUE SOLUTIONS GROUP INC.",
       "retainerHours": null,
       "retainerRate": 661.5,
       "excessRate": null,
       "taxType": "TAX002",
       "accountCode": "311",
       "copyFromPriorMonth": true,
-      "priorInvoiceNumber": "9213"
+      "priorInvoiceNumber": "9213",
+      "processing": {
+        "ar": {
+          "sender": "ar@newvaluegroup.com",
+          "billableUser": "Rustam",
+          "togglProjectId": "204851981",
+          "billAccountCode": "311",
+          "billTaxType": "TAX002",
+          "billDescription": "Rustam Akimov - Consulting Services"
+        },
+        "ap": {
+          "sender": "ap@newvaluegroup.com",
+          "invoiceDescription": "Consulting Services - Purchase Order",
+          "invoiceAccountCode": "200",
+          "invoiceTaxType": "TAX001"
+        },
+        "processedLabel": "NVS-Processed"
+      }
     }
+  },
+  "slack": {
+    "sysopsWebhook": null
   },
   "toggl": {
     "api_url": "https://api.track.toggl.com/reports/api/v2",
