@@ -4,11 +4,11 @@
 
 export interface State {
   lastConvIdx: number;
-  lastFathomCreatedAt: string | null;
   lastGanttsyWorkspaceModifiedTime: string | null;
+  lastPlaudStartTime: number | null; // epoch ms from Plaud API
   skippedConvs?: number[];
-  skippedFathomIds?: string[];
   skippedGanttsyWorkspaceIds?: string[];
+  skippedPlaudIds?: string[];
 }
 
 export interface ProcessedEntry {
@@ -44,6 +44,21 @@ export interface ClassificationResult {
   reason: string;
 }
 
+export interface ClassificationContext {
+  title: string;
+  titleLower: string;
+  emails: string[];
+  names: string[];
+  nonself: Attendee[];
+  nonselfEmails: string[];
+  nonselfNames: string[];
+  gcalTitle: string;
+  gcalDescription: string;
+  gcalCalendarId: string;
+}
+
+export type ClassificationRule = (ctx: ClassificationContext) => ClassificationResult | null;
+
 export interface ConversationRow {
   convIdx: number;
   convUuid: string;
@@ -60,52 +75,36 @@ export interface TranscriptRow {
   spkrName: string;
 }
 
-export interface FathomMeeting {
-  recording_id: number;
-  title: string;
-  meeting_title: string;
-  url: string;
-  share_url: string;
-  created_at: string;
-  scheduled_start_time: string;
-  scheduled_end_time: string;
-  recording_start_time: string;
-  recording_end_time: string;
-  calendar_invitees: FathomInvitee[];
-  transcript?: FathomTranscriptEntry[];
-}
-
-export interface FathomInvitee {
-  name: string;
-  email: string;
-  email_domain: string;
-  is_external: boolean;
-  matched_speaker_display_name?: string;
-}
-
-export interface FathomTranscriptEntry {
-  speaker: {
-    display_name: string;
-    matched_calendar_invitee_email?: string;
-  };
-  text: string;
-  timestamp: string;
-}
-
-export interface FathomListResponse {
-  items: FathomMeeting[];
-  next_cursor?: string;
-}
-
 export interface GanttsyWorkspaceDoc {
   id: string;
   name: string;
   modifiedTime: string;
-  mimeType: string;
+  webViewLink: string;
+}
+
+export interface GanttsyWorkspaceTab {
+  tabId: string;
+  title: string;
+  index: number;
+}
+
+export interface PlaudFile {
+  id: string;
+  filename: string;
+  duration: number; // milliseconds
+  start_time: number; // epoch ms
+}
+
+export interface PlaudTranscriptSegment {
+  content: string;
+  start_time: number; // milliseconds offset
+  end_time: number;
+  speaker: string; // named speaker (e.g. "Cian")
+  original_speaker: string; // diarization label (e.g. "Speaker 1")
 }
 
 export interface UnifiedMeeting {
-  source: 'shadow' | 'fathom' | 'ganttsy_workspace';
+  source: 'shadow' | 'ganttsy_workspace' | 'plaud';
   id: string;
   title: string;
   startedAt: Date;
@@ -115,10 +114,13 @@ export interface UnifiedMeeting {
   gcalMeta: CalendarMeta | null;
   shadowData?: ConversationRow;
   shadowTranscriptRows?: TranscriptRow[];
-  fathomData?: FathomMeeting;
   ganttsyWorkspaceData?: {
     doc: GanttsyWorkspaceDoc;
     transcript: string;
+  };
+  plaudData?: {
+    file: PlaudFile;
+    segments: PlaudTranscriptSegment[];
   };
 }
 
@@ -129,18 +131,43 @@ export interface ProcessMeetingResult {
   reason?: string;
 }
 
+export interface PendingActionItem {
+  index: number;
+  title: string;
+  context: string;
+  assignee: string;
+  priority: 'urgent' | 'high' | 'medium' | 'low';
+  project: string;
+}
+
+export interface PendingMeeting {
+  id: string;
+  meetingTitle: string;
+  meetingDate: string;
+  org: string;
+  sourceRel: string;
+  targetDir: string;
+  transcriptPath: string;
+  lineageTag: string;
+  actions: PendingActionItem[];
+  createdAt: string;
+  status: 'pending' | 'processing' | 'completed' | 'skipped';
+  processedAt?: string;
+  processedItems?: number[];
+}
+
 export interface Args {
   limit: number;
   sinceDays: number | null;
   shadowOnly: boolean;
-  fathomOnly: boolean;
   ganttsyWorkspaceOnly: boolean;
+  plaudOnly: boolean;
   dryRun: boolean;
   reportOnly: boolean;
   calendarFallback: boolean;
   calendarIds: string[];
   calendarWindowMinutes: number;
-  tasksEnabled: boolean;
+  tasksMode: string;
   tasksMinConfidence: number;
   tasksMaxItems: number;
 }

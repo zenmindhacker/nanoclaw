@@ -11,11 +11,11 @@ import type { State } from './types.js';
 
 const DEFAULT_STATE: State = {
   lastConvIdx: 0,
-  lastFathomCreatedAt: null,
   lastGanttsyWorkspaceModifiedTime: null,
+  lastPlaudStartTime: null,
   skippedConvs: [],
-  skippedFathomIds: [],
   skippedGanttsyWorkspaceIds: [],
+  skippedPlaudIds: [],
 };
 
 export function loadState(): State {
@@ -59,12 +59,12 @@ export function markConversationSkipped(state: State, convIdx: number): void {
   }
 }
 
-export function markFathomSkipped(state: State, recordingId: string): void {
-  if (!state.skippedFathomIds) {
-    state.skippedFathomIds = [];
+export function markPlaudSkipped(state: State, fileId: string): void {
+  if (!state.skippedPlaudIds) {
+    state.skippedPlaudIds = [];
   }
-  if (!state.skippedFathomIds.includes(recordingId)) {
-    state.skippedFathomIds.push(recordingId);
+  if (!state.skippedPlaudIds.includes(fileId)) {
+    state.skippedPlaudIds.push(fileId);
   }
 }
 

@@ -3,13 +3,13 @@
  * Container-aware paths — all paths use /workspace/ prefixes for NanoClaw containers.
  */
 
-// Container mount roots
-export const GITHUB_ROOT = '/workspace/extra/github';
-export const CREDENTIALS_ROOT = '/workspace/extra/credentials';
-export const SKILLS_ROOT = '/workspace/extra/skills';
+// Container mount roots (env var overrides for host-side testing)
+export const GITHUB_ROOT = process.env.GITHUB_ROOT || '/workspace/extra/github';
+export const CREDENTIALS_ROOT = process.env.CREDENTIALS_ROOT || '/workspace/extra/credentials';
+export const SKILLS_ROOT = process.env.SKILLS_ROOT || '/workspace/extra/skills';
 
 // Group writable workspace (persists across runs)
-export const GROUP_WORKSPACE = '/workspace/group/transcript-sync';
+export const GROUP_WORKSPACE = process.env.GROUP_WORKSPACE || '/workspace/group/transcript-sync';
 
 // Shadow (local transcription app — mounted read-only)
 export const SHADOW_DB_PATH = '/workspace/extra/shadow/shadow.db';
@@ -24,8 +24,15 @@ export const LOG_FILE = `${GROUP_WORKSPACE}/transcript-sync.log`;
 export const COACHING_ROOT = `${GITHUB_ROOT}/cognitivetech/coaching`;
 export const KEVIN_COACHING_TRANSCRIPTS = `${COACHING_ROOT}/kevin/transcripts`;
 export const CHRISTINA_COACHING_TRANSCRIPTS = `${COACHING_ROOT}/christina/transcripts`;
+export const MONDO_ZEN_COACHING_TRANSCRIPTS = `${COACHING_ROOT}/mondo-zen/transcripts`;
 export const COACH_ANALYSIS_ROOT = `${COACHING_ROOT}/coach-analysis`;
 export const PROCESSED_TRANSCRIPTS_PATH = `${COACH_ANALYSIS_ROOT}/.processed-transcripts.json`;
+
+// Personal transcripts
+export const PERSONAL_TRANSCRIPTS = `${GITHUB_ROOT}/personal/transcripts`;
+
+// Testboard (discovery / new client under CTCI)
+export const TESTBOARD_TRANSCRIPTS = `${GITHUB_ROOT}/cognitivetech/ctci-docs/transcripts/testboard`;
 
 // Coaching skills
 export const COACHING_SKILL_CLIENT = `${COACHING_ROOT}/.agents/skills/client-analysis/SKILL.md`;
@@ -40,8 +47,9 @@ export const GANTTSY_WORKSPACE_FOLDER = '1gRFJ45HMM0ebyjqFxmAdlXa-oHklYT0G';
 export const GANTTSY_GOOGLE_TOKEN = `${CREDENTIALS_ROOT}/ganttsy-google-token.json`;
 export const GANTTSY_GOOGLE_OAUTH_CLIENT = `${CREDENTIALS_ROOT}/ganttsy-google-oauth-client.json`;
 
-// Fathom API
-export const FATHOM_API_KEY_PATH = `${CREDENTIALS_ROOT}/fathom-api-key`;
+// Plaud direct API
+export const PLAUD_JWT_PATH = `${CREDENTIALS_ROOT}/plaud-jwt`;
+export const PLAUD_API_BASE = 'https://api.plaud.ai';
 
 // OpenRouter (for LLM action extraction)
 export const OPENROUTER_KEY_PATH = `${CREDENTIALS_ROOT}/openrouter`;
@@ -61,12 +69,17 @@ export const TRANSCRIPT_DESTINATIONS = {
   coaching: {
     kevin: KEVIN_COACHING_TRANSCRIPTS,
     christina: CHRISTINA_COACHING_TRANSCRIPTS,
+    mondoZen: MONDO_ZEN_COACHING_TRANSCRIPTS,
   },
+  personal: PERSONAL_TRANSCRIPTS,
+  testboard: TESTBOARD_TRANSCRIPTS,
 } as const;
 
 // Default calendar IDs for meeting matching
 export const DEFAULT_CALENDAR_IDS = [
   'cian@cognitivetech.net',
+  'cian@copperteams.ai',
+  'cian@ganttsy.com',
   'c_ed7a5f763561bf4de136dac98759d2e01875cb730c61b5f4a3308654d5c54941@group.calendar.google.com',
 ];
 
@@ -74,7 +87,9 @@ export const DEFAULT_CALENDAR_IDS = [
 export const SELF_EMAILS = [
   'cian@cognitivetech.net',
   'cian@ganttsy.com',
+  'cian@copperteams.ai',
   'cian.whalley@newvaluegroup.com',
+  'cwhalley@gmail.com',
 ];
 
 // Confidentiality detection
