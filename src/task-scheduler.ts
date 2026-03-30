@@ -143,6 +143,8 @@ async function runTask(
       schedule_value: t.schedule_value,
       status: t.status,
       next_run: t.next_run,
+      last_run: t.last_run,
+      last_result: t.last_result,
     })),
   );
 
@@ -185,8 +187,11 @@ async function runTask(
       async (streamedOutput: ContainerOutput) => {
         if (streamedOutput.result) {
           result = streamedOutput.result;
-          // Forward result to user (sendMessage handles formatting)
-          await deps.sendMessage(task.chat_jid, streamedOutput.result);
+          // Suppress silent results (agent outputs __SILENT__ for no-op runs)
+          const trimmed = streamedOutput.result.trim();
+          if (trimmed && trimmed !== '__SILENT__') {
+            await deps.sendMessage(task.chat_jid, streamedOutput.result);
+          }
           scheduleClose();
         }
         if (streamedOutput.status === 'success') {

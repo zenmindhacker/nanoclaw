@@ -74,7 +74,7 @@ export function classifyGanttsySubRoute(ctx: ClassificationContext): Classificat
   if (isOneOnOne || hasStrategyKeyword) {
     return { targetDir: join(GITHUB_ROOT, 'ganttsy/ganttsy-strategy/transcripts'), reason: 'ganttsy:strategy' };
   }
-  return { targetDir: join(GITHUB_ROOT, 'ganttsy/ganttsy-docs/planning/transcripts'), reason: 'ganttsy:team' };
+  return { targetDir: join(GITHUB_ROOT, 'ganttsy/ganttsy-docs/transcripts'), reason: 'ganttsy:team' };
 }
 
 // Helper: extract email domain

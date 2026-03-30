@@ -9,6 +9,14 @@ GITHUB_TOKEN_FILE="/workspace/extra/credentials/github-transcript-token"
 
 mkdir -p "$GROUP_WORKSPACE"
 
+# Copy Shadow DB to /tmp so better-sqlite3 can open it (WAL mode needs writable dir)
+SHADOW_SRC="/workspace/extra/shadow/shadow.db"
+SHADOW_TMP="/tmp/shadow-work.db"
+if [[ -f "$SHADOW_SRC" ]]; then
+  cp "$SHADOW_SRC" "$SHADOW_TMP"
+  export SHADOW_DB_PATH="$SHADOW_TMP"
+fi
+
 # Install deps if missing (skills dir is writable in container)
 if [[ ! -d "$SKILLS_DIR/node_modules" ]]; then
   echo "Installing transcript-sync npm dependencies..." >&2
@@ -22,10 +30,10 @@ if [[ -d "$LINEAR_SCRIPTS_DIR" ]] && [[ ! -d "$LINEAR_SCRIPTS_DIR/node_modules" 
   cd "$LINEAR_SCRIPTS_DIR" && npm install --silent
 fi
 
-# Run the main transcript-sync script
+# Run the main transcript-sync script (stdout = JSON manifest of written files)
 echo "Running transcript-sync..." >&2
 cd "$SCRIPTS_DIR"
-"$SKILLS_DIR/node_modules/.bin/tsx" transcript-sync.ts "$@"
+TS_OUTPUT=$("$SKILLS_DIR/node_modules/.bin/tsx" transcript-sync.ts "$@")
 EXIT_CODE=$?
 
 if [[ $EXIT_CODE -ne 0 ]]; then
@@ -33,7 +41,26 @@ if [[ $EXIT_CODE -ne 0 ]]; then
   exit $EXIT_CODE
 fi
 
-echo "Transcript sync complete. Committing changed repos..." >&2
+# Parse written files from stdout JSON
+WRITTEN_FILES=""
+if [[ -n "$TS_OUTPUT" ]]; then
+  # Extract writtenFiles array from JSON, one path per line
+  WRITTEN_FILES=$(echo "$TS_OUTPUT" | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    for f in data.get('writtenFiles', []):
+        print(f)
+except: pass
+" 2>/dev/null)
+fi
+
+if [[ -z "$WRITTEN_FILES" ]]; then
+  echo "No files written, nothing to commit." >&2
+  exit 0
+fi
+
+echo "Transcript sync complete. Committing written files..." >&2
 
 # Set git identity (required in container)
 git config --global user.email "cleo@nanoclaw" 2>/dev/null || true
@@ -46,39 +73,40 @@ if [[ ! -f "$GITHUB_TOKEN_FILE" ]]; then
 fi
 TOKEN=$(cat "$GITHUB_TOKEN_FILE")
 
-commit_and_push() {
-  local repo_dir="$1"
-  local label="$2"
+# Group written files by git repo and commit only those specific files
+declare -A REPO_FILES
+while IFS= read -r filepath; do
+  [[ -z "$filepath" ]] && continue
+  # Walk up to find .git root
+  dir=$(dirname "$filepath")
+  while [[ "$dir" != "/" ]]; do
+    if [[ -d "$dir/.git" ]]; then
+      REPO_FILES["$dir"]+="$filepath"$'\n'
+      break
+    fi
+    dir=$(dirname "$dir")
+  done
+done <<< "$WRITTEN_FILES"
 
-  [[ -d "$repo_dir/.git" ]] || return 0
-
+for repo_dir in "${!REPO_FILES[@]}"; do
   cd "$repo_dir"
+  label=$(basename "$repo_dir")
 
-  # Check for changes
-  if git diff --quiet && git diff --cached --quiet && [[ -z "$(git ls-files --others --exclude-standard)" ]]; then
-    return 0
-  fi
+  # Stage only the specific files transcript-sync wrote
+  while IFS= read -r f; do
+    [[ -z "$f" ]] && continue
+    git add "$f"
+  done <<< "${REPO_FILES[$repo_dir]}"
 
-  git add .
   if git diff --cached --quiet; then
-    return 0
+    continue
   fi
 
-  git commit -m "Update transcripts [automated]" || return 1
+  git commit -m "Update transcripts [automated]" || continue
 
-  local REMOTE_URL
-  REMOTE_URL=$(git remote get-url origin 2>/dev/null) || return 1
-  local AUTHED_URL
+  REMOTE_URL=$(git remote get-url origin 2>/dev/null) || continue
   AUTHED_URL=$(echo "$REMOTE_URL" | sed "s|https://|https://x-token:${TOKEN}@|")
   git push "$AUTHED_URL" && echo "Pushed: $label" >&2 || echo "Push failed for: $label" >&2
-}
-
-# Commit each repo that transcript-sync writes to
-commit_and_push "$GITHUB_ROOT/ganttsy/ganttsy-docs" "ganttsy-docs"
-commit_and_push "$GITHUB_ROOT/ganttsy/ganttsy-strategy" "ganttsy-strategy"
-commit_and_push "$GITHUB_ROOT/copperteams/ct-docs" "ct-docs"
-commit_and_push "$GITHUB_ROOT/cognitivetech/ctci-docs" "ctci-docs"
-commit_and_push "$GITHUB_ROOT/cognitivetech/coaching" "cognitivetech-coaching"
-commit_and_push "$GITHUB_ROOT/nvs/nvs-docs" "nvs-docs"
+done
 
 echo "Done." >&2

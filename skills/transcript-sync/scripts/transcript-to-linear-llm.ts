@@ -124,9 +124,25 @@ function searchExistingTickets(org: string, lineageTag: string): string[] {
   }
 }
 
+function detectOrgFromContent(transcriptPath: string): string | null {
+  // When path-based detection fails, infer org from transcript title/content
+  try {
+    const content = readFileSync(transcriptPath, 'utf-8');
+    const firstLines = content.slice(0, 2000).toLowerCase();
+    // Check title and source metadata
+    if (firstLines.includes('ganttsy') || firstLines.includes('source: ganttsy_workspace')) return 'ganttsy';
+    if (firstLines.includes('copperteams') || firstLines.includes('copper teams') || firstLines.includes('kora')) return 'ct';
+    // Check attendee emails in the file
+    if (firstLines.includes('@ganttsy.com')) return 'ganttsy';
+    if (firstLines.includes('@copperteams.ai')) return 'ct';
+    if (firstLines.includes('@newvaluegroup.com')) return 'ctci';
+  } catch { /* ignore */ }
+  return null;
+}
+
 function detectOrgAndSource(transcriptPath: string): OrgInfo {
   const p = transcriptPath;
-  
+
   if (p.includes('/copperteams/ct-docs/')) {
     const rel = p.split('/copperteams/ct-docs/')[1];
     return { org: 'ct', sourceRel: `ct-docs/${rel}` };
@@ -143,7 +159,13 @@ function detectOrgAndSource(transcriptPath: string): OrgInfo {
     const rel = p.split('/cognitivetech/')[1];
     return { org: 'ctci', sourceRel: rel };
   }
-  
+
+  // Path didn't match — try to infer org from transcript content
+  const contentOrg = detectOrgFromContent(p);
+  if (contentOrg) {
+    return { org: contentOrg, sourceRel: basename(transcriptPath) };
+  }
+
   return { org: 'ctci', sourceRel: basename(transcriptPath) };
 }
 
@@ -330,53 +352,56 @@ async function main() {
 
   const text = readFileSync(args.transcript, 'utf-8');
   const meetingMeta = extractMeetingMeta(text, args.transcript);
-  
+
   // Check for existing tickets from this meeting
   const existingTickets = searchExistingTickets(org, meetingMeta.lineageTag);
   if (existingTickets.length > 0) {
     log(`Skipping ${basename(args.transcript)} - ${existingTickets.length} ticket(s) already exist from this meeting: ${existingTickets.join(', ')}`);
     return;
   }
-  
+
   log(`Extracting actions from ${basename(args.transcript)} (org=${org}, meeting=${meetingMeta.title.slice(0, 30)}...)`)
   const actions = await extractActionsWithLLM(text, org);
-  
+
   if (actions.length === 0) {
     log(`No action items found in ${basename(args.transcript)}`);
     return;
   }
 
   log(`Found ${actions.length} action item(s)`);
-  
+
   const toCreate = actions.slice(0, args.maxItems);
-  
+
+  // Apply hard routing rules to each action
+  for (const a of toCreate) {
+    if (!a.project) a.project = PROJECT_ROUTING[org]?.projects[0] || 'Cognitive Tech';
+    if (sourceRel.includes('ganttsy-strategy')) a.project = 'Ganttsy Admin';
+    if (a.project === 'Ganttsy Admin') a.assignee = 'cian@ganttsy.com';
+  }
+
+  // extract-only mode: output JSON for the caller (no issue creation)
+  if (args.mode === 'extract-only') {
+    const result = { org, sourceRel, meetingMeta, actions: toCreate };
+    // Write to stdout as clean JSON (no log prefix)
+    process.stdout.write(JSON.stringify(result) + '\n');
+    return;
+  }
+
   for (let i = 0; i < toCreate.length; i++) {
     const a = toCreate[i];
     const desc = `${a.context}\n\nSource: ${sourceRel}`;
-    
-    // Hard rule: strategy transcripts always go to Ganttsy Admin
-    let project = a.project || PROJECT_ROUTING[org]?.projects[0] || 'Cognitive Tech';
-    if (sourceRel.includes('ganttsy-strategy')) {
-      project = 'Ganttsy Admin';
-    }
-    
-    // Hard rule: Ganttsy Admin tasks always assigned to Cian (for later delegation)
-    let assignee = a.assignee;
-    if (project === 'Ganttsy Admin') {
-      assignee = 'cian@ganttsy.com';
-    }
-    
-    const res = createIssue(org, a.title, desc, sourceRel, assignee, a.priority, project, args.mode, meetingMeta);
-    
-    log(`  ${i + 1}. ${a.title} → ${assignee} [${project}] (${a.priority})`);
-    
+
+    const res = createIssue(org, a.title, desc, sourceRel, a.assignee, a.priority, a.project, args.mode, meetingMeta);
+
+    log(`  ${i + 1}. ${a.title} → ${a.assignee} [${a.project}] (${a.priority})`);
+
     if (res.stdout.trim()) {
       const lines = res.stdout.trim().split('\n');
       for (const line of lines) {
         log(`     ${line}`);
       }
     }
-    
+
     if (res.status !== 0 && res.stderr.trim()) {
       const lines = res.stderr.trim().split('\n');
       for (const line of lines) {

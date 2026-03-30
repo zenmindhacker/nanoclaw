@@ -2,7 +2,7 @@
 /**
  * transcript-sync - Main entry point
  *
- * Syncs transcripts from multiple sources (Shadow, Plaud, Google Workspace)
+ * Syncs transcripts from multiple sources (Shadow, Google Workspace)
  * to appropriate GitHub repositories based on attendee/content classification.
  *
  * Modular structure:
@@ -19,7 +19,6 @@
  * - pending-actions.ts: Human-in-the-loop action item approval
  * - sources/shadow.ts: Shadow SQLite source
  * - sources/ganttsy.ts: Ganttsy Google Workspace source
- * - sources/plaud.ts: Plaud API source
  */
 
 export * from './config.js';
@@ -35,4 +34,3 @@ export * from './dedup.js';
 export * from './pending-actions.js';
 export * from './sources/shadow.js';
 export * from './sources/ganttsy.js';
-export * from './sources/plaud.js';

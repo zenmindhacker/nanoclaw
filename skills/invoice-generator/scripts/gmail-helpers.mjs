@@ -1,16 +1,26 @@
 /**
  * Gmail API Helpers
  * Search, read, and manage emails via Gmail REST API
- * Uses OAuth token at ~/.openclaw/credentials/google-gmail-token.json
+ * Uses OAuth token at ~/.config/nanoclaw/credentials/services/google-gmail-token.json
  */
 
 import https from 'https';
-import { readFileSync, writeFileSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
 import { homedir } from 'os';
 
-const TOKEN_PATH = resolve(homedir(), '.openclaw/credentials/google-gmail-token.json');
-const OAUTH_CLIENT_PATH = resolve(homedir(), '.config/shadow-sync/google-oauth-client.json');
+function resolveCredPath(filename) {
+  // Check services/ subdir first (new DO server layout)
+  const servicesPath = `/workspace/extra/credentials/services/${filename}`;
+  if (existsSync(servicesPath)) return servicesPath;
+  // Fall back to flat layout (old laptop layout)
+  const containerPath = `/workspace/extra/credentials/${filename}`;
+  if (existsSync(containerPath)) return containerPath;
+  return resolve(homedir(), `.config/nanoclaw/credentials/services/${filename}`);
+}
+
+const TOKEN_PATH = resolveCredPath('google-gmail-token.json');
+const OAUTH_CLIENT_PATH = resolveCredPath('shadow-google-oauth-client.json');
 
 let cachedToken = null;
 

@@ -4,9 +4,15 @@
  */
 
 import https from 'https';
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
 import { homedir } from 'os';
+
+function resolveCredPath(filename) {
+  const containerPath = `/workspace/extra/credentials/${filename}`;
+  if (existsSync('/workspace/extra/credentials')) return containerPath;
+  return resolve(homedir(), `.config/nanoclaw/credentials/services/${filename}`);
+}
 
 const DEFAULT_CONFIG = {
   api_url: 'https://api.track.toggl.com/reports/api/v2',
@@ -17,8 +23,7 @@ const DEFAULT_CONFIG = {
  * Load Toggl API token from credentials file
  */
 export function getTogglCredentials() {
-  const credPath = resolve(homedir(), '.openclaw/credentials/toggl');
-  return readFileSync(credPath, 'utf8').trim();
+  return readFileSync(resolveCredPath('toggl'), 'utf8').trim();
 }
 
 /**

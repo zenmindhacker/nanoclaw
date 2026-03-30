@@ -9,11 +9,47 @@ import { resolve } from 'path';
 import { homedir } from 'os';
 import https from 'https';
 
-const DEFAULT_CONFIG = {
-  client_id: '748CC12001CF4C89A17B5C7FBD7D9965',
-  client_secret: 'Rfnrjqp9XOHfEShEfZm92XzW4n3ns11Aj5X4EFM3j0Z-ObWh',
-  tokens_file: '~/.openclaw/credentials/xero-tokens.json'
-};
+// Xero OAuth redirect URI — must match what's registered in Xero developer console
+const XERO_REDIRECT_URI = 'https://cleo.cognitivetech.net/auth/callback';
+
+function getXeroClientConfig() {
+  try {
+    const raw = JSON.parse(readFileSync(resolveCredPath('xero-oauth-client.json'), 'utf8'));
+    return { client_id: raw.client_id, client_secret: raw.client_secret };
+  } catch {
+    // Fallback for backwards compatibility
+    return {
+      client_id: '748CC12001CF4C89A17B5C7FBD7D9965',
+      client_secret: 'Rfnrjqp9XOHfEShEfZm92XzW4n3ns11Aj5X4EFM3j0Z-ObWh',
+    };
+  }
+}
+
+/**
+ * Print the Xero OAuth re-auth URL to console.
+ * Visit this URL, complete login, then paste the code back.
+ */
+export function printXeroAuthUrl() {
+  const config = getXeroClientConfig();
+  const params = new URLSearchParams({
+    response_type: 'code',
+    client_id: config.client_id,
+    redirect_uri: XERO_REDIRECT_URI,
+    scope: 'openid profile email accounting.transactions accounting.contacts accounting.attachments offline_access',
+    state: 'nanoclaw',
+  });
+  console.log(`\nXero re-auth URL:\nhttps://login.xero.com/identity/connect/authorize?${params}\n`);
+}
+
+function resolveCredPath(filename) {
+  // Check services/ subdir first (new DO server layout)
+  const servicesPath = `/workspace/extra/credentials/services/${filename}`;
+  if (existsSync(servicesPath)) return servicesPath;
+  // Fall back to flat layout (old laptop layout)
+  const containerPath = `/workspace/extra/credentials/${filename}`;
+  if (existsSync(containerPath)) return containerPath;
+  return resolve(homedir(), `.config/nanoclaw/credentials/services/${filename}`);
+}
 
 let xeroClient = null;
 let currentTenantId = null;
@@ -58,7 +94,7 @@ function refreshXeroToken(clientId, clientSecret, refreshToken) {
  * Initialize Xero client and authenticate
  */
 export async function initXero() {
-  const config = DEFAULT_CONFIG;
+  const config = getXeroClientConfig();
   
   xeroClient = new XeroClient({
     clientId: config.client_id,
@@ -66,17 +102,16 @@ export async function initXero() {
   });
   
   // Load and set tokens
-  const tokensPath = resolve(homedir(), '.openclaw/credentials/xero-tokens.json');
+  const tokensPath = resolveCredPath('xero-tokens.json');
   const tokens = JSON.parse(readFileSync(tokensPath, 'utf8'));
-  
+
   // Refresh access token if expired (before setting on client)
   const now = Date.now() / 1000;
   if (tokens.expires_at && tokens.expires_at < now) {
     console.log('🔄 Xero access token expired, refreshing...');
     const refreshed = await refreshXeroToken(config.client_id, config.client_secret, tokens.refresh_token);
     Object.assign(tokens, refreshed);
-    const tokensPathForSave = resolve(homedir(), '.openclaw/credentials/xero-tokens.json');
-    writeFileSync(tokensPathForSave, JSON.stringify(tokens, null, 2));
+    writeFileSync(tokensPath, JSON.stringify(tokens, null, 2));
     console.log('✅ Token refreshed and saved');
   }
 
@@ -101,8 +136,7 @@ export async function initXero() {
  */
 async function saveTokens() {
   const tokenSet = xeroClient.tokenSet;
-  const tokensPath = resolve(homedir(), '.openclaw/credentials/xero-tokens.json');
-  writeFileSync(tokensPath, JSON.stringify(tokenSet, null, 2));
+  writeFileSync(resolveCredPath('xero-tokens.json'), JSON.stringify(tokenSet, null, 2));
 }
 
 /**
@@ -225,7 +259,7 @@ export async function getPriorMonthInvoice(contactName, month, year) {
  * @param {number} month - Month (1-12)
  * @param {number} year - Year
  */
-export async function createDraftInvoice(contactName, lineItems, description, month, year, { skipDraftDeletion = false } = {}) {
+export async function createDraftInvoice(contactName, lineItems, description, month, year, { skipDraftDeletion = false, taxInclusive = false } = {}) {
   const { client, tenantId } = await ensureValidToken();
 
   // Get or create contact
@@ -253,7 +287,8 @@ export async function createDraftInvoice(contactName, lineItems, description, mo
     dueDate: dueDate,
     reference: description,
     status: 'DRAFT',
-    type: 'ACCREC'  // Accounts Receivable (invoice to client)
+    type: 'ACCREC',  // Accounts Receivable (invoice to client)
+    lineAmountTypes: taxInclusive ? 'INCLUSIVE' : 'EXCLUSIVE'
   };
   
   const response = await client.accountingApi.createInvoices(tenantId, {
@@ -329,8 +364,7 @@ export async function createDraftBill(contactName, lineItems, reference, billDat
  * Attach a PDF buffer to an existing invoice/bill by invoice ID
  */
 export async function attachPdfToInvoice(invoiceId, filename, pdfBuffer) {
-  const tokensPath = resolve(homedir(), '.openclaw/credentials/xero-tokens.json');
-  const tokens = JSON.parse(readFileSync(tokensPath, 'utf8'));
+  const tokens = JSON.parse(readFileSync(resolveCredPath('xero-tokens.json'), 'utf8'));
   const { tenantId } = await ensureValidToken();
 
   const url = `https://api.xero.com/api.xro/2.0/Invoices/${invoiceId}/Attachments/${encodeURIComponent(filename)}?IncludeOnline=true`;

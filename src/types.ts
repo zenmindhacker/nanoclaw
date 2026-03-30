@@ -9,8 +9,21 @@ export interface AdditionalMount {
  * This file should be stored at ~/.config/nanoclaw/mount-allowlist.json
  * and is NOT mounted into any container, making it tamper-proof from agents.
  */
+export interface DefaultMount {
+  // Absolute host path
+  path: string;
+  // Container mount name (mounted at /workspace/extra/<containerName>)
+  containerName: string;
+  // Whether read-write mounts are allowed
+  allowReadWrite: boolean;
+  // Optional description for documentation
+  description?: string;
+}
+
 export interface MountAllowlist {
-  // Directories that can be mounted into containers
+  // Default mounts applied to ALL groups automatically
+  defaultMounts?: DefaultMount[];
+  // Directories that can be mounted into containers (validation allowlist)
   allowedRoots: AllowedRoot[];
   // Glob patterns for paths that should never be mounted (e.g., ".ssh", ".gnupg")
   blockedPatterns: string[];
@@ -83,7 +96,7 @@ export interface TaskRunLog {
 export interface Channel {
   name: string;
   connect(): Promise<void>;
-  sendMessage(jid: string, text: string): Promise<void>;
+  sendMessage(jid: string, text: string, opts?: { noThread?: boolean }): Promise<void>;
   isConnected(): boolean;
   ownsJid(jid: string): boolean;
   disconnect(): Promise<void>;

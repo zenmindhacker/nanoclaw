@@ -118,7 +118,7 @@ function getMonthRange(year, month) {
  * Save PDF attachment to disk
  */
 function savePdf(buffer, filename) {
-  const dir = resolve(homedir(), '.openclaw/nvs-attachments');
+  const dir = existsSync('/workspace/extra/credentials') ? '/tmp/nvs-attachments' : resolve(homedir(), '.config/nanoclaw/nvs-attachments');
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   const path = resolve(dir, filename);
   writeFileSync(path, buffer);
@@ -404,7 +404,7 @@ async function processApEmails(dryRun) {
     try {
       const invoice = await xero.createDraftInvoice(
         nvsClient.contactName, lineItems, reference, invoiceMonth, invoiceYear,
-        { skipDraftDeletion: true }
+        { skipDraftDeletion: true, taxInclusive: true }
       );
 
       // Attach PO PDF

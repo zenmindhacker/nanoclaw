@@ -5,10 +5,8 @@
 export interface State {
   lastConvIdx: number;
   lastGanttsyWorkspaceModifiedTime: string | null;
-  lastPlaudStartTime: number | null; // epoch ms from Plaud API
   skippedConvs?: number[];
   skippedGanttsyWorkspaceIds?: string[];
-  skippedPlaudIds?: string[];
 }
 
 export interface ProcessedEntry {
@@ -88,23 +86,8 @@ export interface GanttsyWorkspaceTab {
   index: number;
 }
 
-export interface PlaudFile {
-  id: string;
-  filename: string;
-  duration: number; // milliseconds
-  start_time: number; // epoch ms
-}
-
-export interface PlaudTranscriptSegment {
-  content: string;
-  start_time: number; // milliseconds offset
-  end_time: number;
-  speaker: string; // named speaker (e.g. "Cian")
-  original_speaker: string; // diarization label (e.g. "Speaker 1")
-}
-
 export interface UnifiedMeeting {
-  source: 'shadow' | 'ganttsy_workspace' | 'plaud';
+  source: 'shadow' | 'ganttsy_workspace';
   id: string;
   title: string;
   startedAt: Date;
@@ -117,10 +100,6 @@ export interface UnifiedMeeting {
   ganttsyWorkspaceData?: {
     doc: GanttsyWorkspaceDoc;
     transcript: string;
-  };
-  plaudData?: {
-    file: PlaudFile;
-    segments: PlaudTranscriptSegment[];
   };
 }
 
@@ -161,10 +140,9 @@ export interface Args {
   sinceDays: number | null;
   shadowOnly: boolean;
   ganttsyWorkspaceOnly: boolean;
-  plaudOnly: boolean;
   dryRun: boolean;
   reportOnly: boolean;
-  calendarFallback: boolean;
+  noCalendar: boolean;
   calendarIds: string[];
   calendarWindowMinutes: number;
   tasksMode: string;
