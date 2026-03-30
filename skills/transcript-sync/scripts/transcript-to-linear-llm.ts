@@ -2,10 +2,10 @@
 import { readFileSync, existsSync, writeFileSync } from 'fs';
 import { join, basename } from 'path';
 import { execSync } from 'child_process';
+import { tmpdir } from 'os';
 
 const SKILLS_ROOT = process.env.SKILLS_ROOT || '/workspace/extra/skills';
 const ROUTER = join(SKILLS_ROOT, 'linear/scripts/linear-router.sh');
-const OPENROUTER_KEY_PATH = process.env.OPENROUTER_KEY_PATH || '/workspace/extra/credentials/openrouter';
 
 interface ActionItem {
   title: string;
@@ -176,10 +176,10 @@ async function extractActionsWithLLM(transcript: string, org: string): Promise<A
   const projectConfig = PROJECT_ROUTING[org] || PROJECT_ROUTING['ctci'];
   const projectsStr = projectConfig.projects.map(p => `"${p}"`).join(', ');
   
-  // minimax-m2.5 has 196k token context (~785k chars), so we can send full transcripts
-  // Limit to 100k chars (~25k tokens) to leave room for prompt + response
-  const sample = transcript.slice(0, 100000);
-  
+  // Opus via claude --task has 200k context, so we can send full transcripts
+  // Limit to 150k chars (~37k tokens) to leave room for prompt + response
+  const sample = transcript.slice(0, 150000);
+
   const prompt = `Extract action items from this meeting transcript. Focus on commitments, tasks, and follow-ups.
 
 ## Team Roster (for assignee resolution)
@@ -215,41 +215,31 @@ Return ONLY valid JSON, no markdown wrapping:
 If no action items found, return: {"actions":[]}`;
 
   try {
-    // Use OpenRouter API directly via fetch to avoid shell escaping issues
-    const openrouterKey = readFileSync(OPENROUTER_KEY_PATH, 'utf-8').trim();
-    
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openrouterKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'minimax/minimax-m2.5',
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: 16000,
-      }),
-    });
-    
-    if (!response.ok) {
-      log(`OpenRouter API error: ${response.status} ${response.statusText}`);
-      return [];
-    }
-    
-    const data = await response.json() as any;
-    const content = data?.choices?.[0]?.message?.content;
+    // Write prompt to temp file to avoid shell escaping issues with large transcripts
+    const promptFile = join(tmpdir(), `transcript-prompt-${Date.now()}.txt`);
+    writeFileSync(promptFile, prompt);
+
+    // Use claude -p (Opus via Claude Max subscription — no extra cost)
+    const content = execSync(
+      `cat "${promptFile}" | claude -p --output-format text --model opus --no-session-persistence`,
+      { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'], timeout: 180000 },
+    );
+
+    // Clean up temp file
+    try { execSync(`rm "${promptFile}"`, { stdio: 'ignore' }); } catch {}
+
     if (!content) {
-      log('No content in OpenRouter response');
+      log('No content from claude -p');
       return [];
     }
-    
-    // Extract JSON from LLM response
+
+    // Extract JSON from response
     const jsonMatch = content.match(/\{[\s\S]*"actions"[\s\S]*\}/);
     if (!jsonMatch) {
-      log('No JSON found in LLM response');
+      log('No JSON found in claude response');
       return [];
     }
-    
+
     // Sanitize control characters inside JSON strings
     const sanitized = jsonMatch[0]
       .replace(/[\x00-\x1F\x7F]/g, (char) => {
@@ -258,7 +248,7 @@ If no action items found, return: {"actions":[]}`;
         if (char === '\t') return '\\t';
         return '';
       });
-    
+
     const parsed: ExtractionResult = JSON.parse(sanitized);
     return parsed.actions || [];
   } catch (error: any) {
