@@ -200,10 +200,16 @@ ${sample}
 - Pick the correct project based on the routing rules above
 - Priority: urgent (blocking/ASAP), high (this week), medium (default), low (eventually)
 - Title should be concise and actionable (5-10 words)
-- Context MUST include the conversation that led to the action (what problem/need was discussed) AND what success looks like. Include relevant quotes from the transcript. Aim for 3-5 sentences that give full context to someone who wasn't in the meeting.
+- Context is the MOST IMPORTANT field. Write it as a structured markdown briefing for someone who wasn't in the meeting. It should include:
+  1. **Background**: What problem, need, or opportunity was being discussed? What led to this topic?
+  2. **Discussion**: Summarize the key points, ideas, and options that were raised. Include direct quotes where they capture intent or specifics (e.g. "Bart suggested: 'We could do a copilot-style feature that...'"). If multiple people weighed in, capture each perspective.
+  3. **Decision/Direction**: What was agreed on? What approach was chosen and why? If no decision was made, note what's still open.
+  4. **Next steps**: What specifically needs to happen, and any constraints or dependencies mentioned.
+- Context should be thorough — aim for 2-4 paragraphs. Extract ALL relevant discussion from the transcript for each action, not just the moment the task was assigned. Often the most valuable context is in the 5-10 minutes of discussion BEFORE someone says "I'll do that."
+- Use markdown formatting (bold, bullet points) in the context field for readability.
 
 ## Output Format
-Return ONLY valid JSON, no markdown:
+Return ONLY valid JSON, no markdown wrapping:
 {"actions":[{"title":"...","context":"...","assignee":"email@...","priority":"medium","project":"..."}]}
 
 If no action items found, return: {"actions":[]}`;
@@ -221,6 +227,7 @@ If no action items found, return: {"actions":[]}`;
       body: JSON.stringify({
         model: 'minimax/minimax-m2.5',
         messages: [{ role: 'user', content: prompt }],
+        max_tokens: 16000,
       }),
     });
     
