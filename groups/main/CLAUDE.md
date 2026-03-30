@@ -120,11 +120,30 @@ Wrap internal reasoning in `<internal>` tags — logged but not sent.
 
 When working as a sub-agent or teammate, only use `send_message` if instructed.
 
+## Message Formatting
+
+Format messages based on the channel. Check the group folder name prefix:
+
+### Slack channels (folder starts with `slack_`)
+
+Use Slack mrkdwn syntax. Key rules:
+- `*bold*` (single asterisks)
+- `_italic_` (underscores)
+- `<https://url|link text>` for links (NOT `[text](url)`)
+- `•` bullets (no numbered lists)
+- `:emoji:` shortcodes like `:white_check_mark:`, `:rocket:`
+- `>` for block quotes
+- No `##` headings — use `*Bold text*` instead
+
 ---
 
 ## Admin Context
 
 This is the **main channel** with elevated privileges.
+
+## Authentication
+
+Anthropic credentials must be either an API key from console.anthropic.com (`ANTHROPIC_API_KEY`) or a long-lived OAuth token from `claude setup-token` (`CLAUDE_CODE_OAUTH_TOKEN`). Short-lived tokens from the system keychain or `~/.claude/.credentials.json` expire within hours and can cause recurring container 401s. The `/setup` skill walks through this. OneCLI manages credentials (including Anthropic auth) — run `onecli --help`.
 
 ## Container Mounts
 
@@ -225,14 +244,15 @@ Read/write `/workspace/project/groups/global/CLAUDE.md` for facts that apply to 
 schedule_task(prompt: "...", schedule_type: "cron", schedule_value: "0 9 * * 1", target_group_jid: "<jid>")
 ```
 
-## Scheduled Task Pattern
+The task will run in that group's context with access to their files and memory.
 
-Every scheduled task prompt **must** end with a state-file write:
-```bash
-mkdir -p /workspace/group/task-state
-date -u +%Y-%m-%dT%H:%M:%SZ > /workspace/group/task-state/<task-id>.last-run
-```
-This enables the catch-up auditor (`task-1773444440966-iz036a`, runs hourly 7am–9pm CST) to detect and re-run tasks missed due to laptop sleep.
+## Task Scripts
+
+For recurring tasks, add a `script` that runs before the agent wakes — the agent is only called when the script outputs `{ "wakeAgent": true }`. This keeps API usage low.
+
+1. Provide a bash `script` alongside the `prompt` when scheduling
+2. Script runs first (30-second timeout), prints JSON to stdout
+3. If `wakeAgent: false` — nothing happens. If `true` — agent wakes with the script's data.
 
 ---
 
