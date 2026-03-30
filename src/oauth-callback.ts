@@ -117,16 +117,14 @@ function findEntry(id: string): RegistryEntry | null {
   return registry?.tokens.find((e) => e.id === id) ?? null;
 }
 
-function buildAuthUrl(
-  entry: RegistryEntry,
-  clientId: string,
-): string {
+function buildAuthUrl(entry: RegistryEntry, clientId: string): string {
   if (entry.provider === 'google') {
     const params = new URLSearchParams({
       client_id: clientId,
       redirect_uri: REDIRECT_URI,
       response_type: 'code',
-      scope: (loadTokenFileRaw(entry.token_file)?.scope as string) || 'openid email',
+      scope:
+        (loadTokenFileRaw(entry.token_file)?.scope as string) || 'openid email',
       access_type: 'offline',
       prompt: 'consent',
       state: entry.id,
@@ -192,7 +190,10 @@ export function startOAuthCallbackServer(
         const authUrl = buildAuthUrl(entry, creds.client_id);
         res.writeHead(302, { location: authUrl });
         res.end();
-        logger.info({ id: entryId }, 'OAuth flow started, redirecting to provider');
+        logger.info(
+          { id: entryId },
+          'OAuth flow started, redirecting to provider',
+        );
         return;
       }
 
@@ -229,9 +230,14 @@ export function startOAuthCallbackServer(
 
           const json = await postForm(entry.token_url, body, {});
           if (json.error) {
-            logger.error({ id: entry.id, error: json.error }, 'Token exchange failed');
+            logger.error(
+              { id: entry.id, error: json.error },
+              'Token exchange failed',
+            );
             res.writeHead(500, { 'content-type': 'text/html' });
-            res.end(`<h1>Auth failed</h1><p>${json.error_description || json.error}</p>`);
+            res.end(
+              `<h1>Auth failed</h1><p>${json.error_description || json.error}</p>`,
+            );
             return;
           }
 
@@ -253,13 +259,18 @@ export function startOAuthCallbackServer(
           if (json.scope) token.scope = json.scope;
 
           saveTokenFile(entry.token_file, token);
-          logger.info({ id: entry.id, account: entry.account }, 'OAuth re-auth complete');
+          logger.info(
+            { id: entry.id, account: entry.account },
+            'OAuth re-auth complete',
+          );
 
           const msg = `OAuth re-auth complete for *${entry.id}* (${entry.account})`;
           if (alertCallback) {
             try {
               alertCallback(msg);
-            } catch { /* best-effort */ }
+            } catch {
+              /* best-effort */
+            }
           }
 
           res.writeHead(200, { 'content-type': 'text/html' });
@@ -269,7 +280,9 @@ export function startOAuthCallbackServer(
         } catch (err) {
           logger.error({ id: entry.id, err }, 'Token exchange error');
           res.writeHead(500, { 'content-type': 'text/html' });
-          res.end('<h1>Auth error</h1><p>Token exchange failed. Check server logs.</p>');
+          res.end(
+            '<h1>Auth error</h1><p>Token exchange failed. Check server logs.</p>',
+          );
         }
         return;
       }

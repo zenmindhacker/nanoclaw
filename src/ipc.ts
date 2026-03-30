@@ -11,7 +11,11 @@ import { logger } from './logger.js';
 import { RegisteredGroup } from './types.js';
 
 export interface IpcDeps {
-  sendMessage: (jid: string, text: string, opts?: { noThread?: boolean }) => Promise<void>;
+  sendMessage: (
+    jid: string,
+    text: string,
+    opts?: { noThread?: boolean },
+  ) => Promise<void>;
   sendMedia: (
     jid: string,
     filePath: string,
@@ -99,7 +103,8 @@ export function startIpcWatcher(deps: IpcDeps): void {
                   // Same-group messages (agent replying to its own chat) should
                   // inherit the active thread context. Cross-group messages post
                   // at channel level to avoid hijacking an unrelated thread.
-                  const isSameGroup = targetGroup && targetGroup.folder === sourceGroup;
+                  const isSameGroup =
+                    targetGroup && targetGroup.folder === sourceGroup;
                   if (data.text) {
                     await deps.sendMessage(
                       data.chatJid,

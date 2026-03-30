@@ -27,7 +27,10 @@ import {
   usingAppleContainer,
 } from './container-runtime.js';
 import { detectAuthMode, readCurrentAccessToken } from './credential-proxy.js';
-import { loadMountAllowlist, validateAdditionalMounts } from './mount-security.js';
+import {
+  loadMountAllowlist,
+  validateAdditionalMounts,
+} from './mount-security.js';
 import { getSecretsForGroup, MANIFEST_PATH } from './secrets.js';
 import { RegisteredGroup } from './types.js';
 
@@ -233,10 +236,14 @@ function buildVolumeMounts(
         ? path.join(process.env.HOME || '', dm.path.slice(2))
         : dm.path;
       if (!fs.existsSync(expandedPath)) {
-        logger.debug({ path: dm.path }, 'Default mount path does not exist, skipping');
+        logger.debug(
+          { path: dm.path },
+          'Default mount path does not exist, skipping',
+        );
         continue;
       }
-      const effectiveReadonly = !dm.allowReadWrite || (!isMain && allowlist.nonMainReadOnly);
+      const effectiveReadonly =
+        !dm.allowReadWrite || (!isMain && allowlist.nonMainReadOnly);
       mounts.push({
         hostPath: expandedPath,
         containerPath: `/workspace/extra/${dm.containerName}`,
@@ -253,7 +260,7 @@ function buildVolumeMounts(
       isMain,
     );
     // Skip any that duplicate a default mount
-    const existingPaths = new Set(mounts.map(m => m.containerPath));
+    const existingPaths = new Set(mounts.map((m) => m.containerPath));
     for (const vm of validatedMounts) {
       if (!existingPaths.has(vm.containerPath)) {
         mounts.push(vm);
