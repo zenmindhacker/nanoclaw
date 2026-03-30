@@ -199,11 +199,19 @@ export class SlackChannel implements Channel {
       // Extract text from Slack attachments/blocks when msg.text is empty.
       // Many bots (snyk-bot, GitHub, etc.) post via rich attachments with no plain text.
       const rawEvent = event as {
-        attachments?: Array<{ text?: string; fallback?: string; pretext?: string }>;
+        attachments?: Array<{
+          text?: string;
+          fallback?: string;
+          pretext?: string;
+        }>;
         blocks?: Array<{
           type: string;
           text?: { text?: string };
-          elements?: Array<{ type: string; text?: string; elements?: Array<{ text?: string }> }>;
+          elements?: Array<{
+            type: string;
+            text?: string;
+            elements?: Array<{ text?: string }>;
+          }>;
         }>;
       };
       let fallbackText: string | undefined;
@@ -466,7 +474,10 @@ export class SlackChannel implements Channel {
       const auth = await this.app.client.auth.test();
       this.botUserId = auth.user_id as string;
       this.botId = auth.bot_id as string | undefined;
-      logger.info({ botUserId: this.botUserId, botId: this.botId }, 'Connected to Slack');
+      logger.info(
+        { botUserId: this.botUserId, botId: this.botId },
+        'Connected to Slack',
+      );
     } catch (err) {
       logger.warn({ err }, 'Connected to Slack but failed to get bot user ID');
     }
@@ -480,7 +491,11 @@ export class SlackChannel implements Channel {
     await this.syncChannelMetadata();
   }
 
-  async sendMessage(jid: string, text: string, opts?: { noThread?: boolean }): Promise<void> {
+  async sendMessage(
+    jid: string,
+    text: string,
+    opts?: { noThread?: boolean },
+  ): Promise<void> {
     const channelId = jid.replace(/^slack:/, '');
 
     if (!this.connected) {
