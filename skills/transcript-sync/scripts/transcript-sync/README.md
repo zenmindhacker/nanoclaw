@@ -91,7 +91,7 @@ openclaw cron add \
 Classifies meetings by attendee emails:
 - **Coaching**: kevin@... → `coaching/kevin/transcripts/`
 - **Coaching**: christina@... → `coaching/christina/transcripts/`
-- **Ganttsy**: @ganttsy.com → `ganttsy/ganttsy-docs/planning/transcripts/`
+- **Ganttsy**: @ganttsy.com → `ganttsy/ganttsy-docs/transcripts/`
 - **CopperTeams**: ct-specific → `copperteams/ct-docs/planning/transcripts/`
 - **NVS**: nvs-specific → `nvs/nvs-docs/transcripts/`
 - **Default**: → `cognitivetech/transcripts/`

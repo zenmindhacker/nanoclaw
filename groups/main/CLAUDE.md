@@ -225,6 +225,15 @@ Read/write `/workspace/project/groups/global/CLAUDE.md` for facts that apply to 
 schedule_task(prompt: "...", schedule_type: "cron", schedule_value: "0 9 * * 1", target_group_jid: "<jid>")
 ```
 
+## Scheduled Task Pattern
+
+Every scheduled task prompt **must** end with a state-file write:
+```bash
+mkdir -p /workspace/group/task-state
+date -u +%Y-%m-%dT%H:%M:%SZ > /workspace/group/task-state/<task-id>.last-run
+```
+This enables the catch-up auditor (`task-1773444440966-iz036a`, runs hourly 7am–9pm CST) to detect and re-run tasks missed due to laptop sleep.
+
 ---
 
 ## Security

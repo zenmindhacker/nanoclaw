@@ -12,10 +12,8 @@ import type { State } from './types.js';
 const DEFAULT_STATE: State = {
   lastConvIdx: 0,
   lastGanttsyWorkspaceModifiedTime: null,
-  lastPlaudStartTime: null,
   skippedConvs: [],
   skippedGanttsyWorkspaceIds: [],
-  skippedPlaudIds: [],
 };
 
 export function loadState(): State {
@@ -56,15 +54,6 @@ export function markConversationSkipped(state: State, convIdx: number): void {
   }
   if (!state.skippedConvs.includes(convIdx)) {
     state.skippedConvs.push(convIdx);
-  }
-}
-
-export function markPlaudSkipped(state: State, fileId: string): void {
-  if (!state.skippedPlaudIds) {
-    state.skippedPlaudIds = [];
-  }
-  if (!state.skippedPlaudIds.includes(fileId)) {
-    state.skippedPlaudIds.push(fileId);
   }
 }
 

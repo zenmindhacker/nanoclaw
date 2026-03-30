@@ -192,7 +192,8 @@ function main(): void {
     if (res.status === 0) {
       created.push(a.index);
       const issueId = res.stdout.match(/([A-Z]+-\d+)/)?.[1] || '';
-      console.log(`✅ ${a.index}. ${a.title} → ${a.assignee} [${a.project}] ${issueId}`);
+      const url = res.stdout.match(/https:\/\/linear\.app\/\S+/)?.[0] || '';
+      console.log(`✅ ${a.index}. ${a.title} → ${a.assignee} [${a.project}] ${issueId}${url ? ` ${url}` : ''}`);
     } else {
       failed.push(a.index);
       const err = res.stderr.trim().split('\n')[0] || 'unknown error';

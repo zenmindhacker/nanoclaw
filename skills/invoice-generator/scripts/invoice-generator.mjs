@@ -241,7 +241,7 @@ async function exportTogglPdf(projectId, since, until, clientName) {
 async function attachTogglPdf(invoice, clientName, projectId, since, until) {
   console.log('   📎 Generating and attaching Toggl PDF report...');
   try {
-    const pdfDir = resolve(homedir(), '.openclaw/toggl-reports');
+    const pdfDir = existsSync('/workspace/extra/credentials') ? '/tmp/toggl-reports' : resolve(homedir(), '.config/nanoclaw/toggl-reports');
     if (!existsSync(pdfDir)) mkdirSync(pdfDir, { recursive: true });
     const pdfPath = pdfDir + '/Toggl-Report-' + invoice.invoiceNumber + '.pdf';
     
@@ -273,8 +273,8 @@ async function attachTogglPdf(invoice, clientName, projectId, since, until) {
     const filename = 'Toggl-Report-' + invoice.invoiceNumber + '.pdf';
     
     // Read PDF and upload to Xero
-    const tokensPath = resolve(homedir(), '.openclaw/credentials/xero-tokens.json');
-    const tokens = JSON.parse(readFileSync(tokensPath, 'utf8'));
+    const xeroCredDir = existsSync('/workspace/extra/credentials') ? '/workspace/extra/credentials' : resolve(homedir(), '.config/nanoclaw/credentials/services');
+    const tokens = JSON.parse(readFileSync(resolve(xeroCredDir, 'xero-tokens.json'), 'utf8'));
     
     const { client, tenantId } = await xero.getXeroClient();
     const response = await client.accountingApi.getInvoices(tenantId);

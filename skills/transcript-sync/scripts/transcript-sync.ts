@@ -2,7 +2,7 @@
 /**
  * transcript-sync — Main orchestrator
  *
- * Syncs transcripts from multiple sources (Shadow, Plaud, Google Workspace)
+ * Syncs transcripts from multiple sources (Shadow, Google Workspace)
  * to appropriate GitHub repositories based on attendee/content classification.
  *
  * All domain logic lives in ./transcript-sync/ modules; this file is the
@@ -22,11 +22,9 @@ import {
   MONDO_ZEN_COACHING_TRANSCRIPTS,
   PERSONAL_TRANSCRIPTS,
   TESTBOARD_TRANSCRIPTS,
-  PLAUD_JWT_PATH,
   DEFAULT_CALENDAR_IDS,
   DEDUP_TIME_WINDOW_MS,
   MIN_TRANSCRIPT_ROWS,
-  MIN_ENDED_AGO_MS,
 } from './transcript-sync/config.js';
 
 // Types
@@ -60,7 +58,6 @@ import {
   parseGanttsyWorkspaceMeetingDate,
   parseGanttsyWorkspaceAttendees,
 } from './transcript-sync/sources/ganttsy.js';
-import { getPlaudToken, fetchPlaudFiles, fetchPlaudTranscriptSegments, formatPlaudTimestamp } from './transcript-sync/sources/plaud.js';
 
 // ============================================================================
 // CLI
@@ -72,7 +69,7 @@ function parseArgs(): Args {
     limit: 50,
     sinceDays: null,
     reportOnly: false,
-    calendarFallback: false,
+    noCalendar: false,
     calendarWindowMinutes: 10,
     calendarIds: DEFAULT_CALENDAR_IDS,
     tasksMode: 'auto',
@@ -80,7 +77,6 @@ function parseArgs(): Args {
     tasksMaxItems: 6,
     shadowOnly: false,
     ganttsyWorkspaceOnly: false,
-    plaudOnly: false,
   };
 
   for (let i = 2; i < process.argv.length; i++) {
@@ -94,8 +90,8 @@ function parseArgs(): Args {
       args.sinceDays = parseInt(process.argv[++i], 10);
     } else if (arg === '--report-only') {
       args.reportOnly = true;
-    } else if (arg === '--calendar-fallback') {
-      args.calendarFallback = true;
+    } else if (arg === '--no-calendar') {
+      args.noCalendar = true;
     } else if (arg === '--calendar-window-minutes') {
       args.calendarWindowMinutes = parseInt(process.argv[++i], 10);
     } else if (arg === '--calendar-ids') {
@@ -110,8 +106,6 @@ function parseArgs(): Args {
       args.shadowOnly = true;
     } else if (arg === '--ganttsy-workspace-only') {
       args.ganttsyWorkspaceOnly = true;
-    } else if (arg === '--plaud-only') {
-      args.plaudOnly = true;
     }
   }
 
@@ -139,8 +133,6 @@ async function processMeeting(
     transcriptText = meeting.shadowTranscriptRows.map(r => `${r.spkrName || ''}: ${r.transContent || ''}`).join('\n');
   } else if (meeting.source === 'ganttsy_workspace' && meeting.ganttsyWorkspaceData) {
     transcriptText = meeting.ganttsyWorkspaceData.transcript;
-  } else if (meeting.source === 'plaud' && meeting.plaudData) {
-    transcriptText = meeting.plaudData.segments.map(s => `${s.speaker || s.original_speaker}: ${s.content}`).join('\n');
   }
 
   if (!transcriptText.trim()) {
@@ -159,9 +151,6 @@ async function processMeeting(
       } else if (meeting.source === 'ganttsy_workspace') {
         state.skippedGanttsyWorkspaceIds = state.skippedGanttsyWorkspaceIds || [];
         state.skippedGanttsyWorkspaceIds.push(meeting.id);
-      } else if (meeting.source === 'plaud') {
-        state.skippedPlaudIds = state.skippedPlaudIds || [];
-        state.skippedPlaudIds.push(meeting.id);
       }
       saveState(state);
       return { wrote: false };
@@ -195,8 +184,12 @@ async function processMeeting(
   }
 
   // Ganttsy workspace fallback: docs from Ganttsy Drive folder always belong in Ganttsy repos.
-  // If gcal matching failed and routing defaulted to CTCI, force to Ganttsy sub-route.
-  if (meeting.source === 'ganttsy_workspace' && targetDir === ctciDir) {
+  // If classification didn't already route to a Ganttsy dir, force to Ganttsy sub-route.
+  const ganttsyDirs = [
+    join(GITHUB_ROOT, 'ganttsy/ganttsy-docs/transcripts'),
+    join(GITHUB_ROOT, 'ganttsy/ganttsy-strategy/transcripts'),
+  ];
+  if (meeting.source === 'ganttsy_workspace' && !ganttsyDirs.includes(targetDir)) {
     const ctx: ClassificationContext = {
       title,
       titleLower: title.toLowerCase(),
@@ -260,12 +253,6 @@ async function processMeeting(
     lines.push(`- ganttsy_workspace_modified: ${meeting.ganttsyWorkspaceData.doc.modifiedTime}`);
   }
 
-  if (meeting.source === 'plaud' && meeting.plaudData) {
-    lines.push(`- plaud_file_id: ${meeting.plaudData.file.id}`);
-    lines.push(`- plaud_url: https://web.plaud.ai/file/${meeting.plaudData.file.id}`);
-    lines.push(`- plaud_duration: ${formatPlaudTimestamp(meeting.plaudData.file.duration)}`);
-  }
-
   if (gcalMeta) {
     const desc = (gcalMeta.event_description || '').replace(/\s+/g, ' ').trim();
     const desc500 = desc.length > 500 ? `${desc.slice(0, 500)}…` : desc;
@@ -294,13 +281,6 @@ async function processMeeting(
 
   if (meeting.source === 'ganttsy_workspace' && meeting.ganttsyWorkspaceData) {
     lines.push(meeting.ganttsyWorkspaceData.transcript);
-  } else if (meeting.source === 'plaud' && meeting.plaudData) {
-    for (const seg of meeting.plaudData.segments) {
-      const speaker = seg.speaker || seg.original_speaker || 'Speaker';
-      const content = seg.content.trim();
-      if (!content) continue;
-      lines.push(`- **${speaker}** [${formatPlaudTimestamp(seg.start_time)}]: ${content}`);
-    }
   } else if (meeting.source === 'shadow' && meeting.shadowTranscriptRows) {
     for (const r of meeting.shadowTranscriptRows) {
       const speaker = r.spkrName || 'Speaker';
@@ -360,20 +340,23 @@ async function main() {
     spawnCoachingAnalysis(incompleteCoachingPaths);
   }
 
-  // Setup Google Calendar service
-  const service = args.calendarFallback ? getCalendarService() : null;
-  if (args.calendarFallback) {
+  // Google Calendar is MANDATORY for correct routing. Without it, meetings
+  // have no attendee data and get misrouted. Use --no-calendar only for debugging.
+  const service = args.noCalendar ? null : getCalendarService();
+  if (!args.noCalendar) {
+    if (!service) {
+      throw new Error('GCAL_REQUIRED: Calendar service failed to init. Fix credentials or use --no-calendar to skip (meetings WILL be misrouted).');
+    }
     await assertCalendarAuthHealthy(service, args.calendarIds);
   }
 
   const ganttsyWorkspaceMeetings: UnifiedMeeting[] = [];
-  const plaudMeetings: UnifiedMeeting[] = [];
   const shadowMeetings: UnifiedMeeting[] = [];
 
   // ========================================================================
   // Fetch Ganttsy Google Workspace meetings
   // ========================================================================
-  if (!args.shadowOnly && !args.plaudOnly) {
+  if (!args.shadowOnly) {
     try {
       let modifiedAfter: string | null = null;
       if (args.sinceDays !== null) {
@@ -438,73 +421,9 @@ async function main() {
   }
 
   // ========================================================================
-  // Fetch Plaud meetings (direct API)
-  // ========================================================================
-  if (!args.shadowOnly && !args.ganttsyWorkspaceOnly) {
-    try {
-      const plaudToken = getPlaudToken();
-      if (!plaudToken) {
-        logWarn(`[plaud] No JWT found at ${PLAUD_JWT_PATH}`);
-      } else {
-        let startAfter: number | null = null;
-        if (args.sinceDays !== null) {
-          startAfter = Date.now() - args.sinceDays * 24 * 60 * 60 * 1000;
-        } else if (state.lastPlaudStartTime) {
-          startAfter = state.lastPlaudStartTime;
-        }
-
-        const files = await fetchPlaudFiles(plaudToken, startAfter, args.limit);
-        const skippedPlaudIds = new Set(state.skippedPlaudIds || []);
-
-        for (const file of files) {
-          if (skippedPlaudIds.has(file.id)) {
-            logInfo(`[skip] plaud=${file.id} previously marked confidential`);
-            continue;
-          }
-
-          const segments = await fetchPlaudTranscriptSegments(plaudToken, file.id);
-          if (!segments || segments.length === 0) continue;
-
-          const meetingDate = new Date(file.start_time);
-          const endDate = new Date(file.start_time + file.duration);
-
-          // Plaud transcripts have no embedded attendees — rely on gcal fallback
-          let gcalMeta: CalendarMeta | null = null;
-          let gcalAttendees: Attendee[] = [];
-          if (service) {
-            [gcalAttendees, gcalMeta] = await calendarFallbackAttendees(
-              service,
-              meetingDate.toISOString(),
-              file.filename,
-              args.calendarIds,
-              args.calendarWindowMinutes
-            );
-          }
-
-          plaudMeetings.push({
-            source: 'plaud',
-            id: file.id,
-            title: file.filename,
-            startedAt: meetingDate,
-            endedAt: endDate,
-            gcalEventId: gcalMeta?.event_id || null,
-            attendees: gcalAttendees,
-            gcalMeta,
-            plaudData: { file, segments },
-          });
-        }
-
-        logInfo(`[plaud] Fetched ${plaudMeetings.length} meeting(s)`);
-      }
-    } catch (err: any) {
-      logError(`[plaud] Error: ${err.message}`);
-    }
-  }
-
-  // ========================================================================
   // Fetch Shadow meetings
   // ========================================================================
-  if (!args.ganttsyWorkspaceOnly && !args.plaudOnly && existsSync(DB_PATH)) {
+  if (!args.ganttsyWorkspaceOnly && existsSync(DB_PATH)) {
     const db = new Database(DB_PATH, { readonly: true });
     const lastIdx = state.lastConvIdx;
 
@@ -514,7 +433,7 @@ async function main() {
         SELECT convIdx, convUuid, convTitle, convStartedAt, convEndedAt, convCreatedAt
         FROM SHADOW_CONVERSATION
         WHERE datetime(replace(substr(convStartedAt,1,19),'T',' ')) >= datetime('now', ?)
-          AND convEndedAt IS NOT NULL
+          AND transStatus = 3
         ORDER BY convIdx ASC
         LIMIT ?
       `).all(`-${args.sinceDays} days`, args.limit) as any[];
@@ -523,7 +442,7 @@ async function main() {
         SELECT convIdx, convUuid, convTitle, convStartedAt, convEndedAt, convCreatedAt
         FROM SHADOW_CONVERSATION
         WHERE convIdx > ?
-          AND convEndedAt IS NOT NULL
+          AND transStatus = 3
         ORDER BY convIdx ASC
         LIMIT ?
       `).all(lastIdx, args.limit) as any[];
@@ -535,16 +454,6 @@ async function main() {
       if (skippedConvs.has(c.convIdx)) {
         logInfo(`[skip] shadow=${c.convIdx} previously marked confidential`);
         continue;
-      }
-
-      // Check if meeting ended long enough ago to be complete
-      if (c.convEndedAt) {
-        const endedAt = parseShadowDt(c.convEndedAt);
-        const endedAgoMs = Date.now() - endedAt.getTime();
-        if (endedAgoMs < MIN_ENDED_AGO_MS) {
-          logInfo(`[skip] shadow=${c.convIdx} ended only ${Math.round(endedAgoMs / 1000)}s ago, waiting for completion`);
-          continue;
-        }
       }
 
       const rows = fetchTranscriptRows(db, c.convIdx);
@@ -587,17 +496,17 @@ async function main() {
 
     db.close();
     logInfo(`[shadow] Fetched ${shadowMeetings.length} conversation(s)`);
-  } else if (!args.ganttsyWorkspaceOnly && !args.plaudOnly) {
+  } else if (!args.ganttsyWorkspaceOnly) {
     logWarn(`[shadow] DB not found at ${DB_PATH}`);
   }
 
   // ========================================================================
-  // Deduplicate: prioritize Ganttsy Workspace > Plaud > Shadow
+  // Deduplicate: prioritize Ganttsy Workspace > Shadow
   // ========================================================================
 
   // Pre-scan existing transcript files for cross-run deduplication
   const transcriptDirs = [
-    join(GITHUB_ROOT, 'ganttsy/ganttsy-docs/planning/transcripts'),
+    join(GITHUB_ROOT, 'ganttsy/ganttsy-docs/transcripts'),
     join(GITHUB_ROOT, 'ganttsy/ganttsy-strategy/transcripts'),
     join(GITHUB_ROOT, 'copperteams/ct-docs/planning/transcripts'),
     join(GITHUB_ROOT, 'cognitivetech/ctci-docs/transcripts'),
@@ -618,7 +527,6 @@ async function main() {
 
   const toProcess: UnifiedMeeting[] = [];
   const dedupedShadowIds: string[] = [];
-  const dedupedPlaudIds: string[] = [];
 
   // Add all Ganttsy Workspace meetings first (highest priority)
   const dedupedGanttsyWorkspaceIds: string[] = [];
@@ -633,32 +541,6 @@ async function main() {
       processedGcalEventIds.add(gw.gcalEventId);
     }
     processedTimeWindows.push(gw.startedAt);
-  }
-
-  // Add Plaud meetings only if no Ganttsy Workspace duplicate
-  for (const pm of plaudMeetings) {
-    if (pm.gcalEventId && processedGcalEventIds.has(pm.gcalEventId)) {
-      logInfo(`[dedup] plaud=${pm.id} matches higher priority source by gcal_event_id=${pm.gcalEventId}, skipping`);
-      dedupedPlaudIds.push(pm.id);
-      continue;
-    }
-
-    const isDuplicate = processedTimeWindows.some(otherTime => {
-      const diff = Math.abs(pm.startedAt.getTime() - otherTime.getTime());
-      return diff <= DEDUP_TIME_WINDOW_MS;
-    });
-
-    if (isDuplicate) {
-      logInfo(`[dedup] plaud=${pm.id} matches higher priority source by time window, skipping`);
-      dedupedPlaudIds.push(pm.id);
-      continue;
-    }
-
-    toProcess.push(pm);
-    if (pm.gcalEventId) {
-      processedGcalEventIds.add(pm.gcalEventId);
-    }
-    processedTimeWindows.push(pm.startedAt);
   }
 
   // Add Shadow meetings only if no higher priority duplicate
@@ -688,7 +570,7 @@ async function main() {
     return;
   }
 
-  logInfo(`Processing ${toProcess.length} meeting(s) (deduped ${dedupedPlaudIds.length} plaud, ${dedupedShadowIds.length} shadow)`);
+  logInfo(`Processing ${toProcess.length} meeting(s) (deduped ${dedupedShadowIds.length} shadow)`);
 
   // ========================================================================
   // Process meetings
@@ -700,7 +582,6 @@ async function main() {
   let exported = 0;
   let maxShadowIdx = state.lastConvIdx;
   let maxGanttsyWorkspaceModifiedTime = state.lastGanttsyWorkspaceModifiedTime;
-  let maxPlaudStartTime = state.lastPlaudStartTime;
 
   // Clean up stale pending files before processing
   cleanStalePendingFiles();
@@ -724,11 +605,6 @@ async function main() {
       if (!maxGanttsyWorkspaceModifiedTime || modifiedTime > maxGanttsyWorkspaceModifiedTime) {
         maxGanttsyWorkspaceModifiedTime = modifiedTime;
       }
-    } else if (meeting.source === 'plaud' && meeting.plaudData) {
-      const startTime = meeting.plaudData.file.start_time;
-      if (!maxPlaudStartTime || startTime > maxPlaudStartTime) {
-        maxPlaudStartTime = startTime;
-      }
     }
   }
 
@@ -745,9 +621,6 @@ async function main() {
     if (maxGanttsyWorkspaceModifiedTime) {
       state.lastGanttsyWorkspaceModifiedTime = maxGanttsyWorkspaceModifiedTime;
     }
-    if (maxPlaudStartTime) {
-      state.lastPlaudStartTime = maxPlaudStartTime;
-    }
     saveState(state);
   }
 
@@ -761,7 +634,13 @@ async function main() {
     postPendingSummaryToSysops(pendingMeetings);
   }
 
-  logInfo(`Done. processed=${toProcess.length} exported=${exported} coaching=${coachingPaths.length} work=${workPaths.length} pending=${pendingMeetings.length} deduped_plaud=${dedupedPlaudIds.length} deduped_shadow=${dedupedShadowIds.length}`);
+  logInfo(`Done. processed=${toProcess.length} exported=${exported} coaching=${coachingPaths.length} work=${workPaths.length} pending=${pendingMeetings.length} deduped_shadow=${dedupedShadowIds.length}`);
+
+  // Output written file paths to stdout so the shell wrapper can git-add only these files
+  const allWrittenPaths = [...coachingPaths, ...workPaths];
+  if (allWrittenPaths.length > 0) {
+    console.log(JSON.stringify({ writtenFiles: allWrittenPaths }));
+  }
 }
 
 main().catch(err => {

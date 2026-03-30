@@ -23,6 +23,8 @@ RUN apt-get update && apt-get install -y \
     libxshmfence1 \
     curl \
     git \
+    jq \
+    sqlite3 \
     && rm -rf /var/lib/apt/lists/*
 
 # Set Chromium path for agent-browser
@@ -30,7 +32,12 @@ ENV AGENT_BROWSER_EXECUTABLE_PATH=/usr/bin/chromium
 ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 
 # Install agent-browser and claude-code globally
-RUN npm install -g agent-browser @anthropic-ai/claude-code
+# Remove /root/.claude/ created during install — containers auth via
+# CLAUDE_CODE_OAUTH_TOKEN env var, not credentials files. Leaving this
+# directory causes noisy "permission denied" errors when the SDK probes
+# it at startup under a non-root uid.
+RUN npm install -g agent-browser @anthropic-ai/claude-code attio-cli neonctl \
+    && rm -rf /root/.claude
 
 # Create app directory
 WORKDIR /app

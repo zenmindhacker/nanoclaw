@@ -12,7 +12,7 @@ export const SKILLS_ROOT = process.env.SKILLS_ROOT || '/workspace/extra/skills';
 export const GROUP_WORKSPACE = process.env.GROUP_WORKSPACE || '/workspace/group/transcript-sync';
 
 // Shadow (local transcription app — mounted read-only)
-export const SHADOW_DB_PATH = '/workspace/extra/shadow/shadow.db';
+export const SHADOW_DB_PATH = process.env.SHADOW_DB_PATH || '/workspace/extra/shadow/shadow.db';
 
 // State management
 export const STATE_PATH = `${GROUP_WORKSPACE}/transcript-sync-state.json`;
@@ -47,10 +47,6 @@ export const GANTTSY_WORKSPACE_FOLDER = '1gRFJ45HMM0ebyjqFxmAdlXa-oHklYT0G';
 export const GANTTSY_GOOGLE_TOKEN = `${CREDENTIALS_ROOT}/ganttsy-google-token.json`;
 export const GANTTSY_GOOGLE_OAUTH_CLIENT = `${CREDENTIALS_ROOT}/ganttsy-google-oauth-client.json`;
 
-// Plaud direct API
-export const PLAUD_JWT_PATH = `${CREDENTIALS_ROOT}/plaud-jwt`;
-export const PLAUD_API_BASE = 'https://api.plaud.ai';
-
 // OpenRouter (for LLM action extraction)
 export const OPENROUTER_KEY_PATH = `${CREDENTIALS_ROOT}/openrouter`;
 
@@ -60,7 +56,7 @@ export const TRANSCRIPT_TASKS_SCRIPT = `${SKILLS_ROOT}/transcript-sync/scripts/t
 // Transcript routing destinations
 export const TRANSCRIPT_DESTINATIONS = {
   ganttsy: {
-    docs: `${GITHUB_ROOT}/ganttsy/ganttsy-docs/planning/transcripts`,
+    docs: `${GITHUB_ROOT}/ganttsy/ganttsy-docs/transcripts`,
     strategy: `${GITHUB_ROOT}/ganttsy/ganttsy-strategy/transcripts`,
   },
   copperteams: `${GITHUB_ROOT}/copperteams/ct-docs/planning/transcripts`,

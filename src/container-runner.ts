@@ -24,9 +24,10 @@ import {
   hostGatewayArgs,
   readonlyMountArgs,
   stopContainer,
+  usingAppleContainer,
 } from './container-runtime.js';
 import { detectAuthMode, readCurrentAccessToken } from './credential-proxy.js';
-import { validateAdditionalMounts } from './mount-security.js';
+import { loadMountAllowlist, validateAdditionalMounts } from './mount-security.js';
 import { getSecretsForGroup, MANIFEST_PATH } from './secrets.js';
 import { RegisteredGroup } from './types.js';
 
@@ -222,14 +223,42 @@ function buildVolumeMounts(
     });
   }
 
-  // Additional mounts validated against external allowlist (tamper-proof from containers)
+  // Default mounts from allowlist — applied to ALL groups automatically.
+  // This is the single source of truth; per-group additionalMounts in the DB
+  // are only needed for one-off extras beyond the defaults.
+  const allowlist = loadMountAllowlist();
+  if (allowlist?.defaultMounts) {
+    for (const dm of allowlist.defaultMounts) {
+      const expandedPath = dm.path.startsWith('~/')
+        ? path.join(process.env.HOME || '', dm.path.slice(2))
+        : dm.path;
+      if (!fs.existsSync(expandedPath)) {
+        logger.debug({ path: dm.path }, 'Default mount path does not exist, skipping');
+        continue;
+      }
+      const effectiveReadonly = !dm.allowReadWrite || (!isMain && allowlist.nonMainReadOnly);
+      mounts.push({
+        hostPath: expandedPath,
+        containerPath: `/workspace/extra/${dm.containerName}`,
+        readonly: effectiveReadonly,
+      });
+    }
+  }
+
+  // Additional per-group mounts validated against allowlist (for extras beyond defaults)
   if (group.containerConfig?.additionalMounts) {
     const validatedMounts = validateAdditionalMounts(
       group.containerConfig.additionalMounts,
       group.name,
       isMain,
     );
-    mounts.push(...validatedMounts);
+    // Skip any that duplicate a default mount
+    const existingPaths = new Set(mounts.map(m => m.containerPath));
+    for (const vm of validatedMounts) {
+      if (!existingPaths.has(vm.containerPath)) {
+        mounts.push(vm);
+      }
+    }
   }
 
   return mounts;
@@ -274,17 +303,21 @@ function buildContainerArgs(
   args.push(...hostGatewayArgs());
 
   // Run as host user so bind-mounted files are accessible.
-  // Skip when running as root (uid 0), as the container's node user (uid 1000),
-  // or when getuid is unavailable (native Windows without WSL).
+  // Skip when running as root (uid 0) or when getuid is unavailable (Windows).
   const hostUid = process.getuid?.();
   const hostGid = process.getgid?.();
-  if (hostUid != null && hostUid !== 0 && hostUid !== 1000) {
-    if (isMain) {
-      // Main containers start as root so the entrypoint can mount --bind
-      // to shadow .env. Privileges are dropped via setpriv in entrypoint.sh.
+  if (hostUid != null && hostUid !== 0) {
+    if (isMain && usingAppleContainer) {
+      // Apple Container main: start as root for mount --bind (Apple Container
+      // only supports directory mounts, not file-to-file). Privileges are
+      // dropped via setpriv in entrypoint.sh.
       args.push('-e', `RUN_UID=${hostUid}`);
       args.push('-e', `RUN_GID=${hostGid}`);
     } else {
+      // Docker or non-main: run as host user directly.
+      // Docker main containers shadow .env via host-side bind mount instead.
+      // Claude Code refuses --dangerously-skip-permissions as root, so we
+      // must not start Docker containers as root.
       args.push('--user', `${hostUid}:${hostGid}`);
     }
     args.push('-e', 'HOME=/home/node');
@@ -296,6 +329,13 @@ function buildContainerArgs(
     } else {
       args.push('-v', `${mount.hostPath}:${mount.containerPath}`);
     }
+  }
+
+  // Shadow .env so agents can't read host secrets from the mounted project root.
+  // Docker supports file-to-file bind mounts; Apple Container doesn't (it uses
+  // mount --bind inside the container via the entrypoint instead).
+  if (!usingAppleContainer && isMain) {
+    args.push('-v', '/dev/null:/workspace/project/.env:ro');
   }
 
   args.push(CONTAINER_IMAGE);
@@ -720,6 +760,8 @@ export function writeTasksSnapshot(
     schedule_value: string;
     status: string;
     next_run: string | null;
+    last_run?: string | null;
+    last_result?: string | null;
   }>,
 ): void {
   // Write filtered tasks to the group's IPC directory

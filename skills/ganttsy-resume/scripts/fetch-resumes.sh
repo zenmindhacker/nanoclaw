@@ -9,6 +9,7 @@ STATE_DIR="${STATE_DIR:-/workspace/group/ganttsy-resume/.state}"
 RAW_DIR="${RAW_DIR:-/workspace/group/ganttsy-resume/candidates/raw}"
 STATE_FILE="$STATE_DIR/processed_ids.txt"
 TOKEN_FILE="/workspace/extra/credentials/ganttsy-google-token.json"
+CLIENT_FILE="/workspace/extra/credentials/ganttsy-google-oauth-client.json"
 
 QUERY_DEFAULT='to:careers@ganttsy.com'
 QUERY="${QUERY:-$QUERY_DEFAULT}"
@@ -26,10 +27,16 @@ if [[ ! -f "$TOKEN_FILE" ]]; then
   exit 1
 fi
 
+if [[ ! -f "$CLIENT_FILE" ]]; then
+  echo "OAuth client file not found: $CLIENT_FILE" >&2
+  exit 1
+fi
+
 get_access_token() {
   local client_id client_secret refresh_token
-  client_id=$(jq -r '.installed.client_id // .client_id' "$TOKEN_FILE")
-  client_secret=$(jq -r '.installed.client_secret // .client_secret' "$TOKEN_FILE")
+  # Client credentials live in the OAuth client file, tokens in the token file
+  client_id=$(jq -r '.installed.client_id // .client_id' "$CLIENT_FILE")
+  client_secret=$(jq -r '.installed.client_secret // .client_secret' "$CLIENT_FILE")
   refresh_token=$(jq -r '.refresh_token' "$TOKEN_FILE")
 
   curl -s -X POST https://oauth2.googleapis.com/token \

@@ -13,7 +13,6 @@
 import { createServer, Server } from 'http';
 import { request as httpsRequest } from 'https';
 import { request as httpRequest, RequestOptions } from 'http';
-import { execSync as nodeExecSync } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -26,10 +25,7 @@ const CLAUDE_OAUTH_TOKEN_URL = 'https://platform.claude.com/v1/oauth/token';
 /** Refresh proactively when less than this many ms remain. */
 const REFRESH_BUFFER_MS = 5 * 60 * 1000;
 
-/** Keychain service/account used by Claude Code ≥ 2.1 on macOS. */
-const KC_SERVICE = 'Claude Code-credentials';
-const KC_ACCOUNT = os.userInfo().username;
-/** Fallback file path used by older Claude Code versions. */
+/** Credentials file path used by Claude Code. */
 const CRED_FILE = path.join(os.homedir(), '.claude', '.credentials.json');
 
 interface OAuthCreds {
@@ -38,24 +34,7 @@ interface OAuthCreds {
   expiresAt: number;
 }
 
-function execSync(cmd: string): string {
-  return nodeExecSync(cmd, { encoding: 'utf-8' }).trim();
-}
-
 function readCredentials(): OAuthCreds | null {
-  // Try macOS Keychain first (Claude Code ≥ 2.1)
-  try {
-    const raw = execSync(
-      `security find-generic-password -s ${JSON.stringify(KC_SERVICE)} -a ${JSON.stringify(KC_ACCOUNT)} -w`,
-    );
-    const o = JSON.parse(raw)?.claudeAiOauth;
-    if (o?.accessToken && o?.refreshToken && o?.expiresAt)
-      return o as OAuthCreds;
-  } catch {
-    /* fall through */
-  }
-
-  // Fallback: flat file (Claude Code < 2.1)
   try {
     const data = JSON.parse(fs.readFileSync(CRED_FILE, 'utf-8'));
     const o = data?.claudeAiOauth;
@@ -69,41 +48,6 @@ function readCredentials(): OAuthCreds | null {
 }
 
 function writeCredentials(creds: OAuthCreds): void {
-  // Try Keychain first
-  try {
-    let existing: Record<string, unknown> = {};
-    try {
-      const raw = execSync(
-        `security find-generic-password -s ${JSON.stringify(KC_SERVICE)} -a ${JSON.stringify(KC_ACCOUNT)} -w`,
-      );
-      existing = JSON.parse(raw);
-    } catch {
-      /* ok — may not exist yet */
-    }
-
-    existing.claudeAiOauth = {
-      ...((existing.claudeAiOauth as object) || {}),
-      ...creds,
-    };
-    const json = JSON.stringify(existing);
-    // delete then add — `add-generic-password` fails if item exists
-    try {
-      execSync(
-        `security delete-generic-password -s ${JSON.stringify(KC_SERVICE)} -a ${JSON.stringify(KC_ACCOUNT)}`,
-      );
-    } catch {
-      /* not found — that's fine */
-    }
-    execSync(
-      `security add-generic-password -s ${JSON.stringify(KC_SERVICE)} -a ${JSON.stringify(KC_ACCOUNT)} -w ${JSON.stringify(json)}`,
-    );
-    logger.info('Refreshed credentials written to Keychain');
-    return;
-  } catch (err) {
-    logger.warn({ err }, 'Keychain write failed, falling back to file');
-  }
-
-  // Fallback: write to file
   try {
     let data: Record<string, unknown> = {};
     try {

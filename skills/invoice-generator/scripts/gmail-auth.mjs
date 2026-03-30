@@ -5,13 +5,14 @@ import { resolve } from 'path';
 import { homedir } from 'os';
 import { execSync } from 'child_process';
 
-const clientJson = JSON.parse(readFileSync(resolve(homedir(), '.config/shadow-sync/google-oauth-client.json'), 'utf8'));
+const clientJson = JSON.parse(readFileSync(resolve(homedir(), '.config/nanoclaw/credentials/services/shadow-google-oauth-client.json'), 'utf8'));
 const client = clientJson.installed;
 
 const SCOPES = [
   'https://www.googleapis.com/auth/gmail.readonly',
   'https://www.googleapis.com/auth/gmail.modify',
-  'https://www.googleapis.com/auth/calendar.readonly'
+  'https://www.googleapis.com/auth/calendar.readonly',
+  'https://www.googleapis.com/auth/drive.readonly'
 ].join(' ');
 
 const PORT = 9879;
@@ -27,7 +28,7 @@ const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` + new URLSearchP
   login_hint: 'cian@cognitivetech.net'
 }).toString();
 
-console.log('Opening browser for Gmail authorization...');
+console.log('Opening browser for CTCI Google authorization (Gmail + Calendar + Drive)...');
 execSync(`open "${authUrl}"`);
 
 const server = http.createServer(async (req, res) => {
@@ -56,14 +57,14 @@ const server = http.createServer(async (req, res) => {
       tokens.expires_at = Math.floor(Date.now() / 1000) + (tokens.expires_in || 3600);
       tokens.account = 'cian@cognitivetech.net';
 
-      const savePath = resolve(homedir(), '.openclaw/credentials/google-gmail-token.json');
+      const savePath = resolve(homedir(), '.config/nanoclaw/credentials/services/google-gmail-token.json');
       writeFileSync(savePath, JSON.stringify(tokens, null, 2));
       console.log('Tokens saved to', savePath);
       console.log('Scope:', tokens.scope);
       console.log('Has refresh:', !!tokens.refresh_token);
 
       res.writeHead(200, { 'Content-Type': 'text/html' });
-      res.end('<h2>Gmail authorized! You can close this tab.</h2>');
+      res.end('<h2>CTCI Google authorized (Gmail + Calendar + Drive)! You can close this tab.</h2>');
       server.close();
       process.exit(0);
     });

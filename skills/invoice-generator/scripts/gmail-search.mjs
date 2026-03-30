@@ -1,9 +1,15 @@
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
 import { homedir } from 'os';
 import https from 'https';
 
-const token = JSON.parse(readFileSync(resolve(homedir(), '.openclaw/credentials/google-gmail-token.json'), 'utf8'));
+function resolveCredPath(filename) {
+  const containerPath = `/workspace/extra/credentials/${filename}`;
+  if (existsSync('/workspace/extra/credentials')) return containerPath;
+  return resolve(homedir(), `.config/nanoclaw/credentials/services/${filename}`);
+}
+
+const token = JSON.parse(readFileSync(resolveCredPath('google-gmail-token.json'), 'utf8'));
 
 function gmailGet(rawPath) {
   const url = new URL('https://gmail.googleapis.com/gmail/v1/users/me/' + rawPath);

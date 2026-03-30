@@ -5,11 +5,17 @@ import {
   ASSISTANT_NAME,
   CREDENTIAL_PROXY_PORT,
   IDLE_TIMEOUT,
+  OAUTH_CALLBACK_PORT,
   POLL_INTERVAL,
   TIMEZONE,
   TRIGGER_PATTERN,
 } from './config.js';
 import { startCredentialProxy } from './credential-proxy.js';
+import {
+  startOAuthCallbackServer,
+  stopOAuthCallbackServer,
+} from './oauth-callback.js';
+import { startOAuthRefresher, stopOAuthRefresher } from './oauth-refresher.js';
 import './channels/index.js';
 import {
   getChannelFactory,
@@ -519,10 +525,27 @@ async function main(): Promise<void> {
     PROXY_BIND_HOST,
   );
 
+  // Start OAuth token refresher (keeps all service tokens fresh)
+  const SYSOPS_JID = 'slack:C07F195GB96';
+  const alertToSysops = (msg: string) => {
+    const ch = findChannel(channels, SYSOPS_JID);
+    if (ch) ch.sendMessage(SYSOPS_JID, msg).catch(() => {});
+  };
+  startOAuthRefresher({ onAlert: alertToSysops });
+
+  // Start OAuth callback server (browser-based re-auth at cleo.cognitivetech.net)
+  const oauthCallbackServer = await startOAuthCallbackServer(
+    OAUTH_CALLBACK_PORT,
+    { onAlert: alertToSysops },
+  );
+
   // Graceful shutdown handlers
   const shutdown = async (signal: string) => {
     logger.info({ signal }, 'Shutdown signal received');
+    stopOAuthRefresher();
+    stopOAuthCallbackServer();
     proxyServer.close();
+    oauthCallbackServer.close();
     await queue.shutdown(10000);
     for (const ch of channels) await ch.disconnect();
     process.exit(0);
@@ -596,14 +619,18 @@ async function main(): Promise<void> {
         return;
       }
       const text = formatOutbound(rawText);
-      if (text) await channel.sendMessage(jid, text);
+      // Scheduled task output posts at channel level, not in stale threads.
+      if (text) await channel.sendMessage(jid, text, { noThread: true });
     },
   });
   startIpcWatcher({
-    sendMessage: (jid, text) => {
+    sendMessage: (jid, text, opts) => {
       const channel = findChannel(channels, jid);
       if (!channel) throw new Error(`No channel for JID: ${jid}`);
-      return channel.sendMessage(jid, text);
+      // Same-group IPC messages inherit active thread context so agent
+      // acknowledgments land in the user's thread. Cross-group messages
+      // use noThread to avoid hijacking unrelated threads.
+      return channel.sendMessage(jid, text, opts);
     },
     sendMedia: async (jid, filePath, filename) => {
       const channel = findChannel(channels, jid);

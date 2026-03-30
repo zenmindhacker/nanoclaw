@@ -1,14 +1,13 @@
 /**
- * Secrets management — macOS Keychain integration.
+ * Secrets management — reads from environment variables.
  *
- * All non-Slack credentials live in Keychain under service "nanoclaw-secrets".
- * The manifest at data/secrets-manifest.json lists what's stored (no values).
- * Agents receive secrets as injected env vars — they never touch Keychain directly.
+ * All non-Slack credentials are loaded from process.env (set via .env / systemd).
+ * The manifest at data/secrets-manifest.json maps secret names to env var names.
+ * Agents receive secrets as injected env vars — they never access the host env directly.
  *
- * Slack tokens stay in .env — they are the comms channel and must survive a Keychain lock.
+ * Slack tokens stay in .env — they are the comms channel and load at process start.
  */
 
-import { execFileSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 
@@ -24,7 +23,7 @@ export interface SecretEntry {
   env_var: string;
   /** Group folder names that receive this secret, or ['*'] for all groups. */
   groups: string[];
-  /** static/oauth: stored in Keychain, injected as env var. file: credential file, mounted into containers. */
+  /** static/oauth: env var injected into containers. file: credential file, mounted. */
   type: 'static' | 'oauth' | 'file';
   /** For type=file: absolute path to the credential file (~ expanded). */
   file_path?: string;
@@ -36,8 +35,23 @@ interface SecretsManifest {
   secrets: SecretEntry[];
 }
 
-// In-memory cache to avoid repeated Keychain reads within one process lifetime.
-const cache = new Map<string, string>();
+// Build name→env_var lookup from manifest (loaded once).
+let envVarMap: Map<string, string> | null = null;
+
+function getEnvVarMap(): Map<string, string> {
+  if (envVarMap) return envVarMap;
+  try {
+    const manifest = loadManifest();
+    envVarMap = new Map(
+      manifest.secrets
+        .filter((s) => s.type !== 'file')
+        .map((s) => [s.name, s.env_var]),
+    );
+  } catch {
+    envVarMap = new Map();
+  }
+  return envVarMap;
+}
 
 /** Read the secrets manifest (no values — metadata only). */
 export function loadManifest(): SecretsManifest {
@@ -46,77 +60,19 @@ export function loadManifest(): SecretsManifest {
 }
 
 /**
- * Read a single secret from Keychain by name.
- * Returns null if not found or Keychain is locked.
+ * Read a single secret by name.
+ * Looks up the env var name from the manifest, reads from process.env.
  */
 export function getSecret(name: string): string | null {
-  const cached = cache.get(name);
-  if (cached !== undefined) return cached;
-
-  try {
-    const value = execFileSync(
-      'security',
-      ['find-generic-password', '-s', KEYCHAIN_SERVICE, '-a', name, '-w'],
-      { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] },
-    ).trim();
-    if (value) {
-      cache.set(name, value);
-      return value;
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Write a secret to Keychain.
- * Replaces existing item if present.
- * Uses -T /usr/bin/security so the CLI can read it back without prompts.
- */
-export function setSecret(name: string, value: string): void {
-  // Delete existing item silently
-  try {
-    execFileSync(
-      'security',
-      ['delete-generic-password', '-s', KEYCHAIN_SERVICE, '-a', name],
-      { stdio: 'ignore' },
-    );
-  } catch {
-    // Not found — fine
-  }
-
-  execFileSync('security', [
-    'add-generic-password',
-    '-s',
-    KEYCHAIN_SERVICE,
-    '-a',
-    name,
-    '-w',
-    value,
-    '-T',
-    '/usr/bin/security',
-  ]);
-  cache.set(name, value);
-}
-
-/** Remove a secret from Keychain. */
-export function deleteSecret(name: string): void {
-  try {
-    execFileSync(
-      'security',
-      ['delete-generic-password', '-s', KEYCHAIN_SERVICE, '-a', name],
-      { stdio: 'ignore' },
-    );
-  } catch {
-    // Not found — fine
-  }
-  cache.delete(name);
+  const map = getEnvVarMap();
+  const envVar = map.get(name);
+  if (!envVar) return null;
+  return process.env[envVar] || null;
 }
 
 /**
  * Return all secrets for a given group as { ENV_VAR: value } pairs.
- * Secrets missing from Keychain are omitted (with a warning).
+ * Secrets missing from env are omitted (with a warning).
  * Call this at container startup to build the env injection map.
  */
 export function getSecretsForGroup(groupFolder: string): {
@@ -142,7 +98,7 @@ export function getSecretsForGroup(groupFolder: string): {
       entry.groups.includes('*') || entry.groups.includes(groupFolder);
     if (!applies) continue;
 
-    const value = getSecret(entry.name);
+    const value = process.env[entry.env_var];
     if (value) {
       env[entry.env_var] = value;
     } else {
@@ -153,7 +109,7 @@ export function getSecretsForGroup(groupFolder: string): {
   if (missing.length > 0) {
     logger.warn(
       { groupFolder, missing },
-      'Some secrets not found in Keychain — Keychain may be locked or secrets not yet stored',
+      'Some secrets not found in environment — check .env file',
     );
   }
 
@@ -161,7 +117,7 @@ export function getSecretsForGroup(groupFolder: string): {
 }
 
 /**
- * Return a list of all secrets with their Keychain status.
+ * Return a list of all secrets with their availability status.
  * Used by the CLI and for diagnostics.
  */
 export function listSecrets(): Array<SecretEntry & { stored: boolean }> {
@@ -174,6 +130,6 @@ export function listSecrets(): Array<SecretEntry & { stored: boolean }> {
 
   return manifest.secrets.map((entry) => ({
     ...entry,
-    stored: getSecret(entry.name) !== null,
+    stored: entry.type === 'file' ? true : !!process.env[entry.env_var],
   }));
 }

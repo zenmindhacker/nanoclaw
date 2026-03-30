@@ -64,7 +64,7 @@ const server = createServer((req, res) => {
             const tokens = JSON.parse(data);
             
             // Save tokens
-            const tokensPath = resolve(homedir(), '.openclaw/credentials/xero-tokens.json');
+            const tokensPath = resolve(homedir(), '.config/nanoclaw/credentials/services/xero-tokens.json');
             tokens.expires_at = Math.floor(Date.now() / 1000) + tokens.expires_in;
             writeFileSync(tokensPath, JSON.stringify(tokens, null, 2));
             

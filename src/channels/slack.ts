@@ -4,6 +4,11 @@ import fs from 'fs';
 import path from 'path';
 
 import { ASSISTANT_NAME, DATA_DIR, TRIGGER_PATTERN } from '../config.js';
+
+// Persist bot-participated thread IDs so restarts don't break auto-trigger.
+// Keyed by jid → array of { ts, savedAt }. Pruned on load (>7 days old).
+const BOT_THREADS_PATH = path.join(DATA_DIR, 'bot-threads.json');
+const BOT_THREADS_TTL_DAYS = 7;
 import { updateChatName } from '../db.js';
 import { readEnvFile } from '../env.js';
 import { logger } from '../logger.js';
@@ -39,6 +44,7 @@ export class SlackChannel implements Channel {
 
   private app: App;
   private botUserId: string | undefined;
+  private botId: string | undefined; // bot_id (B-prefixed) — distinct from botUserId (U-prefixed)
   private connected = false;
   private outgoingQueue: Array<{ jid: string; text: string }> = [];
   private flushing = false;
@@ -46,9 +52,22 @@ export class SlackChannel implements Channel {
 
   private opts: SlackChannelOpts;
 
-  // The thread_ts to reply into for each jid.
-  // Set when a non-bot message arrives; cleared when the thread goes idle.
-  private activeThreadTs = new Map<string, string>();
+  // The thread_ts to reply into for each jid, with the time it was set.
+  // Expires after THREAD_CONTEXT_TTL_MS so IPC/scheduled messages don't
+  // piggyback on a stale thread from an earlier conversation.
+  private activeThreadTs = new Map<string, { ts: string; setAt: number }>();
+  private static readonly THREAD_CONTEXT_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+  /** Get the active thread_ts for a jid, or undefined if expired. */
+  private getActiveThread(jid: string): string | undefined {
+    const entry = this.activeThreadTs.get(jid);
+    if (!entry) return undefined;
+    if (Date.now() - entry.setAt > SlackChannel.THREAD_CONTEXT_TTL_MS) {
+      this.activeThreadTs.delete(jid);
+      return undefined;
+    }
+    return entry.ts;
+  }
 
   // The ts of the latest inbound user message per jid.
   // Used to add/remove a thinking emoji reaction while processing.
@@ -92,6 +111,50 @@ export class SlackChannel implements Channel {
     });
 
     this.setupEventHandlers();
+    this.loadBotThreads();
+  }
+
+  /** Load persisted bot-thread participation from disk, pruning entries older than TTL. */
+  private loadBotThreads(): void {
+    try {
+      const raw = JSON.parse(
+        fs.readFileSync(BOT_THREADS_PATH, 'utf8'),
+      ) as Record<string, Array<{ ts: string; savedAt: number }>>;
+      const cutoff = Date.now() - BOT_THREADS_TTL_DAYS * 86400_000;
+      for (const [jid, entries] of Object.entries(raw)) {
+        const fresh = entries.filter((e) => e.savedAt > cutoff);
+        if (fresh.length > 0) {
+          this.botParticipatedThreads.set(jid, new Set(fresh.map((e) => e.ts)));
+        }
+      }
+    } catch {
+      // File doesn't exist yet — fine, start empty
+    }
+  }
+
+  /** Persist bot-thread participation to disk. */
+  private saveBotThreads(): void {
+    try {
+      const now = Date.now();
+      const out: Record<string, Array<{ ts: string; savedAt: number }>> = {};
+      for (const [jid, tsSet] of this.botParticipatedThreads.entries()) {
+        out[jid] = Array.from(tsSet).map((ts) => ({ ts, savedAt: now }));
+      }
+      const tmp = BOT_THREADS_PATH + '.tmp';
+      fs.writeFileSync(tmp, JSON.stringify(out, null, 2));
+      fs.renameSync(tmp, BOT_THREADS_PATH);
+    } catch (err) {
+      logger.warn({ err }, 'Failed to persist bot-threads');
+    }
+  }
+
+  /** Add a thread_ts to the set of threads the bot has participated in, and persist. */
+  private trackBotThread(jid: string, threadTs: string): void {
+    if (!this.botParticipatedThreads.has(jid)) {
+      this.botParticipatedThreads.set(jid, new Set());
+    }
+    this.botParticipatedThreads.get(jid)!.add(threadTs);
+    this.saveBotThreads();
   }
 
   private setupEventHandlers(): void {
@@ -133,8 +196,46 @@ export class SlackChannel implements Channel {
         }
       ).files;
 
+      // Extract text from Slack attachments/blocks when msg.text is empty.
+      // Many bots (snyk-bot, GitHub, etc.) post via rich attachments with no plain text.
+      const rawEvent = event as {
+        attachments?: Array<{ text?: string; fallback?: string; pretext?: string }>;
+        blocks?: Array<{
+          type: string;
+          text?: { text?: string };
+          elements?: Array<{ type: string; text?: string; elements?: Array<{ text?: string }> }>;
+        }>;
+      };
+      let fallbackText: string | undefined;
+      if (!msg.text) {
+        const parts: string[] = [];
+        if (rawEvent.attachments) {
+          for (const att of rawEvent.attachments) {
+            if (att.text) parts.push(att.text);
+            else if (att.fallback) parts.push(att.fallback);
+            else if (att.pretext) parts.push(att.pretext);
+          }
+        }
+        if (parts.length === 0 && rawEvent.blocks) {
+          for (const block of rawEvent.blocks) {
+            if (block.text?.text) parts.push(block.text.text);
+            else if (block.elements) {
+              for (const el of block.elements) {
+                if (el.text) parts.push(el.text);
+                else if (el.elements) {
+                  for (const sub of el.elements) {
+                    if (sub.text) parts.push(sub.text);
+                  }
+                }
+              }
+            }
+          }
+        }
+        if (parts.length > 0) fallbackText = parts.join('\n');
+      }
+
       // Require text OR attached files — drop empty messages
-      if (!msg.text && (!files || files.length === 0)) return;
+      if (!msg.text && !fallbackText && (!files || files.length === 0)) return;
 
       const jid = `slack:${msg.channel}`;
       const timestamp = new Date(parseFloat(msg.ts) * 1000).toISOString();
@@ -147,14 +248,19 @@ export class SlackChannel implements Channel {
       const groups = this.opts.registeredGroups();
       if (!groups[jid]) return;
 
-      const isBotMessage = !!msg.bot_id || msg.user === this.botUserId;
+      // Only treat messages from OUR bot as bot messages.
+      // Other bots (snyk-bot, etc.) should appear as regular messages
+      // so the agent can see and respond to them.
+      const isBotMessage =
+        (msg.bot_id != null && msg.bot_id === this.botId) ||
+        msg.user === this.botUserId;
 
       // Track the thread to reply into: use the existing thread or start one
       // from this message's ts. Updated on every non-bot inbound message so
       // follow-up messages in the same thread continue in that thread.
       if (!isBotMessage) {
         const threadTs = (msg as { thread_ts?: string }).thread_ts ?? msg.ts;
-        this.activeThreadTs.set(jid, threadTs);
+        this.activeThreadTs.set(jid, { ts: threadTs, setAt: Date.now() });
         this.lastUserMessageTs.set(jid, msg.ts);
       }
 
@@ -186,7 +292,7 @@ export class SlackChannel implements Channel {
       // (e.g., ^@<ASSISTANT_NAME>\b), so we prepend the trigger when the bot is @mentioned.
       // Also auto-trigger when the user replies to a thread where the bot has already replied
       // (no @mention needed — they're already in a conversation with the bot).
-      let content = msg.text ?? '';
+      let content = msg.text || fallbackText || '';
       if (!isBotMessage && !TRIGGER_PATTERN.test(content)) {
         const messageThreadTs = (msg as { thread_ts?: string }).thread_ts;
         const isMentioned =
@@ -359,7 +465,8 @@ export class SlackChannel implements Channel {
     try {
       const auth = await this.app.client.auth.test();
       this.botUserId = auth.user_id as string;
-      logger.info({ botUserId: this.botUserId }, 'Connected to Slack');
+      this.botId = auth.bot_id as string | undefined;
+      logger.info({ botUserId: this.botUserId, botId: this.botId }, 'Connected to Slack');
     } catch (err) {
       logger.warn({ err }, 'Connected to Slack but failed to get bot user ID');
     }
@@ -373,7 +480,7 @@ export class SlackChannel implements Channel {
     await this.syncChannelMetadata();
   }
 
-  async sendMessage(jid: string, text: string): Promise<void> {
+  async sendMessage(jid: string, text: string, opts?: { noThread?: boolean }): Promise<void> {
     const channelId = jid.replace(/^slack:/, '');
 
     if (!this.connected) {
@@ -386,30 +493,34 @@ export class SlackChannel implements Channel {
     }
 
     try {
-      const threadTs = this.activeThreadTs.get(jid);
+      const threadTs = opts?.noThread ? undefined : this.getActiveThread(jid);
       // Slack limits messages to ~4000 characters; split if needed
+      let postedTs: string | undefined;
       if (text.length <= MAX_MESSAGE_LENGTH) {
-        await this.app.client.chat.postMessage({
+        const res = await this.app.client.chat.postMessage({
           channel: channelId,
           text,
           ...(threadTs ? { thread_ts: threadTs } : {}),
         });
+        postedTs = res.ts as string | undefined;
       } else {
         for (let i = 0; i < text.length; i += MAX_MESSAGE_LENGTH) {
-          await this.app.client.chat.postMessage({
+          const res = await this.app.client.chat.postMessage({
             channel: channelId,
             text: text.slice(i, i + MAX_MESSAGE_LENGTH),
             ...(threadTs ? { thread_ts: threadTs } : {}),
           });
+          // Only capture ts of the first chunk (that's the thread anchor)
+          if (i === 0) postedTs = res.ts as string | undefined;
         }
       }
-      // Record that the bot has now replied in this thread so future replies
-      // from the user auto-trigger without needing an @mention.
-      if (threadTs) {
-        if (!this.botParticipatedThreads.has(jid)) {
-          this.botParticipatedThreads.set(jid, new Set());
-        }
-        this.botParticipatedThreads.get(jid)!.add(threadTs);
+      // Track which threads the bot has posted into so user replies auto-trigger.
+      // For top-level posts (no threadTs), the returned ts becomes the thread anchor.
+      // For threaded replies, the existing threadTs is the anchor.
+      // Both are persisted to disk so restarts don't break auto-trigger.
+      const anchorTs = threadTs ?? postedTs;
+      if (anchorTs) {
+        this.trackBotThread(jid, anchorTs);
       }
       logger.info({ jid, length: text.length }, 'Slack message sent');
     } catch (err) {
@@ -427,7 +538,7 @@ export class SlackChannel implements Channel {
     filename?: string,
   ): Promise<void> {
     const channelId = jid.replace(/^slack:/, '');
-    const threadTs = this.activeThreadTs.get(jid);
+    const threadTs = this.getActiveThread(jid);
     const fname = filename || path.basename(filePath);
 
     try {
@@ -463,7 +574,7 @@ export class SlackChannel implements Channel {
 
   async setTyping(jid: string, isTyping: boolean): Promise<void> {
     const channelId = jid.replace(/^slack:/, '');
-    const threadTs = this.activeThreadTs.get(jid);
+    const threadTs = this.getActiveThread(jid);
     // DM channels have IDs starting with 'D'. Regular channels (C/G) are group chats.
     const isDmChannel = channelId.startsWith('D');
 
