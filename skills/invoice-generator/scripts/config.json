@@ -47,24 +47,31 @@
           "productCode": "CTOCONSULT",
           "rate": 175,
           "description": "Cian - CTO Consulting Services",
-          "tasks": ["CTO Consulting"]
+          "tasks": [
+            "CTO Consulting"
+          ]
         },
         "cianDiscounted": {
           "productCode": "SALESCONSULT",
           "rate": 125,
           "description": "Cian - Sales Consulting (Discounted)",
-          "tasks": ["Management Consulting", "Sales Consulting"]
+          "tasks": [
+            "Management Consulting",
+            "Sales Consulting"
+          ]
         },
         "rustam": {
           "productCode": "SRDEVCONSULT",
           "rate": 130,
           "description": "Rustam - Sr Dev Consulting Services",
-          "tasks": ["Sr Dev Consulting"]
+          "tasks": [
+            "Sr Dev Consulting"
+          ]
         }
       }
     },
     "copperteams": {
-      "contactName": "CopperTeams",
+      "contactName": "CopperTeams Inc.",
       "retainerHours": 11,
       "retainerRate": 275,
       "excessRate": 225,
@@ -72,10 +79,12 @@
       "excessDescription": "Excess Hours (prior month)",
       "retainerItemCode": "FCTO-LOW",
       "excessItemCode": "FCTO-TIER3",
-      "billableUsers": ["Cian"]
+      "billableUsers": [
+        "Cian"
+      ]
     },
     "ganttsy": {
-      "contactName": "Ganttsy",
+      "contactName": "Ganttsy (1001330116 ONTARIO INC.)",
       "retainerHours": 40,
       "retainerRate": 225,
       "excessRate": 225,
@@ -83,7 +92,9 @@
       "excessDescription": "Excess Hours (prior month)",
       "retainerItemCode": "FCTO-TIER3",
       "excessItemCode": "FCTO-TIER3",
-      "billableUsers": ["Cian"]
+      "billableUsers": [
+        "Cian"
+      ]
     },
     "kevin-lee": {
       "contactName": "Kevin Lee",
@@ -118,7 +129,9 @@
           "invoiceAccountCode": "200",
           "invoiceTaxType": "TAX001"
         },
-        "processedLabel": "NVS-Processed"
+        "processedLabel": "NVS-Processed",
+        "skippedLabel": "NVS-Skipped",
+        "needsReviewLabel": "NVS-Needs-Review"
       }
     }
   },
