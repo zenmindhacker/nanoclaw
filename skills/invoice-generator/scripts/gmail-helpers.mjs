@@ -199,6 +199,17 @@ export async function addLabel(messageId, labelIds) {
   });
 }
 
+
+/**
+ * Remove label(s) from a message
+ */
+export async function removeLabel(messageId, labelIds) {
+  const ids = Array.isArray(labelIds) ? labelIds : [labelIds];
+  return gmailRequest(`messages/${messageId}/modify`, 'POST', {
+    removeLabelIds: ids
+  });
+}
+
 /**
  * Get or create a Gmail label by name. Returns the label ID.
  */

@@ -25,16 +25,31 @@ const nvsClient = config.clients.nvs;
 const nvsProject = config.projects.nvs;
 const processing = nvsClient.processing;
 
+// Label names (with sensible fallbacks so old configs still work)
+const PROCESSED_LABEL = processing.processedLabel || 'NVS-Processed';
+const SKIPPED_LABEL = processing.skippedLabel || 'NVS-Skipped';
+const NEEDS_REVIEW_LABEL = processing.needsReviewLabel || 'NVS-Needs-Review';
+
+// Emails the script can't confidently auto-process. Collected per run; when
+// non-empty, the script prints a PENDING_DECISIONS JSON block so the agent
+// wrapping this CLI can ask the user what to do and then invoke
+// --skip-ids / --retry-ids accordingly.
+const pendingDecisions = [];
+
 /**
  * Parse CLI args
  */
 function parseArgs() {
   const args = process.argv.slice(2);
-  const opts = { flow: 'all', dryRun: false };
+  const opts = { flow: 'all', dryRun: false, skipIds: null, retryIds: null };
+
+  const csv = v => v.split(',').map(s => s.trim()).filter(Boolean);
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--flow' && args[i + 1]) { opts.flow = args[i + 1]; i++; }
-    if (args[i] === '--dry-run') opts.dryRun = true;
+    else if (args[i] === '--dry-run') opts.dryRun = true;
+    else if (args[i] === '--skip-ids' && args[i + 1]) { opts.skipIds = csv(args[i + 1]); i++; }
+    else if (args[i] === '--retry-ids' && args[i + 1]) { opts.retryIds = csv(args[i + 1]); i++; }
   }
 
   if (!['ar', 'ap', 'all'].includes(opts.flow)) {
@@ -163,8 +178,10 @@ async function processArEmails(dryRun) {
   console.log('\n📥 AR Flow: Processing ar@ invoices (Rustam → Xero bills)');
   console.log('   Sender:', processing.ar.sender);
 
-  const labelId = await gmail.getOrCreateLabel(processing.processedLabel);
-  const query = `from:${processing.ar.sender} -label:${processing.processedLabel}`;
+  const labelId = await gmail.getOrCreateLabel(PROCESSED_LABEL);
+  const reviewId = await gmail.getOrCreateLabel(NEEDS_REVIEW_LABEL);
+  // Exclude all terminal + pending labels so we don't re-ask about the same email
+  const query = `from:${processing.ar.sender} -label:${PROCESSED_LABEL} -label:${SKIPPED_LABEL} -label:${NEEDS_REVIEW_LABEL}`;
   const searchResult = await gmail.searchMessages(query, 10);
   const messages = searchResult.messages || [];
 
@@ -184,7 +201,15 @@ async function processArEmails(dryRun) {
     // Infer billing period (using email date for year context)
     const period = inferPeriod(parsed.subject, parsed.date);
     if (!period) {
-      console.log('      ⚠️ Could not determine billing period from subject. Skipping.');
+      console.log('      ⚠️  Could not determine billing period from subject. Flagging for user review.');
+      if (!dryRun) await gmail.addLabel(msg.id, reviewId);
+      pendingDecisions.push({
+        flow: 'ar',
+        id: msg.id,
+        subject: parsed.subject,
+        date: parsed.date,
+        reason: 'no_billing_period_in_subject',
+      });
       continue;
     }
     const periodStr = `${period.year}-${String(period.month).padStart(2, '0')}`;
@@ -307,8 +332,9 @@ async function processApEmails(dryRun) {
   console.log('\n📤 AP Flow: Processing ap@ purchase orders (PO → Xero invoices)');
   console.log('   Sender:', processing.ap.sender);
 
-  const labelId = await gmail.getOrCreateLabel(processing.processedLabel);
-  const query = `from:${processing.ap.sender} -label:${processing.processedLabel}`;
+  const labelId = await gmail.getOrCreateLabel(PROCESSED_LABEL);
+  const reviewId = await gmail.getOrCreateLabel(NEEDS_REVIEW_LABEL);
+  const query = `from:${processing.ap.sender} -label:${PROCESSED_LABEL} -label:${SKIPPED_LABEL} -label:${NEEDS_REVIEW_LABEL}`;
   const searchResult = await gmail.searchMessages(query, 10);
   const messages = searchResult.messages || [];
 
@@ -334,16 +360,30 @@ async function processApEmails(dryRun) {
       a.mimeType === 'application/pdf' || a.filename?.toLowerCase().endsWith('.pdf')
     );
     if (pdfAttachments.length === 0) {
-      console.log('      ⏭️  No PDF attachment — skipping (likely a reply thread).');
-      // Still label it so we don't re-process
-      if (!dryRun) await gmail.addLabel(msg.id, labelId);
+      console.log('      ⏭️  No PDF attachment (likely a reply thread). Flagging for user review.');
+      if (!dryRun) await gmail.addLabel(msg.id, reviewId);
+      pendingDecisions.push({
+        flow: 'ap',
+        id: msg.id,
+        subject: parsed.subject,
+        date: parsed.date,
+        reason: 'no_pdf_attachment',
+      });
       continue;
     }
 
     // Infer period (using email date for year context)
     const period = inferPeriod(parsed.subject, parsed.date);
     if (!period) {
-      console.log('      ⚠️ Could not determine period from subject. Skipping.');
+      console.log('      ⚠️  Could not determine period from subject. Flagging for user review.');
+      if (!dryRun) await gmail.addLabel(msg.id, reviewId);
+      pendingDecisions.push({
+        flow: 'ap',
+        id: msg.id,
+        subject: parsed.subject,
+        date: parsed.date,
+        reason: 'no_billing_period_in_subject',
+      });
       continue;
     }
     const periodStr = `${period.year}-${String(period.month).padStart(2, '0')}`;
@@ -433,13 +473,71 @@ async function processApEmails(dryRun) {
   }
 }
 
+// ─── USER-DECISION HANDLERS ──────────────────────────────────────────────────
+
+/**
+ * Mark emails as deliberately skipped — user chose not to process them.
+ * Adds NVS-Skipped, removes NVS-Needs-Review so they don't resurface.
+ */
+async function applySkip(ids, dryRun) {
+  const skippedId = await gmail.getOrCreateLabel(SKIPPED_LABEL);
+  const reviewId = await gmail.getOrCreateLabel(NEEDS_REVIEW_LABEL);
+  for (const id of ids) {
+    if (dryRun) {
+      console.log(`   [DRY RUN] Would label ${id} as ${SKIPPED_LABEL}`);
+      continue;
+    }
+    try {
+      await gmail.addLabel(id, skippedId);
+      await gmail.removeLabel(id, reviewId);
+      console.log(`   ✅ ${id} → skipped`);
+    } catch (err) {
+      console.log(`   ❌ ${id} — ${err.message}`);
+    }
+  }
+}
+
+/**
+ * Unflag emails so the next scheduled run re-evaluates them.
+ * Used when the user wants us to try again (e.g. after fixing the subject).
+ */
+async function applyRetry(ids, dryRun) {
+  const reviewId = await gmail.getOrCreateLabel(NEEDS_REVIEW_LABEL);
+  for (const id of ids) {
+    if (dryRun) {
+      console.log(`   [DRY RUN] Would remove ${NEEDS_REVIEW_LABEL} from ${id}`);
+      continue;
+    }
+    try {
+      await gmail.removeLabel(id, reviewId);
+      console.log(`   🔁 ${id} → retry on next run`);
+    } catch (err) {
+      console.log(`   ❌ ${id} — ${err.message}`);
+    }
+  }
+}
+
 // ─── MAIN ────────────────────────────────────────────────────────────────────
 
 async function main() {
   console.log('🎯 NVS Email Processor\n======================');
-  const { flow, dryRun } = parseArgs();
+  const { flow, dryRun, skipIds, retryIds } = parseArgs();
 
   if (dryRun) console.log('⚡ DRY RUN MODE — no Xero entries or labels will be created\n');
+
+  // Decision commands short-circuit normal processing — they just apply labels.
+  if (skipIds && skipIds.length) {
+    console.log(`\n🏷️  Applying skip to ${skipIds.length} email(s)`);
+    await applySkip(skipIds, dryRun);
+    console.log('\n✨ Done!');
+    return;
+  }
+  if (retryIds && retryIds.length) {
+    console.log(`\n🔁 Clearing review flag on ${retryIds.length} email(s)`);
+    await applyRetry(retryIds, dryRun);
+    console.log('\n✨ Done!');
+    return;
+  }
 
   // Init Xero (unless dry run)
   if (!dryRun) {
@@ -453,6 +551,14 @@ async function main() {
 
   if (flow === 'ap' || flow === 'all') {
     await processApEmails(dryRun);
+  }
+
+  // Surface any emails that need a user decision. The wrapping agent reads
+  // this block, asks the user, and re-runs with --skip-ids or --retry-ids.
+  if (pendingDecisions.length > 0) {
+    console.log('\n===PENDING_DECISIONS_START===');
+    console.log(JSON.stringify(pendingDecisions, null, 2));
+    console.log('===PENDING_DECISIONS_END===');
   }
 
   console.log('\n✨ Done!');
