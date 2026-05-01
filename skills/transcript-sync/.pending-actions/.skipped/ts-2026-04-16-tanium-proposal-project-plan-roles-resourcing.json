@@ -1,0 +1,54 @@
+{
+  "id": "ts-2026-04-16-tanium-proposal-project-plan-roles-resourcing",
+  "meetingTitle": "Tanium Proposal: Project Plan, Roles & Resourcing",
+  "meetingDate": "2026-04-16",
+  "org": "ctci",
+  "sourceRel": "ctci-docs/transcripts/2026-04-16-shadow-349-jayne-cian-advisor-coach-phone-call.md",
+  "targetDir": "/workspace/extra/github/cognitivetech/ctci-docs/transcripts",
+  "transcriptPath": "/workspace/extra/github/cognitivetech/ctci-docs/transcripts/2026-04-16-shadow-349-jayne-cian-advisor-coach-phone-call.md",
+  "lineageTag": "meeting:Tanium Proposal: Project Plan, Roles & Resourcing|date:2026-04-16",
+  "actions": [
+    {
+      "title": "Add more hours for Steve in project plan",
+      "context": "**Background**: The team is finalizing a proposal for a Tanium deployment project for TELUS/BCI. A project plan document contains a table breaking down hours by role across phases. Rustam (Mauro) took a first stab at hour allocations and asked the team to review.\n\n**Discussion**: Cian reviewed the hours and noted \"Steve's hours seem a little light to me.\" Rustam agreed: \"Yeah, that's what I'm kind of a – probably we can beef up a little bit Steve hours, yes.\" Cian then specified the structure: \"Steve full-time for the project... the planning is three weeks. So he'll have like almost nothing there, looks like. And then weeks four through 10, I think we should have Steve full time.\" Cian also noted: \"Rustam is kind of token hours earlier on is better.\"\n\n**Decision/Direction**: Steve should be allocated full-time hours for weeks 4-10 (the implementation phase after the 3-week planning phase). This applies to Option 2 specifically.\n\n**Next steps**: Rustam explicitly committed to making this change: \"Sure, of course.\" This needs to be done within a couple of hours as Sted is assembling the final document this afternoon.",
+      "assignee": "rustam.akimov@newvaluegroup.com",
+      "priority": "urgent",
+      "project": "Cognitive Tech",
+      "index": 9
+    },
+    {
+      "title": "Add training/documentation role to proposal roles table",
+      "context": "**Background**: The proposal document has multiple sections including a roles table and a separate project plan document. Cian noticed that while training and knowledge transfer and documentation deliverables are identified as work items, no role has been assigned to them.\n\n**Discussion**: Cian asked: \"Did we add anyone to run the training and documentation pieces?\" The response was: \"We haven't identified someone, but we can. If not, we can just put it in as a placeholder, as a role.\" Cian confirmed: \"We've identified that we're going to do it, but we don't have a role for it.\" The team noted the project plan document has these roles in a table at the bottom, but the main proposal document's roles table is missing them. Sted confirmed: \"I know what you're referring to, Cian — there's another area where we have roles like in a table, we need to add that there.\"\n\n**Decision/Direction**: The training/documentation role needs to be added to the main proposal's roles table (not just the project plan). Someone on the team needs to add this before the document is assembled.\n\n**Next steps**: This role placeholder needs to be added to the main document's roles table. Rustam indicated he could add it. Must be done before Sted begins assembling the final document in a couple of hours.",
+      "assignee": "rustam.akimov@newvaluegroup.com",
+      "priority": "urgent",
+      "project": "Cognitive Tech",
+      "index": 10
+    },
+    {
+      "title": "Finalize all input into proposal document",
+      "context": "**Background**: The team is preparing a proposal for a Tanium deployment project. Sted (the business/marketing lead) announced he will begin assembling all components into a single cohesive document within 1-2 hours of this meeting.\n\n**Discussion**: Sted was clear and direct: \"Make sure all the facts you need in there are in the document. Because in a couple of hours, I'm going to begin the process of putting all this together as one document.\" He reiterated at the end: \"Make sure everyone gets their input in right away, because in an hour or two, I'm going to begin putting all this together.\"\n\n**Decision/Direction**: All technical content, role definitions, hour allocations, and factual statements must be finalized in the document before Sted begins assembly. After that point, Sted will insert comments for questions rather than accepting new content.\n\n**Next steps**: Cian needs to review hour allocations (especially his own hours — Rustam noted \"especially for your hour Cian. I don't know if, you know, yeah, I just put a number there\") and ensure all technical facts are captured. This is time-critical as Sted is assembling the document the same afternoon (April 16, 2026).",
+      "assignee": "cian@cognitivetech.net",
+      "priority": "urgent",
+      "project": "Cognitive Tech",
+      "index": 11
+    },
+    {
+      "title": "Validate Tanium coexistence claim with Tanium",
+      "context": "**Background**: The executive summary of the proposal contains a statement (highlighted in yellow) that reads: \"Tanium patch replaces Config Manager patching for service with real-time visibility and confidence scoring. That has a significant upgrade path while coexisting with Intune for workstation management.\"\n\n**Discussion**: Sted asked whether this statement is accurate. The team discussed where it came from — partially from the RFP requirements. Cian found the relevant RFP requirement: \"reduce manual management and human interaction that are required with existing solutions such as Config Manager and Intune. So we're replacing those with Tanium.\" When asked if the coexistence claim is valid, Cian said: \"Oh yes, tell us. Yeah, I think Tanium would need to validate that.\"\n\n**Decision/Direction**: The coexistence statement needs to be validated by Tanium (the vendor) before it can be confidently included in the proposal. The RFP does require reducing reliance on Config Manager and Intune, but the specific claim about coexistence and upgrade path needs vendor confirmation.\n\n**Next steps**: Someone needs to reach out to Tanium to confirm the coexistence capability with Intune. This should be done before the proposal is finalized.",
+      "assignee": "cian@cognitivetech.net",
+      "priority": "high",
+      "project": "Cognitive Tech",
+      "index": 12
+    },
+    {
+      "title": "Review project plan hours and phase breakdown",
+      "context": "**Background**: Rustam created a project plan document (separate from the main proposal) containing a table with phases, roles, and hour allocations for the Tanium deployment. He explicitly asked for a \"second eye\" review, particularly from Cian.\n\n**Discussion**: Rustam noted: \"That is just a draft. I just took a stab. I want to, you know, second eye, Cian, and Melina and Steve needs to kind of take a look and deeper look, especially for your hours Cian. I don't know if, you know, yeah, I just put a number there.\" Cian gave initial feedback that Steve's hours were light and should be full-time weeks 4-10, but a full review of all allocations (including Cian's own hours) is still needed.\n\n**Decision/Direction**: The project plan needs a thorough review from Cian, particularly validating his own hour allocations and confirming the phase breakdown makes sense technically.\n\n**Next steps**: Review the project plan document's table with phases and hours. Validate the breakdown is technically sound and that hour allocations are realistic. Must be done within hours as Sted is assembling the final document same day.",
+      "assignee": "cian@cognitivetech.net",
+      "priority": "urgent",
+      "project": "Cognitive Tech",
+      "index": 13
+    }
+  ],
+  "createdAt": "2026-04-20T13:09:07.543Z",
+  "status": "pending"
+}

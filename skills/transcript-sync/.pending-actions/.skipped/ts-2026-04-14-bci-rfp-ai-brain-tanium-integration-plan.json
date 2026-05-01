@@ -1,0 +1,62 @@
+{
+  "id": "ts-2026-04-14-bci-rfp-ai-brain-tanium-integration-plan",
+  "meetingTitle": "BCI RFP — AI Brain + Tanium Integration Plan",
+  "meetingDate": "2026-04-14",
+  "org": "ctci",
+  "sourceRel": "2026-04-14-boxing-fight-camp.md",
+  "targetDir": "/workspace/extra/github/personal/transcripts",
+  "transcriptPath": "/workspace/extra/github/personal/transcripts/2026-04-14-boxing-fight-camp.md",
+  "lineageTag": "meeting:BCI RFP — AI Brain + Tanium Integration Plan|date:2026-04-14",
+  "actions": [
+    {
+      "title": "Add AI hypercare and training sections to BCI proposal",
+      "context": "**Background**: The team is preparing an RFP response for BCI involving an AI Brain layer on top of Tanium for cybersecurity operations. Cian had reviewed the full RFP and identified gaps between what BCI requested and what the current proposal document covers.\n\n**Discussion**: The Speaker (Steve) clarified the division of responsibility: *\"Everything related to Tanium — the training and knowledge transfer of any configuration that's on the Tanium side — Tanium does everything. Like hypercare on Tanium, Tanium does. But if we build something from AI, we've got to provide the hypercare for the AI side. We've got to provide the training and the knowledge transfer on the AI side.\"*\n\n**Decision/Direction**: Cian confirmed he would add these sections: *\"Yeah, so I can add those for the AI piece.\"* The scope includes hypercare, training, and knowledge transfer documentation specifically for the AI components they are building.\n\n**Next steps**: Add hypercare plan, training plan, and knowledge transfer documentation for the AI Brain components into the BCI proposal. This is time-sensitive — the proposal needs to be reviewable by Thursday morning.",
+      "assignee": "cian@cognitivetech.net",
+      "priority": "high",
+      "project": "Cognitive Tech",
+      "index": 1
+    },
+    {
+      "title": "Define roles and effort estimates for BCI proposal",
+      "context": "**Background**: The BCI proposal needs to include not just the technical architecture but also a staffing plan with effort estimates for the delivery phase. The Speaker emphasized this needs to be ready by Thursday morning for Muleen to review.\n\n**Discussion**: The Speaker outlined what's needed: *\"We need to understand if you need a BA, what kind of roles you need. We need to understand — like we need Steve Chang as a developer. Mauro will do the BA. We need to come up with some basic high-level estimates of what we think those efforts are going to be.\"* The proposal should support two scenarios: (1) BCI chooses Tanium-only, in which case Cian and Mauro provide basic AI consulting hours and a recommendation document; (2) BCI wants the full AI Brain implementation as described in Cian's architecture document, with the possibility of additional use cases as value-add on time-and-materials basis.\n\n**Decision/Direction**: They agreed on a two-tier structure. The baseline (Tanium-only) includes Muleen as PM, Tanium resources, plus consulting hours for Cian and Mauro. The full option includes the AI Brain build with a ~6-week rollout estimate. A third possibility (additional use cases beyond the initial scope) would be handled as T&M value-add.\n\n**Next steps**: Provide high-level effort estimates for both scenarios, define required roles (PM, BA, developer, AI architect), and structure pricing to allow BCI to choose either option. Target: ready for Muleen's review by Thursday morning (April 16).",
+      "assignee": "cian@cognitivetech.net",
+      "priority": "high",
+      "project": "Cognitive Tech",
+      "index": 2
+    },
+    {
+      "title": "Schedule follow-up meeting with Mauro on BCI rollout plan",
+      "context": "**Background**: Mauro (referenced as the Speaker handling delivery/project planning) committed to writing up the missing delivery, rollout, and project timeline sections of the BCI proposal. He noted: *\"I'll write down all the missing part between tonight and tomorrow.\"* The team discussed meeting daily to check progress.\n\n**Discussion**: Mauro acknowledged he needs help refining the rollout: *\"I will need some, like another meeting point where we can discuss after I elaborate a little bit more, and we can kind of start defining the rollout part.\"* Cian's initial rollout estimate was approximately 6 weeks in phases, which the Speaker said was fine as a starting point: *\"Six weeks is fine, guys. It's just an estimate.\"* They tried to schedule for the next day at 1 PM but had a conflict with a Baskin meeting.\n\n**Decision/Direction**: Daily check-ins were proposed to track progress toward the Thursday deadline. Mauro will elaborate on the delivery documentation, project timeline, and rollout phases, then reconvene with Cian to align.\n\n**Next steps**: Coordinate with Mauro to schedule the follow-up meeting to review his draft of the delivery/rollout sections and finalize the project timeline before Thursday morning.",
+      "assignee": "cian@cognitivetech.net",
+      "priority": "high",
+      "project": "Cognitive Tech",
+      "index": 3
+    },
+    {
+      "title": "Set up intro call with Steve Bond for AI practice",
+      "context": "**Background**: The Speaker mentioned Steve Bond, a management consultant with deep data analytics and BI background who recently obtained several AI certificates. The Speaker knows him from his days at Sierra and suggested he could potentially join the AI practice.\n\n**Discussion**: The Speaker was careful to note: *\"I have not promised him anything. I said the decision is not mine for him to be a part of our AI practice.\"* Cian was receptive: *\"We definitely are going to need more AI hands and feet. Anyone that's smart enough that I can get Rustam to train them on the methodologies I use — that'll be a real boom to us.\"* They discussed where Bond could fit — not as a developer, but in the consulting layer. Cian suggested: *\"Like Rustam or Steve\"* — meaning having Rustam evaluate or train him. The Speaker noted Bond's background is management consulting and data analytics/BI, not development.\n\n**Decision/Direction**: Cian expressed interest in exploring Steve Bond for the consulting layer of the AI practice, with Rustam potentially training him on their methodologies.\n\n**Next steps**: Set up an introductory call between Cian (and possibly Rustam) and Steve Bond to evaluate fit for the AI practice consulting layer.",
+      "assignee": "cian@cognitivetech.net",
+      "priority": "medium",
+      "project": "Cognitive Tech",
+      "index": 4
+    },
+    {
+      "title": "Prepare for Southeast Industrial AI blueprint engagement",
+      "context": "**Background**: The Speaker raised three new AI opportunities that need attention: Southeast Industrial, SCSN, and Castle Rock. Southeast Industrial was highlighted as *\"a really good one\"* — the owner wants a significant push on AI.\n\n**Discussion**: The Speaker described: *\"The owner wants a big push on AI, wants a blueprint. They're in South Carolina there. They want a blueprint.\"* No further details were discussed in this meeting as the conversation shifted to the BCI RFP, but this was flagged as needing follow-up discussion.\n\n**Decision/Direction**: This was identified as a priority opportunity requiring a follow-up conversation to scope the AI blueprint work.\n\n**Next steps**: Schedule time with the Speaker (Steve) to discuss the Southeast Industrial AI blueprint requirements and scope the engagement. This was listed alongside SCSN and Castle Rock as topics needing a separate conversation.",
+      "assignee": "cian@cognitivetech.net",
+      "priority": "medium",
+      "project": "Cognitive Tech",
+      "index": 5
+    },
+    {
+      "title": "Prepare for SCSN French schools AI workshop",
+      "context": "**Background**: SCSN is an organization in Alberta that operates 45 French-speaking private schools. They are interested in exploring AI for their operations.\n\n**Discussion**: The Speaker described the scope: *\"That one is just a two-hour workshop on the art of the possible with AI. Just talk. What can we possibly do with it?\"* Key details: the focus is on **administration and operations**, not teaching in classrooms. The Speaker estimated prep time at about an hour and mentioned having already developed a bunch of use cases. Post-workshop, the deliverable would be a simple one-hour writeup of what happened — *\"You're not doing any analysis from the workshop. You're just saying what happened. Here are some ideas.\"* The workshop could lead to immediate use case identification or a go-away-and-think-about-it outcome.\n\n**Decision/Direction**: This is positioned as a quick, low-effort engagement (1hr prep + 2hr workshop + 1hr writeup). Cian confirmed interest: *\"Perfect. I'm great.\"*\n\n**Next steps**: Coordinate with the Speaker on timing and review the use cases he has already prepared. Prepare for a 2-hour workshop focused on AI possibilities for school administration and operations.",
+      "assignee": "cian@cognitivetech.net",
+      "priority": "medium",
+      "project": "Cognitive Tech",
+      "index": 6
+    }
+  ],
+  "createdAt": "2026-04-18T16:42:22.607Z",
+  "status": "pending"
+}

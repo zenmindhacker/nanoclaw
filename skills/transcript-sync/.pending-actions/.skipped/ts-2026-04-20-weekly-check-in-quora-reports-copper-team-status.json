@@ -1,0 +1,30 @@
+{
+  "id": "ts-2026-04-20-weekly-check-in-quora-reports-copper-team-status",
+  "meetingTitle": "Weekly Check-in: Quora reports & Copper team status",
+  "meetingDate": "2026-04-20",
+  "org": "ct",
+  "sourceRel": "ct-docs/planning/transcripts/2026-04-20-kora-weekly-standup.md",
+  "targetDir": "/workspace/extra/github/copperteams/ct-docs/planning/transcripts",
+  "transcriptPath": "/workspace/extra/github/copperteams/ct-docs/planning/transcripts/2026-04-20-kora-weekly-standup.md",
+  "lineageTag": "meeting:Weekly Check-in: Quora reports & Copper team statu|date:2026-04-20",
+  "actions": [
+    {
+      "title": "Fix minor issues in Quora reports before tomorrow's meeting",
+      "context": "**Background**: Greg informed Rustam that there's an important meeting tomorrow with one of the teams, and there are some minor fixes needed for the Quora reports.\n\n**Discussion**: Rustam explained that last week started with a rush to get reports done for meetings, but by end of week things went quiet. He noted there were some open issues but didn't consider them urgent, so he didn't work Thursday or Friday. This week, Greg flagged the upcoming meeting and the needed fixes.\n\n**Decision/Direction**: Rustam will spend 1-2 hours addressing the minor report fixes. His general approach going forward is to only work on things when explicitly asked — \"if there is nothing urgent do nothing or like double check, ask if it's needed.\"\n\n**Next steps**: Rustam to complete the minor fixes before tomorrow's meeting. No proactive work beyond what's requested.",
+      "assignee": "rustam@copperteams.ai",
+      "priority": "high",
+      "project": "Kora Voice Integration",
+      "index": 1
+    },
+    {
+      "title": "Chat with Greg about reducing check-in cadence",
+      "context": "**Background**: The Copper team workload is minimal right now — just bug fixes and specific feature requests. Cian described himself as \"basically just paused until they need more.\"\n\n**Discussion**: Cian noted he's not proactively checking anything or running a project, and has no tasks for Rustam. Given the low activity level, he proposed reducing the twice-weekly check-ins to once a week.\n\n**Decision/Direction**: Cian decided to keep the Thursday check-in and delete the Monday one. He wants to briefly chat with Greg to align on this. The remaining weekly sync will focus on \"what has been done, and that's it\" — Cian said \"That's really the important part for me, is just to know what's happening.\"\n\n**Next steps**: Cian to speak with Greg about the schedule change, then delete the Monday calendar event.",
+      "assignee": "cian@copperteams.ai",
+      "priority": "medium",
+      "project": "Kora Voice Integration",
+      "index": 2
+    }
+  ],
+  "createdAt": "2026-04-20T17:11:21.129Z",
+  "status": "pending"
+}

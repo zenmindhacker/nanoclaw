@@ -1,0 +1,22 @@
+{
+  "id": "ts-2026-04-24-harvest-somatic-tools-attention-humor-gratitude",
+  "meetingTitle": "Harvest: Somatic Tools — Attention, Humor & Gratitude",
+  "meetingDate": "2026-04-24",
+  "org": "ctci",
+  "sourceRel": "2026-04-24-co-ed-workshop-monthly-for-radiance-and-embodied.md",
+  "targetDir": "/workspace/extra/github/personal/transcripts",
+  "transcriptPath": "/workspace/extra/github/personal/transcripts/2026-04-24-co-ed-workshop-monthly-for-radiance-and-embodied.md",
+  "lineageTag": "meeting:Harvest: Somatic Tools — Attention, Humor & Gratit|date:2026-04-24",
+  "actions": [
+    {
+      "title": "Post class recording with new practices",
+      "context": "**Background**: Cian delivered the monthly co-ed workshop titled \"Harvest: Somatic Tools — Attention, Humor & Gratitude\" on April 23, 2026. The class covered how to bring embodiment work into physical reality through three core tools: sitting with discomfort without writing stories, using humor as a somatic release tool, and practicing gratitude by noticing what's alive and working.\n\n**Discussion**: At the close of the class, Cian committed to publishing the recording along with supplementary practices. Cian stated: \"I will post this with some new practices in the next week.\"\n\n**Decision/Direction**: The recording and accompanying new practices need to be posted for the broader client base, especially since Cian noted \"half of my clients now are not in America are watching this class from other parts of the world later.\"\n\n**Next steps**: Post the class recording and write up the new practices referenced in the session (somatic attention exercises around noticing what's alive, humor-based reframing, and the guided drop-in meditation). Target completion within one week of the April 23 session (by ~April 30).",
+      "assignee": "cian@cognitivetech.net",
+      "priority": "medium",
+      "project": "Cognitive Tech",
+      "index": 1
+    }
+  ],
+  "createdAt": "2026-04-29T18:24:10.677Z",
+  "status": "pending"
+}

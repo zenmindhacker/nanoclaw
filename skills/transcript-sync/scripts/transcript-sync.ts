@@ -10,7 +10,7 @@
  */
 
 import Database from 'better-sqlite3';
-import { existsSync, mkdirSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
 // Config
@@ -46,7 +46,8 @@ import { slugify, mergeAttendees } from './transcript-sync/helpers.js';
 import { hasConfidentialityTrigger, confirmConfidentialWithLLM } from './transcript-sync/confidentiality.js';
 import { getCalendarService, assertCalendarAuthHealthy, calendarFallbackAttendees } from './transcript-sync/calendar.js';
 import { classifyTarget, classifyGanttsySubRoute, isLikelyKevinCoachingFromContent } from './transcript-sync/classification.js';
-import { scanExistingGcalEventIds, normalizeNames } from './transcript-sync/dedup.js';
+import { scanExistingTranscripts, normalizeNames } from './transcript-sync/dedup.js';
+import type { ExistingTranscripts } from './transcript-sync/dedup.js';
 import { cleanStalePendingFiles, extractAndSavePendingActions, postPendingSummaryToSysops } from './transcript-sync/pending-actions.js';
 import { validateCoachingAnalysis, spawnCoachingAnalysis } from './transcript-sync/coaching.js';
 
@@ -67,7 +68,7 @@ function parseArgs(): Args {
   const args: Args = {
     dryRun: false,
     limit: 50,
-    sinceDays: null,
+    sinceDays: 30,
     reportOnly: false,
     noCalendar: false,
     calendarWindowMinutes: 10,
@@ -113,6 +114,67 @@ function parseArgs(): Args {
 }
 
 // ============================================================================
+// Manual classifications — overrides set by the user via classify-transcript.ts
+// ============================================================================
+
+/**
+ * Map org slug (as accepted by classify-transcript.ts) to the target
+ * transcripts directory. When a meeting has a manual classification, the
+ * pipeline routes straight to one of these paths and skips the calendar /
+ * attendee classifier entirely.
+ */
+const ORG_TARGET_DIRS: Record<string, string> = {
+  ganttsy: `${GITHUB_ROOT}/ganttsy/ganttsy-docs/transcripts`,
+  'ganttsy-strategy': `${GITHUB_ROOT}/ganttsy/ganttsy-strategy/transcripts`,
+  ct: `${GITHUB_ROOT}/copperteams/ct-docs/planning/transcripts`,
+  ctci: `${GITHUB_ROOT}/cognitivetech/ctci-docs/transcripts`,
+  nvs: `${GITHUB_ROOT}/nvs/nvs-docs/transcripts`,
+  personal: PERSONAL_TRANSCRIPTS,
+  kevin: KEVIN_COACHING_TRANSCRIPTS,
+  christina: CHRISTINA_COACHING_TRANSCRIPTS,
+  'mondo-zen': MONDO_ZEN_COACHING_TRANSCRIPTS,
+  testboard: TESTBOARD_TRANSCRIPTS,
+};
+
+const CLASSIFICATIONS_PATH = join(
+  process.env.SKILLS_ROOT || '/workspace/extra/skills',
+  'transcript-sync',
+  '.classifications.json',
+);
+
+/**
+ * Load user-submitted classification overrides. Keys are `<source>=<id>`
+ * (e.g. `shadow=362`); values are either an `ORG_TARGET_DIRS` key or the
+ * literal string `skip` (permanently ignore the meeting).
+ */
+function loadClassifications(): Record<string, string> {
+  if (!existsSync(CLASSIFICATIONS_PATH)) return {};
+  try {
+    const raw = JSON.parse(readFileSync(CLASSIFICATIONS_PATH, 'utf-8'));
+    return raw.overrides || {};
+  } catch (err: any) {
+    logWarn(`[classifications] failed to load ${CLASSIFICATIONS_PATH}: ${err.message}`);
+    return {};
+  }
+}
+
+/** Remove an override from the file — called once the pipeline has acted on it. */
+function clearClassification(key: string): void {
+  if (!existsSync(CLASSIFICATIONS_PATH)) return;
+  try {
+    const raw = JSON.parse(readFileSync(CLASSIFICATIONS_PATH, 'utf-8'));
+    if (!raw.overrides || !raw.overrides[key]) return;
+    delete raw.overrides[key];
+    raw.updatedAt = new Date().toISOString();
+    const tmp = `${CLASSIFICATIONS_PATH}.tmp`;
+    writeFileSync(tmp, JSON.stringify(raw, null, 2));
+    renameSync(tmp, CLASSIFICATIONS_PATH);
+  } catch (err: any) {
+    logWarn(`[classifications] failed to clear ${key}: ${err.message}`);
+  }
+}
+
+// ============================================================================
 // Per-meeting processing
 // ============================================================================
 
@@ -123,9 +185,35 @@ async function processMeeting(
   service: any,
   coachingPaths: string[],
   workPaths: string[],
-  pendingMeetings: PendingMeeting[]
+  pendingMeetings: PendingMeeting[],
+  unmatchedMeetings: Array<{ id: string; source: string; title: string; startedAt: string; reason?: string }>,
+  classifications: Record<string, string>
 ): Promise<{ wrote: boolean; path?: string }> {
   const title = meeting.title || `Meeting ${meeting.id}`;
+
+  // --- Manual classification override ---------------------------------------
+  // User replied `classify shadow=<id> <org>` or `skip shadow=<id>` in sysops.
+  // `classify-transcript.ts` wrote the override into `.classifications.json`.
+  // We honor it here, bypassing calendar matching + auto-classifier.
+  const overrideKey = `${meeting.source}=${meeting.id}`;
+  const override = classifications[overrideKey];
+  if (override === 'skip') {
+    logInfo(`[override] ${overrideKey} skip (user-requested)`);
+    if (meeting.source === 'shadow') {
+      const idNum = parseInt(String(meeting.id), 10);
+      state.skippedConvs = state.skippedConvs || [];
+      if (!state.skippedConvs.includes(idNum)) state.skippedConvs.push(idNum);
+      saveState(state);
+    } else if (meeting.source === 'ganttsy_workspace') {
+      state.skippedGanttsyWorkspaceIds = state.skippedGanttsyWorkspaceIds || [];
+      if (!state.skippedGanttsyWorkspaceIds.includes(String(meeting.id))) {
+        state.skippedGanttsyWorkspaceIds.push(String(meeting.id));
+      }
+      saveState(state);
+    }
+    clearClassification(overrideKey);
+    return { wrote: false };
+  }
 
   // Get transcript text for confidentiality check
   let transcriptText = '';
@@ -158,7 +246,9 @@ async function processMeeting(
     logInfo(`[confidential] ${meeting.source}=${meeting.id} LLM says OK, proceeding`);
   }
 
-  // Get gcal metadata if not already present
+  // Get gcal metadata if not already present. Still worth doing even when
+  // we have a manual override — the gcal info populates the file header so
+  // dedup against future runs works.
   let gcalMeta = meeting.gcalMeta;
   let gcalAttendees: Attendee[] = [];
 
@@ -173,7 +263,56 @@ async function processMeeting(
   }
 
   const attendees = mergeAttendees(meeting.attendees, gcalAttendees);
-  let { targetDir, reason: baseReason } = classifyTarget(title, attendees, gcalMeta);
+
+  // --- Apply manual org override (if set) ----------------------------------
+  // Skip calendar-match failure + classifier when the user already said
+  // where this should go. Clear the override so it doesn't stay "sticky"
+  // past this run.
+  let targetDir: string;
+  let baseReason: string;
+  if (override && ORG_TARGET_DIRS[override]) {
+    targetDir = ORG_TARGET_DIRS[override];
+    baseReason = `override:${override}`;
+    logInfo(`[override] ${overrideKey} → ${override} (user-classified)`);
+    clearClassification(overrideKey);
+  } else {
+    // Loud fail: if a shadow meeting has no calendar match, skip + track.
+    // Silent routing to personal:no_attendees hides calendar problems
+    // (expired token, meeting outside window, meeting missing from any cal).
+    if (meeting.source === 'shadow' && !gcalMeta) {
+      logWarn(`[skip] ${meeting.source}=${meeting.id} no_calendar_match title=${JSON.stringify(title)} started=${meeting.startedAt.toISOString()}`);
+      unmatchedMeetings.push({
+        id: String(meeting.id),
+        source: meeting.source,
+        title,
+        startedAt: meeting.startedAt.toISOString(),
+        reason: 'no_calendar_match',
+      });
+      return { wrote: false };
+    }
+
+    const classified = classifyTarget(title, attendees, gcalMeta);
+    targetDir = classified.targetDir;
+    baseReason = classified.reason;
+  }
+
+  // Fail loudly when the classifier falls through to low-confidence defaults.
+  // Before: silently routed to personal/ctci — the user would find a pile
+  // of misclassified transcripts. Now: skip + surface to the user so they
+  // can manually classify. Only applies to shadow; ganttsy_workspace has
+  // its own forced routing below. Manual overrides bypass this check.
+  const AMBIGUOUS_REASONS = new Set(['personal:no_attendees', 'default:ctci']);
+  if (!override && meeting.source === 'shadow' && AMBIGUOUS_REASONS.has(baseReason)) {
+    logWarn(`[skip] ${meeting.source}=${meeting.id} classification_unclear reason=${baseReason} title=${JSON.stringify(title)}`);
+    unmatchedMeetings.push({
+      id: String(meeting.id),
+      source: meeting.source,
+      title,
+      startedAt: meeting.startedAt.toISOString(),
+      reason: `classification_unclear:${baseReason}`,
+    });
+    return { wrote: false };
+  }
 
   const ctciDir = join(GITHUB_ROOT, 'cognitivetech/ctci-docs/transcripts');
 
@@ -185,11 +324,12 @@ async function processMeeting(
 
   // Ganttsy workspace fallback: docs from Ganttsy Drive folder always belong in Ganttsy repos.
   // If classification didn't already route to a Ganttsy dir, force to Ganttsy sub-route.
+  // Skipped when a manual override is in effect — user's decision wins.
   const ganttsyDirs = [
     join(GITHUB_ROOT, 'ganttsy/ganttsy-docs/transcripts'),
     join(GITHUB_ROOT, 'ganttsy/ganttsy-strategy/transcripts'),
   ];
-  if (meeting.source === 'ganttsy_workspace' && !ganttsyDirs.includes(targetDir)) {
+  if (!override && meeting.source === 'ganttsy_workspace' && !ganttsyDirs.includes(targetDir)) {
     const ctx: ClassificationContext = {
       title,
       titleLower: title.toLowerCase(),
@@ -350,6 +490,26 @@ async function main() {
     await assertCalendarAuthHealthy(service, args.calendarIds);
   }
 
+  logInfo(`[mode] Idempotent sync, lookback=${args.sinceDays} days`);
+
+  // Pre-scan existing transcript files for idempotent deduplication
+  const transcriptDirs = [
+    join(GITHUB_ROOT, 'ganttsy/ganttsy-docs/transcripts'),
+    join(GITHUB_ROOT, 'ganttsy/ganttsy-strategy/transcripts'),
+    join(GITHUB_ROOT, 'copperteams/ct-docs/planning/transcripts'),
+    join(GITHUB_ROOT, 'cognitivetech/ctci-docs/transcripts'),
+    join(GITHUB_ROOT, 'nvs/nvs-docs/transcripts'),
+    KEVIN_COACHING_TRANSCRIPTS,
+    CHRISTINA_COACHING_TRANSCRIPTS,
+    MONDO_ZEN_COACHING_TRANSCRIPTS,
+    PERSONAL_TRANSCRIPTS,
+    TESTBOARD_TRANSCRIPTS,
+  ];
+  const existingTranscripts = scanExistingTranscripts(transcriptDirs);
+  if (existingTranscripts.gcalEventIds.size > 0 || existingTranscripts.shadowConvIdxs.size > 0 || existingTranscripts.ganttsyWorkspaceDocIds.size > 0) {
+    logInfo(`[dedup] Existing transcripts: gcal_events=${existingTranscripts.gcalEventIds.size} shadow_convIdxs=${existingTranscripts.shadowConvIdxs.size} ganttsy_docs=${existingTranscripts.ganttsyWorkspaceDocIds.size}`);
+  }
+
   const ganttsyWorkspaceMeetings: UnifiedMeeting[] = [];
   const shadowMeetings: UnifiedMeeting[] = [];
 
@@ -358,12 +518,7 @@ async function main() {
   // ========================================================================
   if (!args.shadowOnly) {
     try {
-      let modifiedAfter: string | null = null;
-      if (args.sinceDays !== null) {
-        modifiedAfter = new Date(Date.now() - args.sinceDays * 24 * 60 * 60 * 1000).toISOString();
-      } else if (state.lastGanttsyWorkspaceModifiedTime) {
-        modifiedAfter = state.lastGanttsyWorkspaceModifiedTime;
-      }
+      const modifiedAfter = new Date(Date.now() - args.sinceDays * 24 * 60 * 60 * 1000).toISOString();
 
       const docs = await fetchGanttsyWorkspaceDocs(modifiedAfter, args.limit);
       const skippedGanttsyWorkspaceIds = new Set(state.skippedGanttsyWorkspaceIds || []);
@@ -371,6 +526,11 @@ async function main() {
       for (const doc of docs) {
         if (skippedGanttsyWorkspaceIds.has(doc.id)) {
           logInfo(`[skip] ganttsy_workspace=${doc.id} previously marked confidential`);
+          continue;
+        }
+
+        if (existingTranscripts.ganttsyWorkspaceDocIds.has(doc.id)) {
+          logInfo(`[skip] ganttsy_workspace=${doc.id} already has transcript file`);
           continue;
         }
 
@@ -425,28 +585,24 @@ async function main() {
   // ========================================================================
   if (!args.ganttsyWorkspaceOnly && existsSync(DB_PATH)) {
     const db = new Database(DB_PATH, { readonly: true });
-    const lastIdx = state.lastConvIdx;
 
-    let convs: ConversationRow[];
-    if (args.sinceDays !== null) {
-      convs = db.prepare(`
-        SELECT convIdx, convUuid, convTitle, convStartedAt, convEndedAt, convCreatedAt
-        FROM SHADOW_CONVERSATION
-        WHERE datetime(replace(substr(convStartedAt,1,19),'T',' ')) >= datetime('now', ?)
-          AND transStatus = 3
-        ORDER BY convIdx ASC
-        LIMIT ?
-      `).all(`-${args.sinceDays} days`, args.limit) as any[];
-    } else {
-      convs = db.prepare(`
-        SELECT convIdx, convUuid, convTitle, convStartedAt, convEndedAt, convCreatedAt
-        FROM SHADOW_CONVERSATION
-        WHERE convIdx > ?
-          AND transStatus = 3
-        ORDER BY convIdx ASC
-        LIMIT ?
-      `).all(lastIdx, args.limit) as any[];
-    }
+    // ORDER BY convIdx DESC — always fetch the newest meetings first.
+    // Previously `ORDER BY convIdx ASC LIMIT 50` silently dropped everything
+    // past the 50th-oldest conv in the window, so once >50 meetings landed
+    // in the 30-day window, new ones stopped being processed. We still cap
+    // for safety, but bump to 500 — comfortably above any plausible 30-day
+    // backlog.
+    let convs: ConversationRow[] = db.prepare(`
+      SELECT convIdx, convUuid, convTitle, convStartedAt, convEndedAt, convCreatedAt
+      FROM SHADOW_CONVERSATION
+      WHERE datetime(replace(substr(convStartedAt,1,19),'T',' ')) >= datetime('now', ?)
+        AND transStatus = 3
+      ORDER BY convIdx DESC
+      LIMIT ?
+    `).all(`-${args.sinceDays} days`, Math.max(args.limit, 500)) as any[];
+
+    // Filter out conversations that already have transcript files
+    convs = convs.filter(c => !existingTranscripts.shadowConvIdxs.has(c.convIdx));
 
     const skippedConvs = new Set(state.skippedConvs || []);
 
@@ -504,25 +660,7 @@ async function main() {
   // Deduplicate: prioritize Ganttsy Workspace > Shadow
   // ========================================================================
 
-  // Pre-scan existing transcript files for cross-run deduplication
-  const transcriptDirs = [
-    join(GITHUB_ROOT, 'ganttsy/ganttsy-docs/transcripts'),
-    join(GITHUB_ROOT, 'ganttsy/ganttsy-strategy/transcripts'),
-    join(GITHUB_ROOT, 'copperteams/ct-docs/planning/transcripts'),
-    join(GITHUB_ROOT, 'cognitivetech/ctci-docs/transcripts'),
-    join(GITHUB_ROOT, 'nvs/nvs-docs/transcripts'),
-    KEVIN_COACHING_TRANSCRIPTS,
-    CHRISTINA_COACHING_TRANSCRIPTS,
-    MONDO_ZEN_COACHING_TRANSCRIPTS,
-    PERSONAL_TRANSCRIPTS,
-    TESTBOARD_TRANSCRIPTS,
-  ];
-  const existingGcalEventIds = scanExistingGcalEventIds(transcriptDirs);
-  if (existingGcalEventIds.size > 0) {
-    logInfo(`[dedup] Found ${existingGcalEventIds.size} existing gcal_event_ids from previous runs`);
-  }
-
-  const processedGcalEventIds = new Set<string>(existingGcalEventIds);
+  const processedGcalEventIds = new Set<string>(existingTranscripts.gcalEventIds);
   const processedTimeWindows: Date[] = [];
 
   const toProcess: UnifiedMeeting[] = [];
@@ -531,7 +669,7 @@ async function main() {
   // Add all Ganttsy Workspace meetings first (highest priority)
   const dedupedGanttsyWorkspaceIds: string[] = [];
   for (const gw of ganttsyWorkspaceMeetings) {
-    if (gw.gcalEventId && existingGcalEventIds.has(gw.gcalEventId)) {
+    if (gw.gcalEventId && existingTranscripts.gcalEventIds.has(gw.gcalEventId)) {
       logInfo(`[dedup] ganttsy_workspace=${gw.id} already exists (gcal_event_id=${gw.gcalEventId}), skipping`);
       dedupedGanttsyWorkspaceIds.push(gw.id);
       continue;
@@ -579,31 +717,54 @@ async function main() {
   const coachingPaths: string[] = [];
   const workPaths: string[] = [];
   const pendingMeetings: PendingMeeting[] = [];
+  const unmatchedMeetings: Array<{ id: string; source: string; title: string; startedAt: string; reason?: string }> = [];
+  // Load user-provided classification overrides once per run. Entries are
+  // consumed (cleared) inside processMeeting as we apply them.
+  const classifications = loadClassifications();
+  const classificationCount = Object.keys(classifications).length;
+  if (classificationCount > 0) {
+    logInfo(`[classifications] ${classificationCount} manual override(s) loaded`);
+  }
+
+  // Apply skip overrides EAGERLY — a skipped conv would be filtered out of
+  // toProcess by the dedup step below, so processMeeting never runs and the
+  // override would never get cleared. Handle it here so the state watermark
+  // (skippedConvs) picks up the skip and the override file is cleaned up.
+  for (const [key, org] of Object.entries(classifications)) {
+    if (org !== 'skip') continue;
+    const m = key.match(/^(\w+)=(.+)$/);
+    if (!m) continue;
+    const [, src, id] = m;
+    if (src === 'shadow') {
+      const idNum = parseInt(id, 10);
+      state.skippedConvs = state.skippedConvs || [];
+      if (!state.skippedConvs.includes(idNum)) state.skippedConvs.push(idNum);
+    } else if (src === 'ganttsy_workspace') {
+      state.skippedGanttsyWorkspaceIds = state.skippedGanttsyWorkspaceIds || [];
+      if (!state.skippedGanttsyWorkspaceIds.includes(id)) state.skippedGanttsyWorkspaceIds.push(id);
+    } else {
+      continue; // unknown source — leave the override in place for processMeeting
+    }
+    logInfo(`[override] ${key} skip (user-requested, applied eagerly)`);
+    clearClassification(key);
+    delete classifications[key];
+  }
+  if (Object.keys(classifications).length !== classificationCount) {
+    saveState(state);
+  }
   let exported = 0;
-  let maxShadowIdx = state.lastConvIdx;
-  let maxGanttsyWorkspaceModifiedTime = state.lastGanttsyWorkspaceModifiedTime;
 
   // Clean up stale pending files before processing
   cleanStalePendingFiles();
 
   for (const meeting of toProcess) {
-    const result = await processMeeting(meeting, args, state, service, coachingPaths, workPaths, pendingMeetings);
+    const result = await processMeeting(meeting, args, state, service, coachingPaths, workPaths, pendingMeetings, unmatchedMeetings, classifications);
 
     if (result.wrote) {
       exported++;
       if (result.path) {
         const dir = result.path.substring(0, result.path.lastIndexOf('/'));
         buckets.set(dir, (buckets.get(dir) || 0) + 1);
-      }
-    }
-
-    // Update watermarks
-    if (meeting.source === 'shadow') {
-      maxShadowIdx = Math.max(maxShadowIdx, parseInt(meeting.id));
-    } else if (meeting.source === 'ganttsy_workspace' && meeting.ganttsyWorkspaceData) {
-      const modifiedTime = meeting.ganttsyWorkspaceData.doc.modifiedTime;
-      if (!maxGanttsyWorkspaceModifiedTime || modifiedTime > maxGanttsyWorkspaceModifiedTime) {
-        maxGanttsyWorkspaceModifiedTime = modifiedTime;
       }
     }
   }
@@ -613,15 +774,6 @@ async function main() {
   const summary = sorted.map(([k, v]) => `${k}:${v}`).join(' | ');
   if (summary) {
     logInfo(`Routing: ${summary}`);
-  }
-
-  // Update state
-  if (!args.dryRun && !args.reportOnly && args.sinceDays === null) {
-    state.lastConvIdx = maxShadowIdx;
-    if (maxGanttsyWorkspaceModifiedTime) {
-      state.lastGanttsyWorkspaceModifiedTime = maxGanttsyWorkspaceModifiedTime;
-    }
-    saveState(state);
   }
 
   // Spawn coaching agent if needed
@@ -634,12 +786,20 @@ async function main() {
     postPendingSummaryToSysops(pendingMeetings);
   }
 
-  logInfo(`Done. processed=${toProcess.length} exported=${exported} coaching=${coachingPaths.length} work=${workPaths.length} pending=${pendingMeetings.length} deduped_shadow=${dedupedShadowIds.length}`);
+  if (unmatchedMeetings.length > 0) {
+    logWarn(`[unmatched] ${unmatchedMeetings.length} shadow meeting(s) had no calendar match — NOT routed:`);
+    for (const u of unmatchedMeetings) {
+      logWarn(`  - ${u.source}=${u.id} "${u.title}" started=${u.startedAt}`);
+    }
+  }
 
-  // Output written file paths to stdout so the shell wrapper can git-add only these files
+  logInfo(`Done. processed=${toProcess.length} exported=${exported} coaching=${coachingPaths.length} work=${workPaths.length} pending=${pendingMeetings.length} unmatched=${unmatchedMeetings.length} deduped_shadow=${dedupedShadowIds.length}`);
+
+  // Output written file paths to stdout so the shell wrapper can git-add only these files.
+  // Also surface unmatched meetings so the gate/agent can alert the user.
   const allWrittenPaths = [...coachingPaths, ...workPaths];
-  if (allWrittenPaths.length > 0) {
-    console.log(JSON.stringify({ writtenFiles: allWrittenPaths }));
+  if (allWrittenPaths.length > 0 || unmatchedMeetings.length > 0) {
+    console.log(JSON.stringify({ writtenFiles: allWrittenPaths, unmatched: unmatchedMeetings }));
   }
 }
 

@@ -1,0 +1,22 @@
+{
+  "id": "ts-2026-04-16-discuss-ai-advisor-coach-role-for-churchill-30plusstrong",
+  "meetingTitle": "Discuss AI Advisor-Coach role for Churchill/30PlusStrong",
+  "meetingDate": "2026-04-16",
+  "org": "ctci",
+  "sourceRel": "2026-04-16-bart-vacation-in-poland.md",
+  "targetDir": "/workspace/extra/github/personal/transcripts",
+  "transcriptPath": "/workspace/extra/github/personal/transcripts/2026-04-16-bart-vacation-in-poland.md",
+  "lineageTag": "meeting:Discuss AI Advisor-Coach role for Churchill/30Plus|date:2026-04-16",
+  "actions": [
+    {
+      "title": "Reconnect with Jane to continue AI Advisor-Coach discussion",
+      "context": "**Background**: Greg connected Cian with Jane from Churchill / 30PlusStrong to explore a potential **AI Advisor-Coach** role. Churchill is a global executive coaching firm (founded by Jane 14 years ago) that was acquired last year by 30PlusStrong, a California-based organization with a government focus. Jane is staying on as CEO for two more years part-time.\n\n**Discussion**: Jane explained that Churchill works with directors through C-suite at large corporations, providing executive coaching and leadership development. They've observed that clients increasingly ask for **advice** alongside coaching — especially around AI — and are launching a new \"Advisor-Coach\" program. This program pairs experienced ex-executive coaches with advisory capabilities so they can fluidly move between coaching and advising. Jane said: *\"We were looking for someone that would be a great advisor coach in the AI world. And Greg suggested we have a conversation.\"* Cian shared that he wasn't sure whether the AI need was internal (transforming Churchill's own practices) or client-facing. Jane began to clarify that the new boss at 30PlusStrong is also *\"looking at vendors to help us with AI as a company,\"* suggesting there may be both an internal and external opportunity.\n\n**Decision/Direction**: No decision was reached. The call was cut short due to severe audio issues — Jane was at a Dunkin' Donuts with background music interfering. Cian sent his phone number via chat so they could reconnect.\n\n**Next steps**: Cian needs to follow up with Jane (or wait for her callback) to complete the introductory conversation and learn more about the scope of the AI Advisor-Coach role, whether it's client-facing advisory, internal AI transformation for 30PlusStrong, or both.",
+      "assignee": "cian@cognitivetech.net",
+      "priority": "high",
+      "project": "Cognitive Tech",
+      "index": 1
+    }
+  ],
+  "createdAt": "2026-04-19T13:01:29.091Z",
+  "status": "pending"
+}

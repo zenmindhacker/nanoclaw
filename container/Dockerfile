@@ -7,6 +7,7 @@ FROM node:22-slim
 RUN apt-get update && apt-get install -y \
     chromium \
     fonts-liberation \
+    fonts-noto-cjk \
     fonts-noto-color-emoji \
     libgbm1 \
     libnss3 \
@@ -24,7 +25,7 @@ RUN apt-get update && apt-get install -y \
     curl \
     git \
     jq \
-    sqlite3 \
+    poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 
 # Set Chromium path for agent-browser
@@ -32,12 +33,19 @@ ENV AGENT_BROWSER_EXECUTABLE_PATH=/usr/bin/chromium
 ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 
 # Install agent-browser and claude-code globally
-# Remove /root/.claude/ created during install — containers auth via
-# CLAUDE_CODE_OAUTH_TOKEN env var, not credentials files. Leaving this
-# directory causes noisy "permission denied" errors when the SDK probes
-# it at startup under a non-root uid.
-RUN npm install -g agent-browser @anthropic-ai/claude-code attio-cli neonctl \
-    && rm -rf /root/.claude
+RUN npm install -g agent-browser @anthropic-ai/claude-code
+
+# Install OpenCode CLI for the `delegate` skill — lets the orchestrator
+# hand off bulk/cheap work to non-Anthropic worker models.
+# Pinning to npm (vs the curl installer) keeps the Docker layer
+# reproducible and avoids surprise binary downloads at build time.
+RUN npm install -g opencode-ai
+
+# `delegate` wrapper from container/skills/delegate/bin/ goes on PATH
+# so the agent can invoke it as a normal command. The skill auto-copies
+# from container/skills/ to /home/node/.claude/skills/ at container spawn
+# (see container-runner.ts), so that's the runtime path.
+ENV PATH="/home/node/.claude/skills/delegate/bin:${PATH}"
 
 # Create app directory
 WORKDIR /app
@@ -61,13 +69,13 @@ RUN mkdir -p /workspace/group /workspace/global /workspace/extra /workspace/ipc/
 # Container input (prompt, group info) is passed via stdin JSON.
 # Credentials are injected by the host's credential proxy — never passed here.
 # Follow-up messages arrive via IPC files in /workspace/ipc/input/
-# Apple Container only supports directory mounts (VirtioFS), so .env cannot be
-# shadowed with a host-side /dev/null file mount. Instead the entrypoint starts
-# as root, uses mount --bind to shadow .env, then drops to the host user via setpriv.
-RUN printf '#!/bin/bash\nset -e\n\n# Shadow .env so the agent cannot read host secrets (requires root)\nif [ "$(id -u)" = "0" ] && [ -f /workspace/project/.env ]; then\n  mount --bind /dev/null /workspace/project/.env\nfi\n\n# Compile agent-runner\ncd /app && npx tsc --outDir /tmp/dist 2>&1 >&2\nln -s /app/node_modules /tmp/dist/node_modules\nchmod -R a-w /tmp/dist\n\n# Capture stdin (secrets JSON) to temp file\ncat > /tmp/input.json\n\n# Drop privileges if running as root (main-group containers)\nif [ "$(id -u)" = "0" ] && [ -n "$RUN_UID" ]; then\n  chown "$RUN_UID:$RUN_GID" /tmp/input.json /tmp/dist\n  exec setpriv --reuid="$RUN_UID" --regid="$RUN_GID" --clear-groups -- node /tmp/dist/index.js < /tmp/input.json\nfi\n\nexec node /tmp/dist/index.js < /tmp/input.json\n' > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
+RUN printf '#!/bin/bash\nset -e\ncd /app && npx tsc --outDir /tmp/dist 2>&1 >&2\nln -s /app/node_modules /tmp/dist/node_modules\nchmod -R a-w /tmp/dist\ncat > /tmp/input.json\nnode /tmp/dist/index.js < /tmp/input.json\n' > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
 
 # Set ownership to node user (non-root) for writable directories
 RUN chown -R node:node /workspace && chmod 777 /home/node
+
+# Switch to non-root user (required for --dangerously-skip-permissions)
+USER node
 
 # Set working directory to group workspace
 WORKDIR /workspace/group

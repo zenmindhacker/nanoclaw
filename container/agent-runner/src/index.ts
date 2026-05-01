@@ -58,35 +58,7 @@ interface SDKUserMessage {
 
 const IPC_INPUT_DIR = '/workspace/ipc/input';
 const IPC_INPUT_CLOSE_SENTINEL = path.join(IPC_INPUT_DIR, '_close');
-const IPC_STATUS_FILE = '/workspace/ipc/status.txt';
 const IPC_POLL_MS = 500;
-
-/** Map SDK tool names to human-readable status strings for the typing indicator. */
-function toolStatusText(toolName: string): string {
-  const map: Record<string, string> = {
-    Bash: '🔧 running bash',
-    Read: '📖 reading file',
-    Write: '✏️ writing file',
-    Edit: '✏️ editing file',
-    Glob: '🔍 searching files',
-    Grep: '🔍 searching code',
-    WebSearch: '🌐 searching web',
-    WebFetch: '🌐 fetching page',
-    Task: '⚡ spawning task',
-    TaskOutput: '⚡ reading task',
-    TeamCreate: '👥 creating team',
-    SendMessage: '💬 messaging agent',
-    TodoWrite: '📋 updating todos',
-    Skill: '🛠️ running skill',
-    NotebookEdit: '📓 editing notebook',
-  };
-  if (map[toolName]) return map[toolName];
-  // MCP tools like mcp__nanoclaw__something
-  if (toolName.startsWith('mcp__nanoclaw__')) {
-    return `🔌 ${toolName.replace('mcp__nanoclaw__', '').replace(/_/g, ' ')}`;
-  }
-  return `🔧 ${toolName.toLowerCase()}`;
-}
 
 /**
  * Push-based async iterable for streaming user messages to the SDK.
@@ -96,13 +68,23 @@ class MessageStream {
   private queue: SDKUserMessage[] = [];
   private waiting: (() => void) | null = null;
   private done = false;
+  private sessionId = '';
+
+  /**
+   * Update the session ID used for subsequent messages.
+   * Must be called after the SDK emits system/init with the active session_id,
+   * so that piped follow-up messages stay in the same session context.
+   */
+  setSessionId(id: string): void {
+    this.sessionId = id;
+  }
 
   push(text: string): void {
     this.queue.push({
       type: 'user',
       message: { role: 'user', content: text },
       parent_tool_use_id: null,
-      session_id: '',
+      session_id: this.sessionId,
     });
     this.waiting?.();
   }
@@ -465,24 +447,11 @@ async function runQuery(
 
     if (message.type === 'assistant' && 'uuid' in message) {
       lastAssistantUuid = (message as { uuid: string }).uuid;
-
-      // Write tool status for Slack typing indicator rotation
-      const msgContent = (message as { message?: { content?: unknown[] } }).message?.content;
-      if (Array.isArray(msgContent)) {
-        const toolUse = msgContent.find(
-          (c): c is { type: 'tool_use'; name: string } =>
-            typeof c === 'object' && c !== null && (c as { type?: string }).type === 'tool_use'
-        );
-        if (toolUse) {
-          try {
-            fs.writeFileSync(IPC_STATUS_FILE, `_${toolStatusText(toolUse.name)}..._`, 'utf-8');
-          } catch { /* ignore */ }
-        }
-      }
     }
 
     if (message.type === 'system' && message.subtype === 'init') {
       newSessionId = message.session_id;
+      stream.setSessionId(newSessionId);
       log(`Session initialized: ${newSessionId}`);
     }
 
@@ -495,8 +464,6 @@ async function runQuery(
       resultCount++;
       const textResult = 'result' in message ? (message as { result?: string }).result : null;
       log(`Result #${resultCount}: subtype=${message.subtype}${textResult ? ` text=${textResult.slice(0, 200)}` : ''}`);
-      // Clear status so Slack typing indicator stops showing tool status
-      try { fs.unlinkSync(IPC_STATUS_FILE); } catch { /* ignore */ }
       writeOutput({
         status: 'success',
         result: textResult || null,
@@ -515,7 +482,7 @@ interface ScriptResult {
   data?: unknown;
 }
 
-const SCRIPT_TIMEOUT_MS = 30_000;
+const SCRIPT_TIMEOUT_MS = 900_000; // 15 min — transcript-sync needs token refresh + API fetches + LLM action extraction
 
 async function runScript(script: string): Promise<ScriptResult | null> {
   const scriptPath = '/tmp/task-script.sh';
@@ -578,7 +545,10 @@ async function main(): Promise<void> {
 
   // Credentials are injected by the host's credential proxy via ANTHROPIC_BASE_URL.
   // No real secrets exist in the container environment.
-  const sdkEnv: Record<string, string | undefined> = { ...process.env };
+  const sdkEnv: Record<string, string | undefined> = {
+    ...process.env,
+    CLAUDE_CODE_AUTO_COMPACT_WINDOW: '165000',
+  };
 
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
   const mcpServerPath = path.join(__dirname, 'ipc-mcp-stdio.js');
@@ -591,6 +561,13 @@ async function main(): Promise<void> {
 
   // Build initial prompt (drain any pending IPC messages too)
   let prompt = containerInput.prompt;
+
+  // Append conversation history hint if the file exists
+  const historyFile = '/workspace/ipc/conversation_history.json';
+  if (fs.existsSync(historyFile)) {
+    prompt += `\n\n<system_note>Full conversation history (including your previous responses) is available at ${historyFile}. Use the Read tool to review it if you need context beyond what's shown above.</system_note>`;
+  }
+
   if (containerInput.isScheduledTask) {
     prompt = `[SCHEDULED TASK - The following message was sent automatically and is not coming directly from the user or group.]\n\n${prompt}`;
   }
@@ -615,9 +592,16 @@ async function main(): Promise<void> {
       return;
     }
 
-    // Script says wake agent — enrich prompt with script data
+    // Script says wake agent — enrich prompt with script data.
+    // Prefer .data if the script wrapped its payload; fall back to
+    // the entire result object (minus wakeAgent) so scripts that put
+    // fields at the top level still surface their data to the agent.
     log(`Script wakeAgent=true, enriching prompt with data`);
-    prompt = `[SCHEDULED TASK]\n\nScript output:\n${JSON.stringify(scriptResult.data, null, 2)}\n\nInstructions:\n${containerInput.prompt}`;
+    const scriptData = scriptResult.data ?? (() => {
+      const { wakeAgent: _, ...rest } = scriptResult;
+      return Object.keys(rest).length ? rest : null;
+    })();
+    prompt = `[SCHEDULED TASK]\n\nScript output:\n${JSON.stringify(scriptData, null, 2)}\n\nInstructions:\n${containerInput.prompt}`;
   }
 
   // Query loop: run query → wait for IPC message → run new query → repeat

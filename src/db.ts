@@ -126,6 +126,17 @@ function createSchema(database: Database.Database): void {
     /* column already exists */
   }
 
+  // Add thread group columns if they don't exist (migration for existing DBs)
+  try {
+    database.exec(
+      `ALTER TABLE registered_groups ADD COLUMN is_thread_group INTEGER DEFAULT 0`,
+    );
+    database.exec(`ALTER TABLE registered_groups ADD COLUMN parent_jid TEXT`);
+    database.exec(`ALTER TABLE registered_groups ADD COLUMN thread_ts TEXT`);
+  } catch {
+    /* columns already exist */
+  }
+
   // Add channel and is_group columns if they don't exist (migration for existing DBs)
   try {
     database.exec(`ALTER TABLE chats ADD COLUMN channel TEXT`);
@@ -388,6 +399,103 @@ export function getLastBotMessageTimestamp(
   return row?.ts ?? undefined;
 }
 
+/**
+ * Get full conversation history (both user and bot messages) for a JID.
+ * Used to build agent prompts with full context.
+ */
+export function getConversationHistory(
+  chatJid: string,
+  limit: number = 30,
+): NewMessage[] {
+  const sql = `
+    SELECT * FROM (
+      SELECT id, chat_jid, sender, sender_name, content, timestamp, is_from_me, is_bot_message
+      FROM messages
+      WHERE chat_jid = ? AND content != '' AND content IS NOT NULL
+      ORDER BY timestamp DESC
+      LIMIT ?
+    ) ORDER BY timestamp
+  `;
+  return db.prepare(sql).all(chatJid, limit) as NewMessage[];
+}
+
+/**
+ * Get recent channel-level messages (both sides) for context when starting a new thread.
+ * Returns a small window of recent channel activity so the agent knows what's being discussed.
+ */
+export function getRecentChannelContext(
+  channelJid: string,
+  limit: number = 5,
+): NewMessage[] {
+  const sql = `
+    SELECT * FROM (
+      SELECT id, chat_jid, sender, sender_name, content, timestamp, is_from_me, is_bot_message
+      FROM messages
+      WHERE chat_jid = ? AND content != '' AND content IS NOT NULL
+      ORDER BY timestamp DESC
+      LIMIT ?
+    ) ORDER BY timestamp
+  `;
+  return db.prepare(sql).all(channelJid, limit) as NewMessage[];
+}
+
+/**
+ * Get the latest stored message timestamp for a JID (any message type).
+ * Used for gap detection during Slack sync.
+ */
+export function getLatestStoredTimestamp(chatJid: string): string | undefined {
+  const row = db
+    .prepare(`SELECT MAX(timestamp) as ts FROM messages WHERE chat_jid = ?`)
+    .get(chatJid) as { ts: string | null } | undefined;
+  return row?.ts ?? undefined;
+}
+
+/**
+ * Check if a message ID already exists in the DB for a given JID.
+ */
+export function messageExists(id: string, chatJid: string): boolean {
+  const row = db
+    .prepare(`SELECT 1 FROM messages WHERE id = ? AND chat_jid = ?`)
+    .get(id, chatJid);
+  return !!row;
+}
+
+/**
+ * Update message content (for Slack message edits).
+ */
+export function updateMessageContent(
+  id: string,
+  chatJid: string,
+  newContent: string,
+): void {
+  db.prepare(
+    `UPDATE messages SET content = ? WHERE id = ? AND chat_jid = ?`,
+  ).run(newContent, id, chatJid);
+}
+
+/**
+ * Delete a message from the DB (for Slack message deletions).
+ */
+export function deleteMessage(id: string, chatJid: string): void {
+  db.prepare(`DELETE FROM messages WHERE id = ? AND chat_jid = ?`).run(
+    id,
+    chatJid,
+  );
+}
+
+/**
+ * Check if a group has active scheduled tasks.
+ * Used by thread cleanup to avoid deleting groups with running tasks.
+ */
+export function hasActiveTasksForGroup(chatJid: string): boolean {
+  const row = db
+    .prepare(
+      `SELECT 1 FROM scheduled_tasks WHERE chat_jid = ? AND status = 'active' LIMIT 1`,
+    )
+    .get(chatJid);
+  return !!row;
+}
+
 export function createTask(
   task: Omit<ScheduledTask, 'last_run' | 'last_result'>,
 ): void {
@@ -589,6 +697,9 @@ export function getRegisteredGroup(
         container_config: string | null;
         requires_trigger: number | null;
         is_main: number | null;
+        is_thread_group: number | null;
+        parent_jid: string | null;
+        thread_ts: string | null;
       }
     | undefined;
   if (!row) return undefined;
@@ -611,6 +722,9 @@ export function getRegisteredGroup(
     requiresTrigger:
       row.requires_trigger === null ? undefined : row.requires_trigger === 1,
     isMain: row.is_main === 1 ? true : undefined,
+    isThreadGroup: row.is_thread_group === 1 ? true : undefined,
+    parentJid: row.parent_jid || undefined,
+    threadTs: row.thread_ts || undefined,
   };
 }
 
@@ -619,8 +733,8 @@ export function setRegisteredGroup(jid: string, group: RegisteredGroup): void {
     throw new Error(`Invalid group folder "${group.folder}" for JID ${jid}`);
   }
   db.prepare(
-    `INSERT OR REPLACE INTO registered_groups (jid, name, folder, trigger_pattern, added_at, container_config, requires_trigger, is_main)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT OR REPLACE INTO registered_groups (jid, name, folder, trigger_pattern, added_at, container_config, requires_trigger, is_main, is_thread_group, parent_jid, thread_ts)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     jid,
     group.name,
@@ -630,7 +744,14 @@ export function setRegisteredGroup(jid: string, group: RegisteredGroup): void {
     group.containerConfig ? JSON.stringify(group.containerConfig) : null,
     group.requiresTrigger === undefined ? 1 : group.requiresTrigger ? 1 : 0,
     group.isMain ? 1 : 0,
+    group.isThreadGroup ? 1 : 0,
+    group.parentJid || null,
+    group.threadTs || null,
   );
+}
+
+export function deleteRegisteredGroup(jid: string): void {
+  db.prepare('DELETE FROM registered_groups WHERE jid = ?').run(jid);
 }
 
 export function getAllRegisteredGroups(): Record<string, RegisteredGroup> {
@@ -643,6 +764,9 @@ export function getAllRegisteredGroups(): Record<string, RegisteredGroup> {
     container_config: string | null;
     requires_trigger: number | null;
     is_main: number | null;
+    is_thread_group: number | null;
+    parent_jid: string | null;
+    thread_ts: string | null;
   }>;
   const result: Record<string, RegisteredGroup> = {};
   for (const row of rows) {
@@ -664,6 +788,9 @@ export function getAllRegisteredGroups(): Record<string, RegisteredGroup> {
       requiresTrigger:
         row.requires_trigger === null ? undefined : row.requires_trigger === 1,
       isMain: row.is_main === 1 ? true : undefined,
+      isThreadGroup: row.is_thread_group === 1 ? true : undefined,
+      parentJid: row.parent_jid || undefined,
+      threadTs: row.thread_ts || undefined,
     };
   }
   return result;

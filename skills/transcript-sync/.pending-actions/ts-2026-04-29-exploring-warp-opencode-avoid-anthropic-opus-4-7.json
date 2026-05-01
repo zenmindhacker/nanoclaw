@@ -1,0 +1,46 @@
+{
+  "id": "ts-2026-04-29-exploring-warp-opencode-avoid-anthropic-opus-4-7",
+  "meetingTitle": "Exploring Warp + OpenCode; avoid Anthropic Opus 4.7",
+  "meetingDate": "2026-04-29",
+  "org": "ganttsy",
+  "sourceRel": "ganttsy-strategy/transcripts/2026-04-29-aby-cian-1-1.md",
+  "targetDir": "/workspace/extra/github/ganttsy/ganttsy-strategy/transcripts",
+  "transcriptPath": "/workspace/extra/github/ganttsy/ganttsy-strategy/transcripts/2026-04-29-aby-cian-1-1.md",
+  "lineageTag": "meeting:Exploring Warp + OpenCode; avoid Anthropic Opus 4.|date:2026-04-29",
+  "actions": [
+    {
+      "title": "Switch Claude Code back to Opus 4.6",
+      "context": "**Background**: Cian raised concerns about Anthropic's Opus 4.7 model, which recently became the default in Claude Code. He had found a Medium article detailing significant problems with the model for their type of workflows.\n\n**Discussion**: Cian explained that Opus 4.7 has been \"optimized for long-running agentic workflows\" targeting enterprise users, but performs poorly for smaller, human-in-the-loop work. Key issues include: (1) when reading documents and coding from them, it \"acts and hallucinates the rest\" due to context window problems, (2) it burns 30-35% more tokens than 4.6, effectively costing more despite the same pricing, and (3) widespread complaints on Reddit. Cian said bluntly: \"It's bad, man. It's bad.\" Rustam confirmed he'd been hitting the 5-hour usage limit for the first time since switching to 4.7, which now makes sense given the token bloat. Rustam also noted that responses became much more verbose compared to 4.6.\n\n**Decision/Direction**: Both agreed to switch back to Opus 4.6 immediately. Cian noted you can switch models on the desktop version but not on the CLI, which is frustrating.\n\n**Next steps**: Rustam committed to switching right away. Cian will share the Medium article detailing the issues.",
+      "assignee": "cian@ganttsy.com",
+      "priority": "high",
+      "project": "Ganttsy Admin",
+      "index": 1
+    },
+    {
+      "title": "Share Medium article on Opus 4.7 problems",
+      "context": "**Background**: During the discussion about Opus 4.7's poor performance, Cian referenced a Medium article that clearly documents the issues with the model.\n\n**Discussion**: Cian offered to share the article with Rustam, saying: \"I'll fire it over to you. At Rustem, here's the article on how bad Opus 4.7 is for our workflows.\" Rustam mentioned he might buy a Medium subscription ($5/month) since Cian shares articles frequently.\n\n**Decision/Direction**: Cian to send the article to Rustam (and potentially the wider team) so everyone understands the rationale for avoiding 4.7.\n\n**Next steps**: Send the Medium article link or PDF to Rustam.",
+      "assignee": "cian@ganttsy.com",
+      "priority": "high",
+      "project": "Ganttsy Admin",
+      "index": 2
+    },
+    {
+      "title": "Deliver code rewritten in Node.js",
+      "context": "**Background**: Aby has been working on some code that Cian needs to review and integrate. The code was originally written in Python, but the team needs it in Node.js.\n\n**Discussion**: Cian mentioned: \"I'm still waiting for the code from Abby on that note. So it hasn't arrived yet. So I haven't been able to look at anything.\" Rustam confirmed: \"I think you said it was written in the Python and you've been expecting it maybe better in Node.js, right?\" Cian agreed, stating that deploying Python \"would just be way too much work\" and that \"Python is kind of good for scripting stuff, but for web services, I don't think it's very good at all.\" Rustam also noted that with AI tooling, Node.js seems to be \"winning the race\" in terms of ecosystem support.\n\n**Decision/Direction**: The code needs to be delivered in Node.js, not Python. Cian has been out on a road trip and hasn't been able to review anything yet.\n\n**Next steps**: Aby needs to deliver the Node.js version of the code so Cian can review it. This is currently blocking Cian's work.",
+      "assignee": "cian@ganttsy.com",
+      "priority": "high",
+      "project": "Ganttsy Admin",
+      "index": 3
+    },
+    {
+      "title": "Explore Warp + OpenCode as dev tool setup",
+      "context": "**Background**: Cian has been looking for a single development harness that combines document editing/review and agentic coding, without being locked into one vendor's model ecosystem. He spent ~$180 on WindSurf last month and is unhappy with being locked into their agent and subscription model.\n\n**Discussion**: Rustam recommended **Warp** (warp.dev), a modern terminal he's been using for ~3 years. Key features discussed: vertical tabs, file explorer, global file search, code review, and support for multiple AI agents (Claude Code, Codex, OpenCode, Gemini). Cian was very enthusiastic: \"This is kind of what I was looking for. Like over the last month.\" They discussed combining Warp with **OpenCode** (an open-source Claude Code alternative that uses OpenRouter), allowing model flexibility. The ideal setup Cian described: Claude Max subscription for Anthropic models + token-based billing through OpenRouter for other models, all running through Warp. Cian said: \"Now I've kept the best of Windsurf. I've gotten rid of my dependence on their subscription.\" Rustam asked Cian to share his findings: \"Next time, I will definitely ask you about warp. How are you using it?\"\n\n**Decision/Direction**: Cian will evaluate the Warp + OpenCode + Claude Max subscription combo as a replacement for WindSurf. The goal is vendor independence and cost control.\n\n**Next steps**: Cian to install and experiment with Warp, test OpenCode integration, and report back to Rustam at the next 1:1 with findings.",
+      "assignee": "cian@ganttsy.com",
+      "priority": "medium",
+      "project": "Ganttsy Admin",
+      "index": 4
+    }
+  ],
+  "createdAt": "2026-04-29T19:56:42.401Z",
+  "status": "pending"
+}

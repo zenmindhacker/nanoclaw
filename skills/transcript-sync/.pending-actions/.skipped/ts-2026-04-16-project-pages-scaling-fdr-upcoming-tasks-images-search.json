@@ -1,0 +1,62 @@
+{
+  "id": "ts-2026-04-16-project-pages-scaling-fdr-upcoming-tasks-images-search",
+  "meetingTitle": "Project Pages & Scaling: FDR, Upcoming Tasks, Images, Search",
+  "meetingDate": "2026-04-16",
+  "org": "ct",
+  "sourceRel": "ct-docs/planning/transcripts/2026-04-16-ct-lt-q2-rocks-2-2.md",
+  "targetDir": "/workspace/extra/github/copperteams/ct-docs/planning/transcripts",
+  "transcriptPath": "/workspace/extra/github/copperteams/ct-docs/planning/transcripts/2026-04-16-ct-lt-q2-rocks-2-2.md",
+  "lineageTag": "meeting:Project Pages & Scaling: FDR, Upcoming Tasks, Imag|date:2026-04-16",
+  "actions": [
+    {
+      "title": "Write ADR for upcoming tasks query optimization",
+      "context": "**Background**: The project homepage displays \"upcoming tasks\" and \"closest to next milestone\" widgets. Both require expensive queries that traverse project dependencies (tasks blocked by other tasks) and milestone completion status. This is fine now with few users, but problematic at scale since this is the main landing page every user hits.\n\n**Discussion**: Rustam explained that the upcoming tasks query finds all active projects, then runs `get_next_steps` which checks task completion status and blocking dependencies. He noted: \"If we hit some performance issue, like whenever we come to this like 10,000, 100,000 users, there is a chance we might need some kind of a special storage for this.\" Cian and Rustam explored several approaches:\n- **Pre-calculation on task completion**: Rustam proposed computing upcoming tasks when a user completes a task, storing results in pre-calculated tables. Cian noted the risk: \"It's also potentially a challenge of like if somebody uncompletes a task\" — both complete and uncomplete operations must funnel through controlled functions, not direct DB writes.\n- **Redis/KV caching**: Cian suggested a Redis KV store but realized invalidation has the same complexity.\n- **Limiting scope**: Rustam suggested only querying recent projects for the homepage, with full expensive queries on the \"view all\" page.\n- **Multiple triggers**: Rustam identified that task completion/uncompletion AND project creation are all triggers that would need to update cached data. Cian noted: \"there's so many entry points that you have to kind of draw a circle around it or do some sort of database-based thing.\"\n\n**Decision/Direction**: Cian said: \"Let's you and I take a task and we'll Slack on this and see if we can figure out what the best approach is for both of these — upcoming tasks and closest to next milestone.\" This should be formalized as an ADR (Architectural Decision Record). No specific approach was chosen yet.\n\n**Next steps**: Cian and Rustam to discuss async on Slack, evaluate the options, and produce an ADR covering both the upcoming tasks and closest-to-milestone queries. Must consider scaling to thousands/millions of users, target response time of ~300ms for homepage.",
+      "assignee": "cian@copperteams.ai",
+      "priority": "high",
+      "project": "Kora Voice Integration",
+      "index": 14
+    },
+    {
+      "title": "Research hybrid semantic search architecture",
+      "context": "**Background**: Murnell presented new search UI designs showing a search overlay where users can type keywords and see project results. This opened a discussion about what search technology to use.\n\n**Discussion**: Cian identified several opportunities:\n- **Traditional search**: Using a search service with indexed tables so queries don't hit the main database directly.\n- **Semantic search**: AI-powered meaning-based search where users could type free-form questions like \"I want a project where I get to work with pink things\" and get relevant results based on meaning, not just keywords.\n- **Hybrid approach**: Cian's preferred direction — combining keyword chips/autocomplete with free-form semantic search. He described: \"if I'm typing in keywords I can select like all those tags from the dropdown\" with chips, \"but then you could also just not do that and you could just type in a question and then press enter\" for semantic search. Results would look the same visually either way.\n\nCian also suggested checking what Vercel and Neon Database already have built in, asking Rustam: \"what does Vercel already have baked in or what does Neon Database already have.\" Greg expressed that search is a component he has \"not many intuitions about\" and is relying on Cian to define the approach. Greg also suggested splitting search results into \"primary direct hits\" and \"recommended options\" from related categories.\n\n**Decision/Direction**: Cian committed to doing about an hour of research, producing an ADR with a design decision covering the technology choice and visual/UX implications. He said: \"I'll include it in the ADR and the design decision so that you'll have it.\"\n\n**Next steps**: Cian to research search options (traditional, semantic, hybrid), check Vercel/Neon built-in capabilities, and write an ADR with recommendation. This will then become a feature requirement for the team.",
+      "assignee": "cian@copperteams.ai",
+      "priority": "high",
+      "project": "Kora Voice Integration",
+      "index": 15
+    },
+    {
+      "title": "Deploy project pages to dev-gansey environment",
+      "context": "**Background**: Rustam has been building out the project landing pages (homepage dashboard, upcoming tasks, milestones, recently updated, started projects) with both frontend design from Figma and backend queries. The work is running on localhost but not yet deployed.\n\n**Discussion**: Greg asked to get access to review the work: \"Can I get the access to it so that I can just review it quickly and see like we are all design optimizations on the record?\" Rustam confirmed: \"It will be in the dev. I will after the meeting, I will deploy and share with you.\" Greg also requested a quasi-demo with real information for select projects to evaluate aspect ratios and card information display.\n\n**Decision/Direction**: Rustam committed to deploying to dev-gansey after the meeting and sharing the link with the team.\n\n**Next steps**: Deploy current project pages work to dev-gansey, share the link with Greg and the team. Greg noted he won't have projects created yet, so he'll need some seed data to see the pages properly.",
+      "assignee": "rustam@copperteams.ai",
+      "priority": "high",
+      "project": "Kora Voice Integration",
+      "index": 16
+    },
+    {
+      "title": "Slide new project screens into tech brief",
+      "context": "**Background**: Murnell presented updated project detail/explore screens that are close to ready-for-dev status. These include the project landing screen with category/subcategory display, start/explore options, accordion sections, and sticky header behavior on scroll. They need one or two more design iterations before being ready for development.\n\n**Discussion**: When discussing timing, Cian said: \"I guess we could do these screens into dev next week, starting Monday.\" Murnell confirmed the remaining design iterations would be done by end of week. Cian then noted: \"I'll look at the tech brief again, Rustam, and see if we can slide these in. If not, it'll just slide in for the next cycle.\"\n\n**Decision/Direction**: Cian to review the current cycle's tech brief and determine if the new project screens can be added to the current cycle or need to wait for the next one.\n\n**Next steps**: Review tech brief, decide on scheduling, communicate to Rustam whether these screens are in the current cycle or next.",
+      "assignee": "cian@copperteams.ai",
+      "priority": "medium",
+      "project": "Kora Voice Integration",
+      "index": 17
+    },
+    {
+      "title": "Finalize project detail screens for ready-for-dev",
+      "context": "**Background**: Murnell has been working on project detail/explore screens including the project landing screen with accordion sections, sticky header, share/favorite options, and mobile versions. These are currently in work-in-progress status.\n\n**Discussion**: Murnell indicated the screens need \"one or two iterations more\" before being ready for dev. Greg mentioned he needs to sign off on them. Murnell said: \"That will be probably towards end of the week. So I'll add all of that, what we discussed. So the changes that are already made on top of the existing ones.\" This includes reflecting card title changes (two-line titles), LXP positioning updates, and the placeholder page designs.\n\n**Decision/Direction**: Murnell to complete the remaining iterations and move screens to ready-for-dev status by end of week.\n\n**Next steps**: Complete design iterations incorporating discussed changes (two-line titles, LXP repositioning, mobile versions), get Greg's sign-off, move to ready-for-dev in Figma.",
+      "assignee": "irica@copperteams.ai",
+      "priority": "high",
+      "project": "Kora Voice Integration",
+      "index": 18
+    },
+    {
+      "title": "Convert image pipeline code to Node and push to repo",
+      "context": "**Background**: Abby has been building an image generation pipeline with a GUI for batch-generating project/category/subcategory images. The pipeline is currently written in Python and needs to be converted to Node.js to match the rest of the codebase. Rustam's code needs to pull images from this repo into the database.\n\n**Discussion**: Cian explained: \"The code that he's built for the pipeline will be ready for, like, production deployment mid to end of next week because he wants to redo some of it. And he did it in Python, and it'll be better in Node, which is the rest of our code is in Node, so he's going to convert it.\" Greg and Abby have encountered some problems with the pipeline that Cian hasn't been able to troubleshoot remotely. Cian stressed: \"He just needs to put the code into Node and put it into the repo so that I can access the code and actually look at it, as opposed to trying to troubleshoot by speaking him through it. I need to see the code and then I'll be able to know where the problem is.\" Greg suggested potentially accelerating this timeline. Cian's response: \"if you want to troubleshoot it faster, then we just need to convince him to get it in there faster.\"\n\n**Decision/Direction**: Abby to convert Python pipeline to Node and push to the repo by mid-to-end of next week. Once in the repo, Cian can review the code and help troubleshoot the issues Greg and Abby encountered.\n\n**Next steps**: Convert pipeline from Python to Node.js, push to shared repo. Cian will then review and help debug. Greg may also set up a three-way call (Greg, Cian, Abby) to discuss the pipeline further.",
+      "assignee": "cian@copperteams.ai",
+      "priority": "medium",
+      "project": "Kora Voice Integration",
+      "index": 19
+    }
+  ],
+  "createdAt": "2026-04-20T13:10:30.037Z",
+  "status": "pending"
+}

@@ -41,28 +41,49 @@ const server = new McpServer({
 
 server.tool(
   'send_message',
-  "Send a message to the user or group immediately while you're still running. Use this for progress updates or to send multiple messages. You can call this multiple times.",
+  `Send a message (text and/or media) to the user or group immediately while you're still running. Use this for progress updates, multiple messages, or to attach files like voice notes, images, or documents. You can call this multiple times.
+
+ATTACHING MEDIA:
+To send a file (audio, image, document), first write/copy it into the IPC directory at /workspace/ipc/, then pass its path as "media_path". The path must be relative to /workspace/ipc/ (e.g. "voice-note.mp3", not "/tmp/voice-note.mp3" or "/workspace/ipc/voice-note.mp3"). The host uploads the file to the channel and then deletes the staged copy.
+
+Example — sending a voice note:
+  cp /tmp/voice-note.mp3 /workspace/ipc/voice-note.mp3
+  send_message(media_path="voice-note.mp3")
+
+DM'ING A CONTACT FROM ANY CONTEXT:
+To DM a known contact (e.g. the operator's personal DM) from any group/thread you're running in, pass their JID as "target_jid". Discover available contacts by reading /workspace/ipc/outbound_contacts.json — it lists each contact's JID, name, and description. Only JIDs in that file (plus groups you're already authorized for) can be targeted; others are rejected by the host.
+
+Example — DMing the operator from a thread:
+  # cat /workspace/ipc/outbound_contacts.json to find the JID
+  send_message(target_jid="slack:D0APR54QDKP", text="Heads up — the deploy finished")
+
+You must provide at least one of "text" or "media_path".`,
   {
-    text: z.string().default('').describe('The message text to send (can be empty when sending media only)'),
+    text: z.string().optional().describe('The message text to send. Optional if media_path is provided.'),
     sender: z.string().optional().describe('Your role/identity name (e.g. "Researcher"). When set, messages appear from a dedicated bot in Telegram.'),
-    mediaPath: z.string().optional().describe('Absolute path to a local audio/video file to attach (e.g. "/tmp/voice.mp3"). The file will be uploaded to the chat.'),
+    media_path: z.string().optional().describe('Path to a file to attach, relative to /workspace/ipc/ (e.g. "voice-note.mp3"). Stage the file under /workspace/ipc/ first. The host deletes the staged file after sending.'),
+    target_jid: z.string().optional().describe('Override destination. Use to DM a known contact from any context. Read /workspace/ipc/outbound_contacts.json for available JIDs. Omit to send to the current chat.'),
   },
   async (args) => {
-    // If a mediaPath is provided, copy the file into the IPC media directory
-    // so the host can find it (container FS is isolated after process exits).
-    let ipcMediaPath: string | undefined;
-    if (args.mediaPath) {
-      const MEDIA_DIR = path.join(IPC_DIR, 'media');
-      fs.mkdirSync(MEDIA_DIR, { recursive: true });
-      const ext = path.extname(args.mediaPath) || '.bin';
-      const mediaFilename = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`;
-      const destPath = path.join(MEDIA_DIR, mediaFilename);
-      try {
-        fs.copyFileSync(args.mediaPath, destPath);
-        ipcMediaPath = `media/${mediaFilename}`;
-      } catch (err) {
+    if (!args.text && !args.media_path) {
+      return {
+        content: [{ type: 'text' as const, text: 'Error: send_message requires at least one of "text" or "media_path".' }],
+        isError: true,
+      };
+    }
+
+    // Validate media_path stays within /workspace/ipc (matches host-side check).
+    if (args.media_path) {
+      if (path.isAbsolute(args.media_path) || args.media_path.includes('..')) {
         return {
-          content: [{ type: 'text' as const, text: `Failed to stage media file: ${err instanceof Error ? err.message : String(err)}` }],
+          content: [{ type: 'text' as const, text: `Error: media_path must be a relative path under /workspace/ipc/, got "${args.media_path}". Stage the file first (e.g. cp /tmp/file.mp3 /workspace/ipc/file.mp3) and pass "file.mp3".` }],
+          isError: true,
+        };
+      }
+      const stagedPath = path.join(IPC_DIR, args.media_path);
+      if (!fs.existsSync(stagedPath)) {
+        return {
+          content: [{ type: 'text' as const, text: `Error: file not found at ${stagedPath}. Copy or write the file there first, then retry.` }],
           isError: true,
         };
       }
@@ -71,16 +92,22 @@ server.tool(
     const data: Record<string, string | undefined> = {
       type: 'message',
       chatJid,
+      targetJid: args.target_jid || undefined,
       text: args.text || undefined,
-      mediaPath: ipcMediaPath,
       sender: args.sender || undefined,
+      mediaPath: args.media_path || undefined,
       groupFolder,
       timestamp: new Date().toISOString(),
     };
 
     writeIpcFile(MESSAGES_DIR, data);
 
-    return { content: [{ type: 'text' as const, text: 'Message sent.' }] };
+    const what = args.media_path
+      ? args.text
+        ? `Message and media (${args.media_path}) sent.`
+        : `Media (${args.media_path}) sent.`
+      : 'Message sent.';
+    return { content: [{ type: 'text' as const, text: what }] };
   },
 );
 

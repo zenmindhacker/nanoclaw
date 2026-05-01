@@ -4,34 +4,39 @@
  */
 import { ChildProcess, spawn } from 'child_process';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 
 import {
   CONTAINER_IMAGE,
   CONTAINER_MAX_OUTPUT_SIZE,
+  CONTAINER_NAME_PREFIX,
   CONTAINER_TIMEOUT,
+  CREDENTIAL_PROXY_PORT,
   DATA_DIR,
   GROUPS_DIR,
   IDLE_TIMEOUT,
-  CREDENTIAL_PROXY_PORT,
+  THREAD_IDLE_TIMEOUT,
   TIMEZONE,
 } from './config.js';
+import { getConversationHistory } from './db.js';
 import { resolveGroupFolderPath, resolveGroupIpcPath } from './group-folder.js';
 import { logger } from './logger.js';
+import { getOutboundContacts } from './outbound-contacts.js';
 import {
   CONTAINER_HOST_GATEWAY,
   CONTAINER_RUNTIME_BIN,
   hostGatewayArgs,
   readonlyMountArgs,
   stopContainer,
-  usingAppleContainer,
 } from './container-runtime.js';
-import { detectAuthMode, readCurrentAccessToken } from './credential-proxy.js';
+import { detectAuthMode } from './credential-proxy.js';
+import { getSecretsForGroup } from './secrets.js';
+import { getAllRegisteredGroups } from './db.js';
 import {
   loadMountAllowlist,
   validateAdditionalMounts,
 } from './mount-security.js';
-import { getSecretsForGroup, MANIFEST_PATH } from './secrets.js';
 import { RegisteredGroup } from './types.js';
 
 // Sentinel markers for robust output parsing (must match agent-runner)
@@ -54,7 +59,6 @@ export interface ContainerOutput {
   result: string | null;
   newSessionId?: string;
   error?: string;
-  missingSecrets?: string[];
 }
 
 interface VolumeMount {
@@ -83,11 +87,16 @@ function buildVolumeMounts(
       readonly: true,
     });
 
-    // NOTE: Ideally we would shadow .env with an empty file so the agent cannot
-    // read orchestrator secrets from the mounted project root. Apple Container
-    // only supports directory-to-directory bind mounts (not file-to-file), so
-    // this shadow is skipped. Secrets are never passed as container env vars —
-    // only the credential proxy exposes them on a per-request basis.
+    // Shadow .env so the agent cannot read secrets from the mounted project root.
+    // Credentials are injected by the credential proxy, never exposed to containers.
+    const envFile = path.join(projectRoot, '.env');
+    if (fs.existsSync(envFile)) {
+      mounts.push({
+        hostPath: '/dev/null',
+        containerPath: '/workspace/project/.env',
+        readonly: true,
+      });
+    }
 
     // Main also gets its group folder as the working directory
     mounts.push({
@@ -95,6 +104,17 @@ function buildVolumeMounts(
       containerPath: '/workspace/group',
       readonly: false,
     });
+
+    // Global directory — shared CLAUDE.md persona + facts.
+    // Read-write for main so it can update shared content (e.g., pending-followups.md).
+    const mainGlobalDir = path.join(GROUPS_DIR, 'global');
+    if (fs.existsSync(mainGlobalDir)) {
+      mounts.push({
+        hostPath: mainGlobalDir,
+        containerPath: '/workspace/global',
+        readonly: false,
+      });
+    }
   } else {
     // Other groups only get their own folder
     mounts.push({
@@ -193,13 +213,22 @@ function buildVolumeMounts(
     'agent-runner-src',
   );
   if (fs.existsSync(agentRunnerSrc)) {
-    const srcIndex = path.join(agentRunnerSrc, 'index.ts');
-    const cachedIndex = path.join(groupAgentRunnerDir, 'index.ts');
+    // Compute newest-mtime across all .ts files on both sides. Comparing only
+    // index.ts would miss edits to siblings like ipc-mcp-stdio.ts, leaving the
+    // cached copy stale after a host-side update.
+    const maxMtime = (dir: string): number => {
+      if (!fs.existsSync(dir)) return 0;
+      let max = 0;
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (!entry.isFile() || !entry.name.endsWith('.ts')) continue;
+        const m = fs.statSync(path.join(dir, entry.name)).mtimeMs;
+        if (m > max) max = m;
+      }
+      return max;
+    };
     const needsCopy =
       !fs.existsSync(groupAgentRunnerDir) ||
-      !fs.existsSync(cachedIndex) ||
-      (fs.existsSync(srcIndex) &&
-        fs.statSync(srcIndex).mtimeMs > fs.statSync(cachedIndex).mtimeMs);
+      maxMtime(agentRunnerSrc) > maxMtime(groupAgentRunnerDir);
     if (needsCopy) {
       fs.cpSync(agentRunnerSrc, groupAgentRunnerDir, { recursive: true });
     }
@@ -209,23 +238,6 @@ function buildVolumeMounts(
     containerPath: '/app/src',
     readonly: false,
   });
-
-  // Secrets manifest (read-only): agents can see what credentials exist without values.
-  // Apple Container only supports directory mounts, so we copy the manifest into a
-  // dedicated staging directory and mount that at a consistent path in all groups.
-  if (fs.existsSync(MANIFEST_PATH)) {
-    const manifestMountDir = path.join(DATA_DIR, 'manifest-mount');
-    fs.mkdirSync(manifestMountDir, { recursive: true });
-    fs.copyFileSync(
-      MANIFEST_PATH,
-      path.join(manifestMountDir, 'secrets-manifest.json'),
-    );
-    mounts.push({
-      hostPath: manifestMountDir,
-      containerPath: '/workspace/secrets-info',
-      readonly: true,
-    });
-  }
 
   // Default mounts from allowlist — applied to ALL groups automatically.
   // This is the single source of truth; per-group additionalMounts in the DB
@@ -275,59 +287,50 @@ function buildVolumeMounts(
 function buildContainerArgs(
   mounts: VolumeMount[],
   containerName: string,
-  isMain: boolean,
-  secretEnv: Record<string, string>,
+  secretEnv: Record<string, string> = {},
 ): string[] {
   const args: string[] = ['run', '-i', '--rm', '--name', containerName];
 
   // Pass host timezone so container's local time matches the user's
   args.push('-e', `TZ=${TIMEZONE}`);
 
-  // Route API traffic through the credential proxy (containers never see real secrets)
-  args.push(
-    '-e',
-    `ANTHROPIC_BASE_URL=http://${CONTAINER_HOST_GATEWAY}:${CREDENTIAL_PROXY_PORT}`,
-  );
+  // Pin the model per $ANTHROPIC_MODEL on the host (falls back to Opus 4.6
+  // for personal-assistant workloads — cheaper on the Max quota than 4.7
+  // and quality delta is negligible for chat/coordination tasks).
+  // To override per-deployment, set ANTHROPIC_MODEL in the host env/.env.
+  // To temporarily test a different model, unset it and the SDK's default
+  // takes over.
+  const model = process.env.ANTHROPIC_MODEL || 'claude-opus-4-6';
+  args.push('-e', `ANTHROPIC_MODEL=${model}`);
 
-  // Inject auth credentials so the container Claude Code CLI can authenticate.
-  // API key mode: any placeholder works — proxy replaces x-api-key on every request.
-  // OAuth mode:   Claude Code validates token format locally before making any
-  //               network request, so we inject the real current token. The proxy
-  //               intercepts requests and refreshes the token when it nears expiry.
+  // Auth: route containers to the right credential source.
   const authMode = detectAuthMode();
   if (authMode === 'api-key') {
+    // API key mode: proxy injects x-api-key on every request.
+    args.push(
+      '-e',
+      `ANTHROPIC_BASE_URL=http://${CONTAINER_HOST_GATEWAY}:${CREDENTIAL_PROXY_PORT}`,
+    );
     args.push('-e', 'ANTHROPIC_API_KEY=placeholder');
-  } else {
-    const oauthToken = readCurrentAccessToken() ?? 'placeholder';
-    args.push('-e', `CLAUDE_CODE_OAUTH_TOKEN=${oauthToken}`);
   }
+  // OAuth credential mount is deferred until after volume mounts (see below)
+  // so the file mount overlays the .claude directory mount.
 
-  // Inject service credentials from Keychain (Linear, OpenAI, etc.)
-  for (const [envVar, value] of Object.entries(secretEnv)) {
-    args.push('-e', `${envVar}=${value}`);
+  // Inject service credentials from manifest (ElevenLabs, OpenAI, etc.)
+  for (const [key, value] of Object.entries(secretEnv)) {
+    args.push('-e', `${key}=${value}`);
   }
 
   // Runtime-specific args for host gateway resolution
   args.push(...hostGatewayArgs());
 
   // Run as host user so bind-mounted files are accessible.
-  // Skip when running as root (uid 0) or when getuid is unavailable (Windows).
+  // Skip when running as root (uid 0), as the container's node user (uid 1000),
+  // or when getuid is unavailable (native Windows without WSL).
   const hostUid = process.getuid?.();
   const hostGid = process.getgid?.();
-  if (hostUid != null && hostUid !== 0) {
-    if (isMain && usingAppleContainer) {
-      // Apple Container main: start as root for mount --bind (Apple Container
-      // only supports directory mounts, not file-to-file). Privileges are
-      // dropped via setpriv in entrypoint.sh.
-      args.push('-e', `RUN_UID=${hostUid}`);
-      args.push('-e', `RUN_GID=${hostGid}`);
-    } else {
-      // Docker or non-main: run as host user directly.
-      // Docker main containers shadow .env via host-side bind mount instead.
-      // Claude Code refuses --dangerously-skip-permissions as root, so we
-      // must not start Docker containers as root.
-      args.push('--user', `${hostUid}:${hostGid}`);
-    }
+  if (hostUid != null && hostUid !== 0 && hostUid !== 1000) {
+    args.push('--user', `${hostUid}:${hostGid}`);
     args.push('-e', 'HOME=/home/node');
   }
 
@@ -339,11 +342,15 @@ function buildContainerArgs(
     }
   }
 
-  // Shadow .env so agents can't read host secrets from the mounted project root.
-  // Docker supports file-to-file bind mounts; Apple Container doesn't (it uses
-  // mount --bind inside the container via the entrypoint instead).
-  if (!usingAppleContainer && isMain) {
-    args.push('-v', '/dev/null:/workspace/project/.env:ro');
+  // OAuth mode: mount real credentials AFTER the .claude directory mount
+  // so the file overlays the session directory. SDK handles auth directly.
+  if (authMode === 'oauth') {
+    const credFile = path.join(os.homedir(), '.claude', '.credentials.json');
+    if (fs.existsSync(credFile)) {
+      args.push('-v', `${credFile}:/home/node/.claude/.credentials.json:ro`);
+    } else {
+      logger.warn('OAuth mode but no ~/.claude/.credentials.json found');
+    }
   }
 
   args.push(CONTAINER_IMAGE);
@@ -356,7 +363,6 @@ export async function runContainerAgent(
   input: ContainerInput,
   onProcess: (proc: ChildProcess, containerName: string) => void,
   onOutput?: (output: ContainerOutput) => Promise<void>,
-  onMissingSecrets?: (missing: string[]) => void,
 ): Promise<ContainerOutput> {
   const startTime = Date.now();
 
@@ -365,27 +371,16 @@ export async function runContainerAgent(
 
   const mounts = buildVolumeMounts(group, input.isMain);
   const safeName = group.folder.replace(/[^a-zA-Z0-9-]/g, '-');
-  const containerName = `nanoclaw-${safeName}-${Date.now()}`;
-
-  // Load secrets for this group from Keychain. Missing secrets are logged inside
-  // getSecretsForGroup; the caller is responsible for notifying the user.
-  const { env: secretEnv, missing: missingSecrets } = getSecretsForGroup(
-    group.folder,
-  );
-  if (missingSecrets.length > 0) {
-    logger.warn(
-      { group: group.name, missing: missingSecrets },
-      'Some Keychain secrets missing — containers will run without them',
-    );
-    onMissingSecrets?.(missingSecrets);
+  const containerName = `${CONTAINER_NAME_PREFIX}-${safeName}-${Date.now()}`;
+  // For thread groups, inherit the parent's secret allowlist — matches how
+  // thread groups already inherit containerConfig and allowedOutboundJids.
+  let parentFolder: string | undefined;
+  if (group.isThreadGroup && group.parentJid) {
+    const allGroups = getAllRegisteredGroups();
+    parentFolder = allGroups[group.parentJid]?.folder;
   }
-
-  const containerArgs = buildContainerArgs(
-    mounts,
-    containerName,
-    input.isMain,
-    secretEnv,
-  );
+  const { env: secretEnv } = getSecretsForGroup(group.folder, parentFolder);
+  const containerArgs = buildContainerArgs(mounts, containerName, secretEnv);
 
   logger.debug(
     {
@@ -510,9 +505,13 @@ export async function runContainerAgent(
     let timedOut = false;
     let hadStreamingOutput = false;
     const configTimeout = group.containerConfig?.timeout || CONTAINER_TIMEOUT;
-    // Grace period: hard timeout must be at least IDLE_TIMEOUT + 30s so the
+    // Grace period: hard timeout must be at least idle timeout + 30s so the
     // graceful _close sentinel has time to trigger before the hard kill fires.
-    const timeoutMs = Math.max(configTimeout, IDLE_TIMEOUT + 30_000);
+    // Thread groups use a shorter idle timeout to reclaim resources faster.
+    const effectiveIdleTimeout = group.isThreadGroup
+      ? THREAD_IDLE_TIMEOUT
+      : IDLE_TIMEOUT;
+    const timeoutMs = Math.max(configTimeout, effectiveIdleTimeout + 30_000);
 
     const killOnTimeout = () => {
       timedOut = true;
@@ -572,8 +571,6 @@ export async function runContainerAgent(
               status: 'success',
               result: null,
               newSessionId,
-              missingSecrets:
-                missingSecrets.length > 0 ? missingSecrets : undefined,
             });
           });
           return;
@@ -692,8 +689,6 @@ export async function runContainerAgent(
             status: 'success',
             result: null,
             newSessionId,
-            missingSecrets:
-              missingSecrets.length > 0 ? missingSecrets : undefined,
           });
         });
         return;
@@ -728,11 +723,7 @@ export async function runContainerAgent(
           'Container completed',
         );
 
-        resolve({
-          ...output,
-          missingSecrets:
-            missingSecrets.length > 0 ? missingSecrets : undefined,
-        });
+        resolve(output);
       } catch (err) {
         logger.error(
           {
@@ -779,8 +770,6 @@ export function writeTasksSnapshot(
     schedule_value: string;
     status: string;
     next_run: string | null;
-    last_run?: string | null;
-    last_result?: string | null;
   }>,
 ): void {
   // Write filtered tasks to the group's IPC directory
@@ -832,4 +821,45 @@ export function writeGroupsSnapshot(
       2,
     ),
   );
+}
+
+/**
+ * Write the global outbound-contacts snapshot into a group's IPC directory
+ * so the agent can discover JIDs it's allowed to DM from any context.
+ * Safe to call on every runAgent — the file is small.
+ */
+export function writeOutboundContactsSnapshot(groupFolder: string): void {
+  const groupIpcDir = resolveGroupIpcPath(groupFolder);
+  fs.mkdirSync(groupIpcDir, { recursive: true });
+
+  const contactsFile = path.join(groupIpcDir, 'outbound_contacts.json');
+  fs.writeFileSync(
+    contactsFile,
+    JSON.stringify(
+      {
+        contacts: getOutboundContacts(),
+        lastSync: new Date().toISOString(),
+      },
+      null,
+      2,
+    ),
+  );
+}
+
+/**
+ * Write full conversation history to the group's IPC directory.
+ * The container's read_conversation_history MCP tool reads this file,
+ * allowing the agent to page back through history when needed.
+ */
+export function writeConversationHistorySnapshot(
+  groupFolder: string,
+  chatJid: string,
+): void {
+  const groupIpcDir = resolveGroupIpcPath(groupFolder);
+  fs.mkdirSync(groupIpcDir, { recursive: true });
+
+  // Write up to 200 messages — enough for deep history lookup
+  const history = getConversationHistory(chatJid, 200);
+  const historyFile = path.join(groupIpcDir, 'conversation_history.json');
+  fs.writeFileSync(historyFile, JSON.stringify(history, null, 2));
 }

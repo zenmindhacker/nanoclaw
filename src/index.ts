@@ -3,22 +3,22 @@ import path from 'path';
 
 import {
   ASSISTANT_NAME,
+  CONTAINER_NAME_PREFIX,
+  CREDENTIAL_PROXY_PORT,
   DEFAULT_TRIGGER,
   getTriggerPattern,
   GROUPS_DIR,
   IDLE_TIMEOUT,
-  CREDENTIAL_PROXY_PORT,
-  OAUTH_CALLBACK_PORT,
   MAX_MESSAGES_PER_PROMPT,
   POLL_INTERVAL,
+  THREAD_IDLE_TIMEOUT,
   TIMEZONE,
 } from './config.js';
-import { startCredentialProxy } from './credential-proxy.js';
 import {
-  startOAuthCallbackServer,
-  stopOAuthCallbackServer,
-} from './oauth-callback.js';
-import { startOAuthRefresher, stopOAuthRefresher } from './oauth-refresher.js';
+  onAuthFailure,
+  startCredentialProxy,
+  startProactiveRefresh,
+} from './credential-proxy.js';
 import './channels/index.js';
 import {
   getChannelFactory,
@@ -27,7 +27,9 @@ import {
 import {
   ContainerOutput,
   runContainerAgent,
+  writeConversationHistorySnapshot,
   writeGroupsSnapshot,
+  writeOutboundContactsSnapshot,
   writeTasksSnapshot,
 } from './container-runner.js';
 import {
@@ -36,25 +38,35 @@ import {
   PROXY_BIND_HOST,
 } from './container-runtime.js';
 import {
+  deleteRegisteredGroup,
   getAllChats,
   getAllRegisteredGroups,
   getAllSessions,
   getAllTasks,
+  getConversationHistory,
   getLastBotMessageTimestamp,
   getMessagesSince,
   getNewMessages,
+  getRecentChannelContext,
   getRouterState,
+  hasActiveTasksForGroup,
   initDatabase,
   setRegisteredGroup,
   setRouterState,
   setSession,
   storeChatMetadata,
   storeMessage,
+  storeMessageDirect,
 } from './db.js';
 import { GroupQueue } from './group-queue.js';
 import { resolveGroupFolderPath } from './group-folder.js';
 import { startIpcWatcher } from './ipc.js';
-import { findChannel, formatMessages, formatOutbound } from './router.js';
+import {
+  findChannel,
+  formatMessages,
+  formatOutbound,
+  formatWithChannelContext,
+} from './router.js';
 import {
   restoreRemoteControl,
   startRemoteControl,
@@ -79,13 +91,8 @@ let registeredGroups: Record<string, RegisteredGroup> = {};
 let lastAgentTimestamp: Record<string, string> = {};
 let messageLoopRunning = false;
 
-// Debounce: only send missing-secrets notification once per process lifetime
-// to avoid flooding the user if every container start is missing creds.
-let missingSecretsNotified = false;
-
 const channels: Channel[] = [];
 const queue = new GroupQueue();
-
 
 function loadState(): void {
   lastTimestamp = getRouterState('last_timestamp') || '';
@@ -168,13 +175,122 @@ function registerGroup(jid: string, group: RegisteredGroup): void {
     }
   }
 
-  // Ensure a corresponding OneCLI agent exists (best-effort, non-blocking)
-
-
   logger.info(
     { jid, name: group.name, folder: group.folder },
     'Group registered',
   );
+}
+
+/**
+ * Auto-create an ephemeral thread group when a thread reply arrives
+ * for a registered channel. The thread group inherits the parent's
+ * config, trigger, and persona but gets its own container and session.
+ */
+function autoCreateThreadGroup(
+  threadJid: string,
+  parentJid: string,
+  threadTs: string,
+): void {
+  if (registeredGroups[threadJid]) {
+    // Group exists but ensure the chats FK entry also exists (may be missing
+    // for groups created before the FK fix was deployed).
+    storeChatMetadata(
+      threadJid,
+      new Date().toISOString(),
+      registeredGroups[threadJid].name,
+      'slack',
+      true,
+    );
+    return;
+  }
+
+  const parentGroup = registeredGroups[parentJid];
+  if (!parentGroup) {
+    logger.warn({ threadJid, parentJid }, 'Thread group: parent not found');
+    return;
+  }
+
+  // Extract channelId from parentJid: "slack:C0APUHPBE5Q" → "C0APUHPBE5Q"
+  const channelId = parentJid.replace(/^slack:/, '');
+
+  // Folder: t-{channelId}-{threadTs with dots replaced by dashes}
+  const folder = `t-${channelId}-${threadTs.replace(/\./g, '-')}`;
+
+  const threadGroup: RegisteredGroup = {
+    name: `thread in ${parentGroup.name}`,
+    folder,
+    trigger: parentGroup.trigger,
+    added_at: new Date().toISOString(),
+    containerConfig: {
+      ...parentGroup.containerConfig,
+      // Thread groups can send messages to the parent channel and to other registered groups
+      allowedOutboundJids: [
+        parentJid,
+        ...(parentGroup.containerConfig?.allowedOutboundJids || []),
+      ],
+    },
+    requiresTrigger: false,
+    isMain: false,
+    isThreadGroup: true,
+    parentJid,
+    threadTs,
+  };
+
+  // Create a chats entry for the thread JID so the messages FK constraint is satisfied
+  storeChatMetadata(
+    threadJid,
+    new Date().toISOString(),
+    `thread in ${parentGroup.name}`,
+    'slack',
+    true,
+  );
+
+  registerGroup(threadJid, threadGroup);
+  logger.info(
+    { threadJid, parentJid, folder, threadTs },
+    'Thread group auto-created',
+  );
+}
+
+/**
+ * Periodically clean up stale thread groups that haven't had activity.
+ * Removes DB entries and in-memory state. Session folders are left for
+ * potential future resume but can be cleaned up separately.
+ */
+function startThreadGroupCleanup(): void {
+  const STALE_MS = 24 * 60 * 60 * 1000; // 24 hours
+  const CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // Check every 5 minutes
+
+  setInterval(() => {
+    const now = Date.now();
+    for (const [jid, group] of Object.entries(registeredGroups)) {
+      if (!group.isThreadGroup) continue;
+
+      const lastMsg = getLastBotMessageTimestamp(jid, ASSISTANT_NAME);
+      const lastActivity = lastMsg
+        ? new Date(lastMsg).getTime()
+        : new Date(group.added_at).getTime();
+
+      if (now - lastActivity > STALE_MS) {
+        // Don't delete groups that have active scheduled tasks
+        if (hasActiveTasksForGroup(jid)) {
+          logger.debug(
+            { jid, folder: group.folder },
+            'Thread group is stale but has active tasks, skipping cleanup',
+          );
+          continue;
+        }
+        delete registeredGroups[jid];
+        deleteRegisteredGroup(jid);
+        // Clean up cursor state
+        delete lastAgentTimestamp[jid];
+        logger.info(
+          { jid, folder: group.folder },
+          'Cleaned up stale thread group',
+        );
+      }
+    }
+  }, CLEANUP_INTERVAL_MS);
 }
 
 /**
@@ -218,6 +334,7 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
 
   const isMainGroup = group.isMain === true;
 
+  // Check for new user messages that need processing (bot messages filtered out)
   const missedMessages = getMessagesSince(
     chatJid,
     getOrRecoverCursor(chatJid),
@@ -239,7 +356,26 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
     if (!hasTrigger) return true;
   }
 
-  const prompt = formatMessages(missedMessages, TIMEZONE);
+  // Build prompt with full conversation history (both user and bot messages).
+  // This makes the agent resilient to SDK session loss — the DB is the source of truth.
+  const conversationHistory = getConversationHistory(
+    chatJid,
+    MAX_MESSAGES_PER_PROMPT,
+  );
+  let prompt: string;
+
+  if (group.isThreadGroup && group.parentJid) {
+    // Thread groups get recent parent channel context so the agent
+    // knows what's being discussed (e.g., "did you see the snyk vulns?")
+    const channelContext = getRecentChannelContext(group.parentJid, 5);
+    prompt = formatWithChannelContext(
+      channelContext,
+      conversationHistory,
+      TIMEZONE,
+    );
+  } else {
+    prompt = formatMessages(conversationHistory, TIMEZONE);
+  }
 
   // Advance cursor so the piping path in startMessageLoop won't re-fetch
   // these messages. Save the old cursor so we can roll back on error.
@@ -253,7 +389,11 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
     'Processing messages',
   );
 
-  // Track idle timer for closing stdin when agent is idle
+  // Track idle timer for closing stdin when agent is idle.
+  // Thread groups use a shorter timeout to reclaim resources faster.
+  const groupIdleTimeout = group.isThreadGroup
+    ? THREAD_IDLE_TIMEOUT
+    : IDLE_TIMEOUT;
   let idleTimer: ReturnType<typeof setTimeout> | null = null;
 
   const resetIdleTimer = () => {
@@ -264,7 +404,7 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
         'Idle timeout, closing container stdin',
       );
       queue.closeStdin(chatJid);
-    }, IDLE_TIMEOUT);
+    }, groupIdleTimeout);
   };
 
   await channel.setTyping?.(chatJid, true);
@@ -272,10 +412,11 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
   let outputSentToUser = false;
 
   const output = await runAgent(group, prompt, chatJid, async (result) => {
+    // Streaming output callback — called for each agent result
     if (result.result) {
-      // Text result — send to user, then immediately clear the typing indicator.
-      // Clearing here (rather than on result: null) ensures the indicator doesn't
-      // stay stuck when thread replies arrive before the idle session marker fires.
+      // Clear typing indicator immediately when first output arrives
+      await channel.setTyping?.(chatJid, false);
+
       const raw =
         typeof result.result === 'string'
           ? result.result
@@ -286,23 +427,22 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
       if (text) {
         await channel.sendMessage(chatJid, text);
         outputSentToUser = true;
+
+        // Store bot response in DB so conversation history includes both sides.
+        // This makes thread context durable — not dependent on SDK session alone.
+        storeMessageDirect({
+          id: `bot-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          chat_jid: chatJid,
+          sender: ASSISTANT_NAME,
+          sender_name: ASSISTANT_NAME,
+          content: text,
+          timestamp: new Date().toISOString(),
+          is_from_me: true,
+          is_bot_message: true,
+        });
       }
-      channel
-        .setTyping?.(chatJid, false)
-        ?.catch((err) =>
-          logger.warn({ chatJid, err }, 'Failed to clear typing indicator'),
-        );
       // Only reset idle timer on actual results, not session-update markers (result: null)
       resetIdleTimer();
-    } else {
-      // result: null is the session-update marker — agent is idle between turns.
-      // Typing indicator was already cleared on text result above; this is a no-op
-      // in the normal case but handles edge cases (e.g. agent sends no text).
-      channel
-        .setTyping?.(chatJid, false)
-        ?.catch((err) =>
-          logger.warn({ chatJid, err }, 'Failed to clear typing indicator'),
-        );
     }
 
     if (result.status === 'success') {
@@ -314,7 +454,6 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
     }
   });
 
-  // Also clear if container exits without ever sending a result (e.g. error)
   await channel.setTyping?.(chatJid, false);
   if (idleTimer) clearTimeout(idleTimer);
 
@@ -376,6 +515,13 @@ async function runAgent(
     new Set(Object.keys(registeredGroups)),
   );
 
+  // Write conversation history snapshot so the agent can page back with read_conversation_history
+  writeConversationHistorySnapshot(group.folder, chatJid);
+
+  // Write global outbound-contacts snapshot so the agent knows which JIDs
+  // it's allowed to DM from any context (e.g. operator's personal DM).
+  writeOutboundContactsSnapshot(group.folder);
+
   // Wrap onOutput to track session ID from streamed results
   const wrappedOnOutput = onOutput
     ? async (output: ContainerOutput) => {
@@ -401,27 +547,6 @@ async function runAgent(
       (proc, containerName) =>
         queue.registerProcess(chatJid, proc, containerName, group.folder),
       wrappedOnOutput,
-      (missing) => {
-        if (missingSecretsNotified) return;
-        missingSecretsNotified = true;
-        // Notify main group that Keychain secrets are missing
-        const mainEntry = Object.entries(registeredGroups).find(
-          ([, g]) => g.isMain,
-        );
-        if (!mainEntry) return;
-        const [mainJid] = mainEntry;
-        const mainChannel = findChannel(channels, mainJid);
-        if (!mainChannel) return;
-        const names = missing.join(', ');
-        mainChannel
-          .sendMessage(
-            mainJid,
-            `⚠️ *Keychain secrets missing or locked*\n\nThe following credentials are not available: \`${names}\`\n\nRun \`npm run secrets status\` to check, or unlock your Keychain. Agents will run without these credentials until they are available.`,
-          )
-          .catch((err) =>
-            logger.warn({ err }, 'Failed to send missing-secrets notification'),
-          );
-      },
     );
 
     if (output.newSessionId) {
@@ -508,8 +633,16 @@ async function startMessageLoop(): Promise<void> {
             if (!hasTrigger) continue;
           }
 
-          // Pull all messages since lastAgentTimestamp so non-trigger
-          // context that accumulated between triggers is included.
+          // Include recent conversation history (both sides) so the agent
+          // has context even if the SDK session was lost or compacted.
+          // This is the safety net — the SDK session is the primary context,
+          // but the DB history makes piped messages self-contained.
+          const recentHistory = getConversationHistory(chatJid, 20);
+          const formatted = formatMessages(
+            recentHistory.length > 0 ? recentHistory : groupMessages,
+            TIMEZONE,
+          );
+          // Track cursor using the latest new user message
           const allPending = getMessagesSince(
             chatJid,
             getOrRecoverCursor(chatJid),
@@ -518,7 +651,6 @@ async function startMessageLoop(): Promise<void> {
           );
           const messagesToSend =
             allPending.length > 0 ? allPending : groupMessages;
-          const formatted = formatMessages(messagesToSend, TIMEZONE);
 
           if (queue.sendMessage(chatJid, formatted)) {
             logger.debug(
@@ -571,7 +703,7 @@ function recoverPendingMessages(): void {
 
 function ensureContainerSystemRunning(): void {
   ensureContainerRuntimeRunning();
-  cleanupOrphans();
+  cleanupOrphans(CONTAINER_NAME_PREFIX);
 }
 
 async function main(): Promise<void> {
@@ -579,42 +711,20 @@ async function main(): Promise<void> {
   initDatabase();
   logger.info('Database initialized');
   loadState();
-
-  // Ensure OneCLI agents exist for all registered groups.
-  // Recovers from missed creates (e.g. OneCLI was down at registration time).
-  for (const [jid, group] of Object.entries(registeredGroups)) {
-  
-  }
-
   restoreRemoteControl();
 
-  // Start OAuth token refresher (keeps all service tokens fresh)
-  const SYSOPS_JID = 'slack:C07F195GB96';
-  const alertToSysops = (msg: string) => {
-    const ch = findChannel(channels, SYSOPS_JID);
-    if (ch) ch.sendMessage(SYSOPS_JID, msg).catch(() => {});
-  };
-  // Start credential proxy (injects Anthropic auth into container API requests)
+  // Start credential proxy (containers route API calls through this)
   const proxyServer = await startCredentialProxy(
     CREDENTIAL_PROXY_PORT,
     PROXY_BIND_HOST,
   );
-
-  startOAuthRefresher({ onAlert: alertToSysops });
-
-  // Start OAuth callback server (browser-based re-auth at cleo.cognitivetech.net)
-  const oauthCallbackServer = await startOAuthCallbackServer(
-    OAUTH_CALLBACK_PORT,
-    { onAlert: alertToSysops },
-  );
+  // Keep OAuth tokens fresh even when no requests are coming in
+  startProactiveRefresh();
 
   // Graceful shutdown handlers
   const shutdown = async (signal: string) => {
     logger.info({ signal }, 'Shutdown signal received');
-    stopOAuthRefresher();
-    stopOAuthCallbackServer();
     proxyServer.close();
-    oauthCallbackServer.close();
     await queue.shutdown(10000);
     for (const ch of channels) await ch.disconnect();
     process.exit(0);
@@ -702,6 +812,8 @@ async function main(): Promise<void> {
       isGroup?: boolean,
     ) => storeChatMetadata(chatJid, timestamp, name, channel, isGroup),
     registeredGroups: () => registeredGroups,
+    onThreadGroup: (threadJid: string, parentJid: string, threadTs: string) =>
+      autoCreateThreadGroup(threadJid, parentJid, threadTs),
   };
 
   // Create and connect all registered channels.
@@ -739,24 +851,22 @@ async function main(): Promise<void> {
         return;
       }
       const text = formatOutbound(rawText);
-      // Scheduled task output posts at channel level, not in stale threads.
-      if (text) await channel.sendMessage(jid, text, { noThread: true });
+      if (text) await channel.sendMessage(jid, text);
     },
   });
   startIpcWatcher({
     sendMessage: (jid, text, opts) => {
       const channel = findChannel(channels, jid);
       if (!channel) throw new Error(`No channel for JID: ${jid}`);
-      // Same-group IPC messages inherit active thread context so agent
-      // acknowledgments land in the user's thread. Cross-group messages
-      // use noThread to avoid hijacking unrelated threads.
       return channel.sendMessage(jid, text, opts);
     },
-    sendMedia: async (jid, filePath, filename) => {
+    sendMedia: (jid, filePath, filename) => {
       const channel = findChannel(channels, jid);
       if (!channel) throw new Error(`No channel for JID: ${jid}`);
-      if (!channel.sendMedia)
-        throw new Error(`Channel does not support media for JID: ${jid}`);
+      if (!channel.sendMedia) {
+        logger.warn({ jid }, 'Channel does not support sendMedia');
+        return Promise.resolve();
+      }
       return channel.sendMedia(jid, filePath, filename);
     },
     registeredGroups: () => registeredGroups,
@@ -790,6 +900,22 @@ async function main(): Promise<void> {
   });
   queue.setProcessMessagesFn(processGroupMessages);
   recoverPendingMessages();
+  startThreadGroupCleanup();
+
+  // Notify user via Slack DM when Claude OAuth auth fails
+  onAuthFailure((msg) => {
+    const mainJid = Object.entries(registeredGroups).find(
+      ([_, g]) => g.isMain,
+    )?.[0];
+    if (!mainJid) return;
+    const channel = findChannel(channels, mainJid);
+    channel
+      ?.sendMessage(mainJid, msg)
+      .catch((err) =>
+        logger.warn({ err }, 'Failed to send auth failure notification'),
+      );
+  });
+
   startMessageLoop().catch((err) => {
     logger.fatal({ err }, 'Message loop crashed unexpectedly');
     process.exit(1);

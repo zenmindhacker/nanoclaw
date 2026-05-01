@@ -288,7 +288,7 @@ export async function createDraftInvoice(contactName, lineItems, description, mo
     reference: description,
     status: 'DRAFT',
     type: 'ACCREC',  // Accounts Receivable (invoice to client)
-    lineAmountTypes: taxInclusive ? 'INCLUSIVE' : 'EXCLUSIVE'
+    lineAmountTypes: taxInclusive ? 'Inclusive' : 'Exclusive'
   };
   
   const response = await client.accountingApi.createInvoices(tenantId, {

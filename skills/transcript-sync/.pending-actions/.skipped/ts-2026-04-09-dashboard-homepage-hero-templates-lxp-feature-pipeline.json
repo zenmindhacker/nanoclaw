@@ -1,0 +1,62 @@
+{
+  "id": "ts-2026-04-09-dashboard-homepage-hero-templates-lxp-feature-pipeline",
+  "meetingTitle": "Dashboard/Homepage: Hero Templates, LXP & Feature Pipeline",
+  "meetingDate": "2026-04-09",
+  "org": "ctci",
+  "sourceRel": "2026-04-09-questions-for-tanium.md",
+  "targetDir": "/workspace/extra/github/nvs/nvs-docs/transcripts",
+  "transcriptPath": "/workspace/extra/github/nvs/nvs-docs/transcripts/2026-04-09-questions-for-tanium.md",
+  "lineageTag": "meeting:Dashboard/Homepage: Hero Templates, LXP & Feature |date:2026-04-09",
+  "actions": [
+    {
+      "title": "Add dashboard work items to Linear",
+      "context": "**Background**: Rustam has been working on several dashboard-related tasks including design-to-dev migration, content sync updates, and backend hero structure. When presenting his progress, Cian asked whether this work was tracked in Linear.\n\n**Discussion**: Rustam confirmed the work is not yet in Linear: *\"Not yet, I believe. Yeah, mostly the... Let me share. The Circle 5 was about dashboard on my site.\"* He then walked through three focus areas: design-to-dev dashboard migration, content sync adjustments (updating the GANSI content repository), and backend hero component architecture.\n\n**Decision/Direction**: Cian's question implied an expectation that active work should be tracked in Linear. No explicit deadline was set, but the implication was clear that this should be done promptly.\n\n**Next steps**: Create Linear tickets covering the current dashboard workstreams — hero component pipeline, content sync updates, and design-to-dev migration — so the team has visibility into progress and scope.",
+      "assignee": "rustam.akimov@newvaluegroup.com",
+      "priority": "high",
+      "project": "Cognitive Tech",
+      "index": 16
+    },
+    {
+      "title": "Deploy dashboard frontend to devgancy",
+      "context": "**Background**: Rustam has been migrating the dashboard/homepage design from Figma to the development environment, including hero components, top picks, category sections, and a new mobile view. The links and navigation within the dashboard were not yet live.\n\n**Discussion**: Rustam demonstrated the current state of the dashboard, noting: *\"I didn't deploy it yet, will deploy it today, so links should be working too.\"* The team noticed some UI issues — titles on project cards were too long, there was double-wording on some labels, and the hard/soft skill tags were taking too much space. Mernell was noted as already catching these issues.\n\n**Decision/Direction**: Rustam committed to deploying the current version today (April 9), with the understanding that fine-tuning of UI details (title lengths, category naming, skill tag display) would be discussed in the Monday review meeting.\n\n**Next steps**: Deploy the current dashboard build to devgancy.com so the team can interact with it and prepare feedback for the Monday review session.",
+      "assignee": "rustam.akimov@newvaluegroup.com",
+      "priority": "high",
+      "project": "Cognitive Tech",
+      "index": 17
+    },
+    {
+      "title": "Create design decision document for hero pipeline",
+      "context": "**Background**: Rustam proposed a new backend architecture for the dashboard hero component that introduces a separate \"dashboard hero\" data structure layered on top of the existing project template model. This enables marketing overrides, scheduled featuring, display ordering, and derived fields like LXP calculations — all without modifying the core project template.\n\n**Discussion**: Rustam walked through the pipeline concept in detail: project templates serve as the base data source, a new hero structure allows overriding title, description, and images for dashboard display, and a \"derivation layer\" fills gaps by computing values (e.g., LXP from difficulty and duration). He explained the blob storage proposal using Vercel Blob (already used for voice storage) with three environments (development, preview, production) to avoid polluting prod during testing. Cian validated the approach: *\"If I'm hearing you correctly, this would give us the flexibility to pick certain projects to feature for a certain period of time in a certain order with additional images overrided by like some marketing campaign... Definitely demonstrates that you're thinking outside of the box and outside of the dev sort of channel. This is really good, man.\"*\n\n**Decision/Direction**: The team was positive about the approach. Rustam offered to formalize it: *\"I will try to create a design decision document from that and I will maybe send it.\"*\n\n**Next steps**: Write up the design decision document covering the hero pipeline architecture (template → hero model → derivation layer), the Vercel Blob storage strategy with environment separation, and the LXP calculation proposal. Share with team before the Monday review.",
+      "assignee": "rustam.akimov@newvaluegroup.com",
+      "priority": "high",
+      "project": "Cognitive Tech",
+      "index": 18
+    },
+    {
+      "title": "Schedule Monday review of dashboard functionality",
+      "context": "**Background**: Rustam has made significant progress on the dashboard/homepage — hero components, top picks, categories, mobile view, and backend architecture — but the broader team hasn't had a structured walkthrough of all the pieces together. Several UI concerns were raised during this call (title lengths, skill tag display, desktop scroll vs. drag interaction, category naming).\n\n**Discussion**: One of the speakers (likely Mauro) proposed a focused review session: *\"I was thinking that at some point, and maybe that point is as early as this week, we should, either the three of us or maybe the four of us... see a schedule, okay maybe on Monday next week.\"* The idea is to walk through the functionality piece by piece, with Mauro and Rustam preparing a structured presentation. The speaker noted: *\"you and I can prepare a service presentation where we walk through, how we're saying, piece by piece, the functionality, but if you want to have a question, plus they end up always stopping to discuss.\"*\n\n**Decision/Direction**: The team agreed on Monday (April 13, 2026) for the review meeting. Fine-tuning of UI details was explicitly deferred to this session.\n\n**Next steps**: Schedule the review meeting for Monday. Prepare a piece-by-piece walkthrough of dashboard functionality. Identify gaps and alignment issues before the session.",
+      "assignee": "cian@cognitivetech.net",
+      "priority": "high",
+      "project": "Cognitive Tech",
+      "index": 19
+    },
+    {
+      "title": "Scope out project search bar feature",
+      "context": "**Background**: The dashboard/homepage is taking shape with hero components, top picks, and categories, but a basic search capability for browsing the project catalog has not yet been addressed.\n\n**Discussion**: One of the speakers raised this as a sidebar during the dashboard review: *\"Something that Marnell and I were discussing the other day — it's a feature that probably is going to come up and we may have forgotten, which is a basic search bar for projects. We're going to see all the projects that correspond to that. Maybe I know that there's different types of searches. So we can send that to you to explore that. But that is something that we probably keep plugging. If we need to scope it out, just to see kind of how that the plugin will work.\"*\n\n**Decision/Direction**: No decision was made — this was flagged as a feature that keeps getting deferred and needs to be scoped. The speaker acknowledged there are different types of search to consider.\n\n**Next steps**: Create a scoping ticket for the project search bar feature. Investigate search approaches (different types of search mentioned) and estimate effort. This can be discussed further in the Monday review or a follow-up session.",
+      "assignee": "cian@cognitivetech.net",
+      "priority": "medium",
+      "project": "Cognitive Tech",
+      "index": 20
+    },
+    {
+      "title": "Resolve desktop hero scroll vs drag UX",
+      "context": "**Background**: Rustam implemented a mobile-responsive view for the hero section of the dashboard. On mobile, the hero cards support touch-based swiping. He extended this interaction pattern to desktop but was uncertain whether it was the right approach.\n\n**Discussion**: Rustam explained: *\"For desktop, actually, I did the same, but I'm not sure if it's the right way. Like whenever you click, you have this icon which is like grab the hand and you are able to move it. But maybe we might discuss with Mernell whether it is intuitive to move those things in the desktop or it's better to have maybe a scroller. I checked the scroller — it doesn't look good, the great design becomes more polluted.\"* He decided to ship the drag approach for now and revisit it.\n\n**Decision/Direction**: No final decision. Rustam implemented drag-to-scroll as a temporary solution, noting the traditional scrollbar looked worse. This needs a UX review with Mernell.\n\n**Next steps**: Discuss with Mernell (designer) whether the desktop hero section should use drag-to-scroll, arrow navigation, or another pattern. Can be addressed in the Monday review meeting.",
+      "assignee": "rustam.akimov@newvaluegroup.com",
+      "priority": "medium",
+      "project": "Cognitive Tech",
+      "index": 21
+    }
+  ],
+  "createdAt": "2026-04-17T19:47:28.015Z",
+  "status": "pending"
+}

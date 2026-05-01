@@ -1,135 +1,168 @@
 /**
- * Secrets management — reads from environment variables.
+ * Secrets management — dual-source credential loading.
  *
- * All non-Slack credentials are loaded from process.env (set via .env / systemd).
- * The manifest at data/secrets-manifest.json maps secret names to env var names.
- * Agents receive secrets as injected env vars — they never access the host env directly.
+ * Credentials come from two sources, merged at container spawn time:
  *
- * Slack tokens stay in .env — they are the comms channel and load at process start.
+ * 1. **Manifest + process.env** — keys listed in data/secrets-manifest.json,
+ *    values from process.env (set via .env / systemd EnvironmentFile).
+ *    Managed by the host admin.
+ *
+ * 2. **Credential files** — agents write JSON files to the credentials
+ *    directory (~/.config/nanoclaw/credentials/services/). A registry file
+ *    (credentials.json) maps env var names to values. Agents have full
+ *    lifecycle control: add, update, remove.
+ *
+ * File-based credentials take precedence over manifest-based ones,
+ * so agents can override host-level defaults.
  */
-
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
-
 import { DATA_DIR } from './config.js';
 import { logger } from './logger.js';
+import { loadMountAllowlist } from './mount-security.js';
 
-export const KEYCHAIN_SERVICE = 'nanoclaw-secrets';
 export const MANIFEST_PATH = path.join(DATA_DIR, 'secrets-manifest.json');
 
-export interface SecretEntry {
+// The credential registry filename agents write to
+const CREDENTIAL_REGISTRY_FILE = 'credentials.json';
+
+interface SecretEntry {
   name: string;
   description: string;
   env_var: string;
-  /** Group folder names that receive this secret, or ['*'] for all groups. */
   groups: string[];
-  /** static/oauth: env var injected into containers. file: credential file, mounted. */
-  type: 'static' | 'oauth' | 'file';
-  /** For type=file: absolute path to the credential file (~ expanded). */
+  type: 'static' | 'file';
   file_path?: string;
 }
 
 interface SecretsManifest {
   version: number;
-  keychain_service: string;
   secrets: SecretEntry[];
 }
 
-// Build name→env_var lookup from manifest (loaded once).
-let envVarMap: Map<string, string> | null = null;
-
-function getEnvVarMap(): Map<string, string> {
-  if (envVarMap) return envVarMap;
+/**
+ * Read the secrets manifest (metadata only — no secret values).
+ * Returns null if the manifest doesn't exist.
+ */
+export function loadManifest(): SecretsManifest | null {
   try {
-    const manifest = loadManifest();
-    envVarMap = new Map(
-      manifest.secrets
-        .filter((s) => s.type !== 'file')
-        .map((s) => [s.name, s.env_var]),
-    );
+    const raw = fs.readFileSync(MANIFEST_PATH, 'utf-8');
+    return JSON.parse(raw);
   } catch {
-    envVarMap = new Map();
+    return null;
   }
-  return envVarMap;
-}
-
-/** Read the secrets manifest (no values — metadata only). */
-export function loadManifest(): SecretsManifest {
-  const raw = fs.readFileSync(MANIFEST_PATH, 'utf-8');
-  return JSON.parse(raw) as SecretsManifest;
 }
 
 /**
- * Read a single secret by name.
- * Looks up the env var name from the manifest, reads from process.env.
+ * Resolve the host-side credentials directory path.
+ * Reads mount-allowlist.json to find the "credentials" default mount.
  */
-export function getSecret(name: string): string | null {
-  const map = getEnvVarMap();
-  const envVar = map.get(name);
-  if (!envVar) return null;
-  return process.env[envVar] || null;
+function resolveCredentialsDir(): string | null {
+  try {
+    const allowlist = loadMountAllowlist();
+    if (!allowlist?.defaultMounts) return null;
+
+    const credMount = allowlist.defaultMounts.find(
+      (dm) => dm.containerName === 'credentials',
+    );
+    if (!credMount) return null;
+
+    const mountPath = credMount.path.startsWith('~')
+      ? path.join(os.homedir(), credMount.path.slice(1))
+      : credMount.path;
+
+    return fs.existsSync(mountPath) ? mountPath : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Read agent-managed credential registry from the credentials directory.
+ * Returns env var → value pairs from credentials.json.
+ */
+function readCredentialRegistry(): Record<string, string> {
+  const credDir = resolveCredentialsDir();
+  if (!credDir) return {};
+
+  const registryPath = path.join(credDir, CREDENTIAL_REGISTRY_FILE);
+  try {
+    const raw = fs.readFileSync(registryPath, 'utf-8');
+    const parsed = JSON.parse(raw);
+
+    // Validate: must be a flat object of string → string
+    if (typeof parsed !== 'object' || parsed === null) return {};
+    const result: Record<string, string> = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      if (typeof value === 'string' && value.length > 0) {
+        result[key] = value;
+      }
+    }
+    return result;
+  } catch {
+    // File doesn't exist or invalid JSON — fine, no agent-managed creds
+    return {};
+  }
 }
 
 /**
  * Return all secrets for a given group as { ENV_VAR: value } pairs.
- * Secrets missing from env are omitted (with a warning).
- * Call this at container startup to build the env injection map.
+ *
+ * Merges two sources:
+ * 1. Manifest entries matched to this group, values from process.env
+ * 2. Agent-managed credentials.json (takes precedence)
  */
-export function getSecretsForGroup(groupFolder: string): {
+export function getSecretsForGroup(
+  groupFolder: string,
+  inheritFromFolder?: string,
+): {
   env: Record<string, string>;
   missing: string[];
 } {
-  let manifest: SecretsManifest;
-  try {
-    manifest = loadManifest();
-  } catch (err) {
-    logger.warn({ err }, 'Could not load secrets manifest');
-    return { env: {}, missing: [] };
-  }
-
   const env: Record<string, string> = {};
   const missing: string[] = [];
 
-  for (const entry of manifest.secrets) {
-    // File-type credentials are handled by container mounts, not env injection
-    if (entry.type === 'file') continue;
+  // Source 1: manifest-based secrets from process.env.
+  // Thread groups inherit their parent's secret allowlist via
+  // inheritFromFolder so they get the same env as the parent group's
+  // containers.
+  const manifest = loadManifest();
+  if (manifest) {
+    for (const entry of manifest.secrets) {
+      if (entry.type === 'file') continue;
 
-    const applies =
-      entry.groups.includes('*') || entry.groups.includes(groupFolder);
-    if (!applies) continue;
+      const applies =
+        entry.groups.includes('*') ||
+        entry.groups.includes(groupFolder) ||
+        (inheritFromFolder !== undefined &&
+          entry.groups.includes(inheritFromFolder));
+      if (!applies) continue;
 
-    const value = process.env[entry.env_var];
-    if (value) {
-      env[entry.env_var] = value;
-    } else {
-      missing.push(entry.name);
+      const value = process.env[entry.env_var];
+      if (value) {
+        env[entry.env_var] = value;
+      } else {
+        missing.push(entry.name);
+      }
     }
+  }
+
+  // Source 2: agent-managed credential registry (overrides manifest)
+  const agentCreds = readCredentialRegistry();
+  for (const [key, value] of Object.entries(agentCreds)) {
+    env[key] = value;
+    // If this key was in the missing list, remove it — agent provided it
+    const idx = missing.indexOf(key);
+    if (idx !== -1) missing.splice(idx, 1);
   }
 
   if (missing.length > 0) {
     logger.warn(
       { groupFolder, missing },
-      'Some secrets not found in environment — check .env file',
+      'Some secrets not found — check .env or credentials.json',
     );
   }
 
   return { env, missing };
-}
-
-/**
- * Return a list of all secrets with their availability status.
- * Used by the CLI and for diagnostics.
- */
-export function listSecrets(): Array<SecretEntry & { stored: boolean }> {
-  let manifest: SecretsManifest;
-  try {
-    manifest = loadManifest();
-  } catch {
-    return [];
-  }
-
-  return manifest.secrets.map((entry) => ({
-    ...entry,
-    stored: entry.type === 'file' ? true : !!process.env[entry.env_var],
-  }));
 }

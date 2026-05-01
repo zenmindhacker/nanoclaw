@@ -3,8 +3,6 @@
  */
 
 export interface State {
-  lastConvIdx: number;
-  lastGanttsyWorkspaceModifiedTime: string | null;
   skippedConvs?: number[];
   skippedGanttsyWorkspaceIds?: string[];
 }
@@ -137,7 +135,7 @@ export interface PendingMeeting {
 
 export interface Args {
   limit: number;
-  sinceDays: number | null;
+  sinceDays: number;
   shadowOnly: boolean;
   ganttsyWorkspaceOnly: boolean;
   dryRun: boolean;

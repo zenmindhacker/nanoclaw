@@ -1,0 +1,30 @@
+{
+  "id": "ts-2026-03-20-ahpl-intro-discuss-implementation-use-case-schedule",
+  "meetingTitle": "AHPL intro: discuss implementation use case & schedule",
+  "meetingDate": "2026-03-20",
+  "org": "ctci",
+  "sourceRel": "2026-03-20-busy.md",
+  "targetDir": "/workspace/extra/github/personal/transcripts",
+  "transcriptPath": "/workspace/extra/github/personal/transcripts/2026-03-20-busy.md",
+  "lineageTag": "meeting:AHPL intro: discuss implementation use case & sche|date:2026-03-20",
+  "actions": [
+    {
+      "title": "Email AHPL details and documents to Cian",
+      "context": "**Background**: A company called AHPL (described as possibly an engineering/civil works company) had previously been sent a blueprint request by the team. AHPL declined the blueprint approach, saying they instead want to speak directly with Cian to discuss putting an actual use case into place — they want a concrete concept implemented rather than a blueprint engagement.\n\n**Discussion**: The speaker (Rustam) explained that they had tried to schedule this meeting multiple times. They sent AHPL available times three times, checking Cian's calendar, but the \"Blue Equinox guys\" likely never followed up with AHPL. Yesterday, Rustam received an email from AHPL saying they're still interested and asking when Cian is available. Rustam wanted to check with Cian first before scheduling, since he wasn't sure how busy Cian's schedule is.\n\nCian asked whether this was the in-person half-day engagement, but Rustam clarified it's a different one — AHPL wants Cian to look at their company and \"actually just put something in place.\" When Cian asked if they're ready to sign an engagement, Rustam said: \"I wouldn't say they're ready to sign an engagement, but they definitely are looking to find out from you a little bit better as to how you can help them do this.\"\n\n**Decision/Direction**: Cian asked Rustam to email him details — specifically the document that was previously sent to AHPL and relevant emails — so he can review before the meeting.\n\n**Next steps**: Rustam needs to send Cian the original document sent to AHPL plus relevant email correspondence. This should happen promptly so Cian can review and then provide available time slots.",
+      "assignee": "rustam.akimov@newvaluegroup.com",
+      "priority": "high",
+      "project": "Cognitive Tech",
+      "index": 8
+    },
+    {
+      "title": "Review AHPL docs and send available meeting slots",
+      "context": "**Background**: AHPL is an engineering/civil works company that wants to discuss a concrete AI implementation use case with Cian. They previously declined a blueprint engagement and instead want Cian to look at their operations and put an actual concept in place. Despite multiple scheduling attempts, a meeting has never been set up due to communication gaps.\n\n**Discussion**: Rustam asked if his scheduling link is still valid and whether he could just book time, or if Cian has a preferred time next week. Cian responded that his calendar is \"really crazy next week\" and said he'd need to look at his schedule first and then provide specific available slots. Cian said: \"I'm going to have to look, like line some things up first and then give you some slots.\"\n\n**Decision/Direction**: Cian will review the AHPL documents once Rustam sends them, then come back with available time slots for the meeting. Rustam will then forward the slots to AHPL.\n\n**Next steps**: Once Cian receives the AHPL documents and emails from Rustam, he needs to (1) review the materials to understand AHPL's needs, and (2) identify available meeting slots in his schedule for next week and send them to Rustam, who will coordinate with AHPL.",
+      "assignee": "cian@cognitivetech.net",
+      "priority": "high",
+      "project": "Cognitive Tech",
+      "index": 9
+    }
+  ],
+  "createdAt": "2026-04-17T19:44:57.114Z",
+  "status": "pending"
+}

@@ -1,5 +1,5 @@
 #!/bin/bash
-# sync-messages.sh - Pull last 24h messages from all platforms, output JSON for agent processing
+# sync-messages.sh - Pull messages since last sync from all platforms, output JSON for agent processing
 # Usage: sync-messages.sh [--since HOURS]
 # Output: JSON with new_contacts, field_updates, errors
 
@@ -9,10 +9,19 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_DIR="$SCRIPT_DIR/../config"
 BEEPER_TOKEN=$(cat /workspace/extra/credentials/beeper)
 ATTIO_WRAPPER=/workspace/extra/skills/attio/scripts/attio-wrapper.sh
+STATE_FILE="$SCRIPT_DIR/../.last-sync-time"
 
-# Default: last 24 hours
-HOURS=${1:-24}
-SINCE=$(date -v-${HOURS}H -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -d "$HOURS hours ago" -u +%Y-%m-%dT%H:%M:%SZ)
+# Use last sync time if available, otherwise fall back to --since HOURS (default 24)
+if [ -f "$STATE_FILE" ] && [ -z "$1" ]; then
+  SINCE=$(cat "$STATE_FILE")
+  echo "Resuming from last sync: $SINCE" >&2
+else
+  HOURS=${1:-24}
+  SINCE=$(date -v-${HOURS}H -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -d "$HOURS hours ago" -u +%Y-%m-%dT%H:%M:%SZ)
+fi
+
+# Record this run's start time so next run picks up from here
+date -u +%Y-%m-%dT%H:%M:%SZ > "$STATE_FILE"
 
 # Output arrays
 NEW_CONTACTS=()

@@ -1,0 +1,54 @@
+{
+  "id": "ts-2026-04-14-content-generation-pipeline-convert-python-app-and-deploy-to-prod",
+  "meetingTitle": "Content-generation pipeline: convert Python app and deploy to prod",
+  "meetingDate": "2026-04-14",
+  "org": "ctci",
+  "sourceRel": "2026-04-14-bc-investments-tanium-ai.md",
+  "targetDir": "/workspace/extra/github/nvs/nvs-docs/transcripts",
+  "transcriptPath": "/workspace/extra/github/nvs/nvs-docs/transcripts/2026-04-14-bc-investments-tanium-ai.md",
+  "lineageTag": "meeting:Content-generation pipeline: convert Python app an|date:2026-04-14",
+  "actions": [
+    {
+      "title": "Convert content-generation app from Python to Node.js",
+      "context": "**Background**: The team has a content-generation pipeline and GUI built in Python (~309 lines) that manages AI image generation for project categories. It was built from scratch with Claude and includes features like style extraction, color palette management, batch image generation across multiple AI models (Black Forest Labs, OpenRouter), and automatic project context pulling from directory structures. The app needs to move from a local development tool to a shared production deployment.\n\n**Discussion**: Cian initially suggested deploying the Python app on Render (~$7/month) since Vercel is Node-based. The Speaker offered to convert it to Node.js, noting they've been learning Node for a personal project and are comfortable with the React/Next.js ecosystem. Cian confirmed: *\"it's probably not too big of a lift for Claude to rewrite this in Node\"* and noted the app is only 309 lines — *\"real conversion... it's very light work.\"* The Speaker wants to implement additional changes, fixes, and features before converting, then stress-test the converted version.\n\n**Decision/Direction**: The Speaker will finish polishing the app (tweaks, features, fixes) this week, then convert from Python to Node.js targeting Next.js/Vercel. Once converted, the code goes into the Gansi content Git repo under `/app`. Target completion: end of the week of April 20 or start of the week of April 27.\n\n**Next steps**: Complete current feature work and style extractor tweaks → convert to Node.js → run stress tests → place converted code in `/app` directory of the Gansi content Git repo.",
+      "assignee": "cian@cognitivetech.net",
+      "priority": "high",
+      "project": "Cognitive Tech",
+      "index": 1
+    },
+    {
+      "title": "Deploy content-generation app to Vercel production",
+      "context": "**Background**: Once the content-generation pipeline is converted to Node.js and placed in the Git repo, it needs to be deployed as a production web application so multiple team members (including Bart and others) can access it. The Speaker noted: *\"anyone kind of having access to this would be handy in case someone would take a look or might have an idea to make it better.\"*\n\n**Discussion**: Cian explained the deployment approach: *\"I can see the content and I can actually build it into a container on Vercel that'll redeploy every time you change the code.\"* The app would get a subdomain (e.g., `line.gancy.com` or similar). Cian noted he'd need to *\"augment it a little bit to have it work with the git repo on the remote server\"* since currently it reads/writes to a local directory structure. The team will use their existing Vercel + Neon database stack rather than Supabase, which the Speaker had been using for their personal project.\n\n**Decision/Direction**: Cian will handle the production deployment on Vercel with Neon DB, including adding Git library functions so the app can interact with the remote repo instead of local filesystem. Target: the week of April 27 (week after next).\n\n**Next steps**: Wait for converted Node.js code in `/app` directory → add git integration for remote repo access → deploy to Vercel → set up auto-redeploy on code changes.",
+      "assignee": "cian@cognitivetech.net",
+      "priority": "medium",
+      "project": "Cognitive Tech",
+      "index": 2
+    },
+    {
+      "title": "Add authentication to content-generation app",
+      "context": "**Background**: The content-generation pipeline will be deployed as a public-facing web app that multiple team members need to access. Since it controls API keys for image generation services and interacts with project content, it needs some form of access control.\n\n**Discussion**: Cian asked whether Bart wanted login access, and the Speaker confirmed that having it accessible to multiple people would be beneficial. Cian briefly mentioned adding protection: *\"we'll put some sort of weird password or some sort of our cell protection on it\"* — suggesting either a simple shared password or Vercel's built-in authentication features.\n\n**Decision/Direction**: Some form of auth will be added to the deployed app. The specific mechanism wasn't decided — could be Vercel protection, a simple password gate, or another approach.\n\n**Next steps**: Determine auth approach and implement it as part of the production deployment.",
+      "assignee": "cian@cognitivetech.net",
+      "priority": "medium",
+      "project": "Cognitive Tech",
+      "index": 3
+    },
+    {
+      "title": "Integrate OpenRouter API key for image generators",
+      "context": "**Background**: The content-generation pipeline currently supports Black Forest Labs models for image generation. The Speaker wanted to add support for additional image generators (Gemini, etc.) through OpenRouter and initially thought they needed separate API keys for each provider.\n\n**Discussion**: The Speaker asked about setting up keys for different image generators through OpenRouter. Cian clarified that a single OpenRouter key works for all models: *\"Just put the model company and model name as an attribute, and you can switch through any of the models on OpenRouter with that.\"* He emphasized: *\"You don't need to get new keys for every goddamn company.\"* The Speaker confirmed they'd integrate this approach: *\"I will program that later in today.\"*\n\n**Decision/Direction**: Use a single OpenRouter API key (referred to as \"NameKey\") with model company and model name as attributes to access all available image generation models. The Speaker will add OpenRouter model listing to the app's provider dropdown.\n\n**Next steps**: Integrate the single OpenRouter key into the app → add model listing/selection for all OpenRouter image generators alongside existing Black Forest Labs models.",
+      "assignee": "cian@cognitivetech.net",
+      "priority": "high",
+      "project": "Cognitive Tech",
+      "index": 4
+    },
+    {
+      "title": "Polish style extractor and finalize 12 category styles",
+      "context": "**Background**: The content-generation pipeline includes a style extractor feature that pulls color palettes, mood, lighting, and other style tokens from reference images. These style tokens are then used to guide AI image generation for each project category. The plan is to hard-code finalized styles for all 12 categories.\n\n**Discussion**: The Speaker explained that they and Bart had been testing the style extractor: *\"We tried generating a few based off of the main category colors and stuff, and it didn't turn out great.\"* Bart left notes on the testing results. The Speaker said tweaking the style extractor and overall app polishing would be the primary focus for the current week: *\"this entire week actually is going to be mostly tweaking this thing and working on this thing rather than actual image creations.\"* The style intensity feature allows controlling how prominently category colors appear — subtle backgrounds vs. heavy presence — which can vary between subcategories and main categories.\n\n**Decision/Direction**: The Speaker will spend the week of April 14 refining the style extractor based on Bart's testing notes. Once all 12 categories are finalized, the color palettes and style tokens will be hard-coded for production use.\n\n**Next steps**: Review Bart's testing notes → tweak style extraction logic → test across all 12 categories → hard-code finalized style tokens.",
+      "assignee": "cian@cognitivetech.net",
+      "priority": "high",
+      "project": "Cognitive Tech",
+      "index": 5
+    }
+  ],
+  "createdAt": "2026-04-18T16:31:57.382Z",
+  "status": "pending"
+}

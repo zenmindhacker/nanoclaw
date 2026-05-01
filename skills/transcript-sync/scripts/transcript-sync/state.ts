@@ -10,8 +10,6 @@ import { logInfo, logWarn } from './logger.js';
 import type { State } from './types.js';
 
 const DEFAULT_STATE: State = {
-  lastConvIdx: 0,
-  lastGanttsyWorkspaceModifiedTime: null,
   skippedConvs: [],
   skippedGanttsyWorkspaceIds: [],
 };

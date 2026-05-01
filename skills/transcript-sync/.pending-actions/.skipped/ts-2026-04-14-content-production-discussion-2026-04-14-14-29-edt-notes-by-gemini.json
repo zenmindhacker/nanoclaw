@@ -1,0 +1,54 @@
+{
+  "id": "ts-2026-04-14-content-production-discussion-2026-04-14-14-29-edt-notes-by-gemini",
+  "meetingTitle": "Content Production Discussion - 2026/04/14 14:29 EDT - Notes by Gemini",
+  "meetingDate": "2026-04-14",
+  "org": "ganttsy",
+  "sourceRel": "ganttsy-strategy/transcripts/2026-04-14-content-production-discussion.md",
+  "targetDir": "/workspace/extra/github/ganttsy/ganttsy-strategy/transcripts",
+  "transcriptPath": "/workspace/extra/github/ganttsy/ganttsy-strategy/transcripts/2026-04-14-content-production-discussion.md",
+  "lineageTag": "meeting:Content Production Discussion - 2026/04/14 14:29 E|date:2026-04-14",
+  "actions": [
+    {
+      "title": "Integrate Open Router key into content app",
+      "context": "**Background**: The content generation pipeline Aby built supports multiple image generation models (Black Forest Labs, etc.). To access additional models through Open Router, the application needs an Open Router API key integrated. Currently the app only has Black Forest Labs configured.\n\n**Discussion**: Cian clarified that Open Router uses a single API key for all models — you just specify the company and model name as attributes. Aby was initially under the impression they'd need separate keys for each image generator. Cian explained: *\"Open Router is just like you just put the model company and model name as an attribute and you can switch through any of the models on Open Router without needing a new key.\"* Aby confirmed they'd add another key entry in the UI for Open Router and have it synchronize to display a list of all available image generators.\n\n**Decision/Direction**: Aby will integrate the Open Router key into the application, adding it as a provider option alongside Black Forest Labs so they can bounce between all available models.\n\n**Next steps**: Program the Open Router integration today (2026-04-14). This is a straightforward key setup — add a new provider entry, connect to Open Router's API, and populate the model list.",
+      "assignee": "cian@ganttsy.com",
+      "priority": "urgent",
+      "project": "Ganttsy Admin",
+      "index": 1
+    },
+    {
+      "title": "Implement changes, fixes, and stress test the content app",
+      "context": "**Background**: Aby built a content generation pipeline from scratch (with Claude's help) — a ~309-line Python application that handles image style extraction, batch content creation, prompt generation, and image output. The style extractor component was yielding unsatisfactory results during initial testing with Bart, and there are additional features and fixes needed before the app is production-ready.\n\n**Discussion**: Aby explained that the entire current week would be focused on *\"tweaking and polishing\"* the style extractor component, which handles extracting color palettes (hex codes), mood, lighting, and style tokens from reference images. The style intensity controls (subtle backgrounds vs. heavy color use) and visual markers (watermark-like features) also need refinement. Aby outlined the plan: *\"I want to implement a bunch of changes, fixes, add a few features in... run a bunch of tests to see where I can stress this, break it, what's its limitations.\"*\n\n**Decision/Direction**: Aby will spend this week and potentially into next week implementing all necessary changes, fixes, and features, then run stress tests before beginning the Node.js conversion. Target completion is end of next week (approx. 2026-04-24).\n\n**Next steps**: Focus on style extractor improvements this week, implement additional features, then run comprehensive stress tests. This work must be completed before the Node.js conversion begins.",
+      "assignee": "cian@ganttsy.com",
+      "priority": "high",
+      "project": "Ganttsy Admin",
+      "index": 2
+    },
+    {
+      "title": "Convert content app from Python to Node.js",
+      "context": "**Background**: The content generation pipeline is currently a 309-line Python script. The team wants to deploy it on Vercel, which runs a Node.js environment. The alternatives discussed were running it on Render (~$7/month) with Python, or converting to Node.js to use the existing Vercel + Neon stack.\n\n**Discussion**: When Cian asked about the framework, Aby revealed it was Python. Cian noted: *\"We're probably not going to run it on Vercel because that's Node. We can run it on Render though for like seven bucks a month.\"* Aby volunteered to convert it, citing their experience with Node.js on a personal project and familiarity with the Vercel/Supabase workflow. Cian confirmed it would be a trivial conversion at 309 lines. The team's standard stack uses **Vercel and Neon** (not Supabase) for the database. Aby wants to complete all feature work and stress testing first before converting, to avoid converting unstable code.\n\n**Decision/Direction**: Aby will convert the application to Node.js (targeting Next.js framework) after finishing all changes and stress tests. This aligns with the team's existing Vercel + Neon stack and avoids the additional $7/month Render cost. Cian noted: *\"Next.js is pretty easy.\"*\n\n**Next steps**: Begin conversion after feature work is complete (target: end of next week, ~2026-04-24). The conversion should target the Vercel + Neon stack rather than Supabase.",
+      "assignee": "cian@ganttsy.com",
+      "priority": "high",
+      "project": "Ganttsy Admin",
+      "index": 3
+    },
+    {
+      "title": "Submit content app code to Ganttsy content repo /app folder",
+      "context": "**Background**: To move the content generation pipeline from Aby's local environment into a deployable production setup, the code needs to be in the team's Git repository. Cian wants to build it into a container on Vercel that auto-redeploys on code changes.\n\n**Discussion**: Cian specified the exact location: *\"What I would need to do to put this into a production sort of website is for you to put the code for this app in the Ganttsy content git repo under the folder name of just /app.\"* Once the code is there, Cian can set up the Vercel deployment pipeline and assign it a subdomain (e.g., ukline.ganttsy.com). Cian also mentioned needing to *\"augment it a little bit to have it work with the git repo on the remote server\"* since it currently works with a local directory structure. Multi-user access was discussed as beneficial — Aby suggested: *\"Anyone having access to this would be handy in case someone wants to go take a look or might have an idea to make it better.\"* Cian also mentioned adding *\"some sort of Vercel protection\"* (authentication) to the deployed app.\n\n**Decision/Direction**: After the Node.js conversion is complete, Aby will place the code in the `/app` folder of the Ganttsy content Git repo. The team plans to put the app into production the week after next (~week of 2026-04-27).\n\n**Next steps**: Submit the converted Node.js code to the Ganttsy content repo's `/app` directory. This is blocked by the Node.js conversion task. Once submitted, Cian will handle the Vercel deployment setup.",
+      "assignee": "cian@ganttsy.com",
+      "priority": "medium",
+      "project": "Ganttsy Admin",
+      "index": 4
+    },
+    {
+      "title": "Set up Vercel deployment for content app",
+      "context": "**Background**: Once Aby submits the converted Node.js content generation app to the Ganttsy content Git repo's `/app` folder, it needs to be deployed on Vercel with auto-redeployment on code changes and some form of access protection.\n\n**Discussion**: Cian described the deployment plan: *\"I can actually build it into a container on Vercel that'll redeploy every time you change the code.\"* He mentioned assigning a subdomain (e.g., ukline.ganttsy.com or similar) and noted he'd need to *\"augment it a little bit to have it work with the git repo on the remote server because it's a little different than on your local machine\"* — essentially adding git library functions. Cian also committed to adding authentication: *\"We'll put some sort of weird password or some sort of Vercel protection on it.\"* The team's standard stack is Vercel + Neon (not Supabase), and the app should use this existing infrastructure.\n\n**Decision/Direction**: Cian will handle the Vercel deployment, remote git integration, and access protection once the code is in the repo. Target production deployment is the week of 2026-04-27.\n\n**Next steps**: Set up Vercel container deployment with auto-redeploy, configure subdomain, add Vercel authentication/protection, and integrate remote git library functions. Blocked by Aby's code submission to the repo.",
+      "assignee": "cian@ganttsy.com",
+      "priority": "medium",
+      "project": "Ganttsy Admin",
+      "index": 5
+    }
+  ],
+  "createdAt": "2026-04-17T19:44:03.560Z",
+  "status": "pending"
+}

@@ -2,41 +2,63 @@
  * Deduplication — detects duplicate meetings across sources and previous runs.
  */
 
-import { existsSync, readFileSync } from 'fs';
-import { execSync } from 'child_process';
+import { existsSync, readFileSync, readdirSync } from 'fs';
+import { join } from 'path';
 import { DEDUP_TIME_WINDOW_MS } from './config.js';
 import type { UnifiedMeeting } from './types.js';
 
-// Scan existing transcript files for gcal_event_ids (cross-run deduplication)
-export function scanExistingGcalEventIds(directories: string[]): Set<string> {
+export interface ExistingTranscripts {
+  gcalEventIds: Set<string>;
+  shadowConvIdxs: Set<number>;
+  ganttsyWorkspaceDocIds: Set<string>;
+}
+
+// Scan existing transcript files for identifying metadata (cross-run deduplication)
+export function scanExistingTranscripts(directories: string[]): ExistingTranscripts {
   const gcalEventIds = new Set<string>();
+  const shadowConvIdxs = new Set<number>();
+  const ganttsyWorkspaceDocIds = new Set<string>();
 
   for (const dir of directories) {
     if (!existsSync(dir)) continue;
 
     try {
-      const files = execSync(`find "${dir}" -name "*.md" -type f -mtime -7 2>/dev/null || true`, {
-        encoding: 'utf-8',
-        shell: '/bin/bash',
-      }).trim().split('\n').filter(Boolean);
+      const entries = readdirSync(dir);
+      const mdFiles = entries.filter(f => f.endsWith('.md')).map(f => join(dir, f));
 
-      for (const file of files) {
+      for (const file of mdFiles) {
         try {
           const content = readFileSync(file, 'utf-8');
-          const match = content.match(/^- gcal_event_id: (.+)$/m);
-          if (match && match[1]) {
-            gcalEventIds.add(match[1].trim());
+
+          const gcalMatch = content.match(/^- gcal_event_id: (.+)$/m);
+          if (gcalMatch && gcalMatch[1]) {
+            gcalEventIds.add(gcalMatch[1].trim());
+          }
+
+          const shadowMatch = content.match(/^- shadow_convIdx: (\d+)$/m);
+          if (shadowMatch && shadowMatch[1]) {
+            shadowConvIdxs.add(parseInt(shadowMatch[1].trim(), 10));
+          }
+
+          const ganttsyMatch = content.match(/^- ganttsy_workspace_doc_id: (.+)$/m);
+          if (ganttsyMatch && ganttsyMatch[1]) {
+            ganttsyWorkspaceDocIds.add(ganttsyMatch[1].trim());
           }
         } catch {
           // ignore read errors
         }
       }
     } catch {
-      // ignore find errors
+      // ignore directory read errors
     }
   }
 
-  return gcalEventIds;
+  return { gcalEventIds, shadowConvIdxs, ganttsyWorkspaceDocIds };
+}
+
+// Legacy wrapper — kept for compatibility but delegates to scanExistingTranscripts
+export function scanExistingGcalEventIds(directories: string[]): Set<string> {
+  return scanExistingTranscripts(directories).gcalEventIds;
 }
 
 export const NAME_REPLACEMENTS: [RegExp, string][] = [

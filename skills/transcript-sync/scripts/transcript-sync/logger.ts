@@ -10,7 +10,7 @@ export type LogLevel = 'INFO' | 'ERROR' | 'WARN' | 'DEBUG';
 export function log(level: LogLevel, message: string): void {
   const ts = new Date().toISOString();
   const line = `[${ts}] [${level}] ${message}\n`;
-  process.stdout.write(line);
+  process.stderr.write(line);
   try {
     appendFileSync(LOG_FILE, line);
   } catch {
