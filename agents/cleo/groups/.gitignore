@@ -1,0 +1,2 @@
+# Thread groups are runtime-generated — don't track in git
+t-*/
