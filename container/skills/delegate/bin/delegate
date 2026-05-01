@@ -1,0 +1,122 @@
+#!/usr/bin/env bash
+# delegate — wrapper around `opencode run` for orchestrator → worker handoff.
+#
+# Usage:
+#   delegate <model-or-task-key> "<prompt>"           # e.g. delegate kimi "summarize this"
+#   delegate --task <key> "<prompt>"                  # explicit task lookup
+#   delegate --model <key> "<prompt>"                 # explicit model lookup
+#   delegate --json <key> "<prompt>"                  # raw JSON output (default: text)
+#   delegate --cwd <dir> <key> "<prompt>"             # set working dir for the worker
+#   delegate --system "<sys>" <key> "<prompt>"        # add a system prompt
+#   delegate --file <path> <key> "<prompt>"           # attach a file (repeatable)
+#   delegate list                                     # show catalog (tasks + models)
+#   delegate cost <key> <input_tokens> <output_tokens>  # estimate cost
+#
+# Lookup order: tasks.<key> → models.<key>. So `delegate code-cheap "..."` resolves
+# to whatever model is currently mapped to the `code-cheap` task in models.json.
+# Update the catalog without touching this script.
+set -euo pipefail
+
+# container/skills/delegate/ gets auto-copied into the per-group session
+# at /home/node/.claude/skills/delegate/ at container spawn. Default to that
+# path; allow override via $SKILL_DIR for testing.
+SKILL_DIR="${SKILL_DIR:-/home/node/.claude/skills/delegate}"
+CATALOG="$SKILL_DIR/models.json"
+
+if ! command -v opencode &>/dev/null; then
+  echo "delegate: opencode CLI not installed in this container" >&2
+  echo "  install in the agent-runner image; see SKILL.md" >&2
+  exit 127
+fi
+if [[ ! -f "$CATALOG" ]]; then
+  echo "delegate: catalog missing at $CATALOG" >&2
+  exit 1
+fi
+
+JSON=0
+CWD=""
+SYS=""
+declare -a FILES=()
+declare -a EXTRA=()
+
+# Parse flags
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --json) JSON=1; shift ;;
+    --cwd) CWD="$2"; shift 2 ;;
+    --system) SYS="$2"; shift 2 ;;
+    --file) FILES+=("$2"); shift 2 ;;
+    --task|--model) shift ;; # ignored — disambiguation handled by lookup
+    list)
+      python3 - <<PYEOF
+import json
+d = json.load(open("$CATALOG"))
+print("\n=== TASKS (use case → model) ===")
+for k, v in d.get("tasks", {}).items():
+    print(f"  {k:<20} → {v['model']:<16} ({v['rationale']})")
+print("\n=== MODELS (key → id, $/Mtok) ===")
+for k, v in d.get("models", {}).items():
+    print(f"  {k:<16} {v['id']:<32} in=\${v['input_per_mtok']:.2f} out=\${v['output_per_mtok']:.2f} ctx={v['context']}")
+PYEOF
+      exit 0
+      ;;
+    cost)
+      KEY="$2"; IN="$3"; OUT="$4"
+      python3 - "$KEY" "$IN" "$OUT" <<'PYEOF'
+import json, sys
+key, tin, tout = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
+d = json.load(open("/home/node/.claude/skills/delegate/models.json"))
+if key in d.get("tasks", {}):
+    key = d["tasks"][key]["model"]
+m = d["models"].get(key)
+if not m:
+    print(f"unknown model/task: {key}", file=sys.stderr); sys.exit(2)
+cost = (tin / 1_000_000) * m["input_per_mtok"] + (tout / 1_000_000) * m["output_per_mtok"]
+print(f"{key} ({m['id']}): ${cost:.4f}  (in={tin} @ ${m['input_per_mtok']}/Mtok, out={tout} @ ${m['output_per_mtok']}/Mtok)")
+PYEOF
+      exit 0
+      ;;
+    *) EXTRA+=("$1"); shift ;;
+  esac
+done
+
+if [[ ${#EXTRA[@]} -lt 2 ]]; then
+  echo "usage: delegate <key> \"<prompt>\"   |   delegate list   |   delegate cost <key> <in> <out>" >&2
+  exit 2
+fi
+
+KEY="${EXTRA[0]}"
+PROMPT="${EXTRA[*]:1}"
+
+# Resolve model id from catalog (task → model → id)
+MODEL_ID=$(python3 - "$CATALOG" "$KEY" <<'PYEOF'
+import json, sys
+catalog, key = sys.argv[1], sys.argv[2]
+d = json.load(open(catalog))
+if key in d.get("tasks", {}):
+    key = d["tasks"][key]["model"]
+m = d.get("models", {}).get(key)
+if not m:
+    print(f"ERROR: unknown task/model key: {key}", file=sys.stderr)
+    sys.exit(2)
+print(m["id"])
+PYEOF
+)
+
+# Build opencode command. XDG_DATA_HOME=/workspace/extra makes opencode
+# read auth.json from /workspace/extra/opencode/auth.json (the host's
+# ~/.local/share/opencode/auth.json mounted in via mount-allowlist).
+CMD=(env "XDG_DATA_HOME=/workspace/extra" opencode run --model "$MODEL_ID" --dangerously-skip-permissions)
+[[ $JSON -eq 1 ]] && CMD+=(--format json)
+[[ -n "$SYS" ]] && CMD+=(--system "$SYS")
+for f in "${FILES[@]}"; do
+  CMD+=(--file "$f")
+done
+
+# Execute (set --cwd via shell, opencode runs in that dir)
+if [[ -n "$CWD" ]]; then
+  cd "$CWD"
+fi
+
+# Pipe prompt via stdin so it handles long prompts cleanly
+printf '%s' "$PROMPT" | "${CMD[@]}"

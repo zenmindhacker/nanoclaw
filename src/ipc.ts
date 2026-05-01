@@ -8,6 +8,10 @@ import { AvailableGroup } from './container-runner.js';
 import { createTask, deleteTask, getTaskById, updateTask } from './db.js';
 import { isValidGroupFolder } from './group-folder.js';
 import { logger } from './logger.js';
+import {
+  isGlobalOutboundJid,
+  loadOutboundContacts,
+} from './outbound-contacts.js';
 import { RegisteredGroup } from './types.js';
 
 export interface IpcDeps {
@@ -45,6 +49,9 @@ export function startIpcWatcher(deps: IpcDeps): void {
 
   const ipcBaseDir = path.join(DATA_DIR, 'ipc');
   fs.mkdirSync(ipcBaseDir, { recursive: true });
+
+  // Load global outbound-contact allowlist (optional file)
+  loadOutboundContacts();
 
   const processIpcFiles = async () => {
     // Scan all group IPC directories (identity determined by directory)
@@ -90,16 +97,21 @@ export function startIpcWatcher(deps: IpcDeps): void {
               const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
               if (
                 data.type === 'message' &&
-                data.chatJid &&
+                (data.chatJid || data.targetJid) &&
                 (data.text || data.mediaPath)
               ) {
-                // Authorization: verify this group can send to this chatJid
-                const targetGroup = registeredGroups[data.chatJid];
+                // The agent may override destination via targetJid (to DM a
+                // known contact from any group context). Fall back to the
+                // source group's own chatJid otherwise.
+                const destinationJid: string = data.targetJid || data.chatJid;
+                // Authorization: verify this group can send to destinationJid
+                const targetGroup = registeredGroups[destinationJid];
                 const allowedOutbound = folderAllowedOutbound.get(sourceGroup);
                 if (
                   isMain ||
                   (targetGroup && targetGroup.folder === sourceGroup) ||
-                  allowedOutbound?.has(data.chatJid)
+                  allowedOutbound?.has(destinationJid) ||
+                  isGlobalOutboundJid(destinationJid)
                 ) {
                   // Same-group messages (agent replying to its own chat) should
                   // inherit the active thread context. Cross-group messages post
@@ -108,18 +120,21 @@ export function startIpcWatcher(deps: IpcDeps): void {
                     targetGroup && targetGroup.folder === sourceGroup;
                   if (data.text) {
                     await deps.sendMessage(
-                      data.chatJid,
+                      destinationJid,
                       data.text,
                       isSameGroup ? undefined : { noThread: true },
                     );
                     logger.info(
-                      { chatJid: data.chatJid, sourceGroup },
+                      {
+                        chatJid: destinationJid,
+                        sourceGroup,
+                        override: !!data.targetJid,
+                      },
                       'IPC message sent',
                     );
                   }
                   if (data.mediaPath) {
                     // Resolve relative media path to absolute host path
-                    // mediaPath is relative to the group's IPC dir (e.g. "media/voice.mp3")
                     const ipcGroupDir = path.join(DATA_DIR, 'ipc', sourceGroup);
                     const hostMediaPath = path.resolve(
                       ipcGroupDir,
@@ -130,13 +145,13 @@ export function startIpcWatcher(deps: IpcDeps): void {
                     if (!rel.startsWith('..') && !path.isAbsolute(rel)) {
                       const filename = path.basename(hostMediaPath);
                       await deps.sendMedia(
-                        data.chatJid,
+                        destinationJid,
                         hostMediaPath,
                         filename,
                       );
                       logger.info(
                         {
-                          chatJid: data.chatJid,
+                          chatJid: destinationJid,
                           sourceGroup,
                           mediaPath: data.mediaPath,
                         },
@@ -151,7 +166,7 @@ export function startIpcWatcher(deps: IpcDeps): void {
                     } else {
                       logger.warn(
                         {
-                          chatJid: data.chatJid,
+                          chatJid: destinationJid,
                           sourceGroup,
                           mediaPath: data.mediaPath,
                         },
@@ -161,7 +176,7 @@ export function startIpcWatcher(deps: IpcDeps): void {
                   }
                 } else {
                   logger.warn(
-                    { chatJid: data.chatJid, sourceGroup },
+                    { chatJid: destinationJid, sourceGroup },
                     'Unauthorized IPC message attempt blocked',
                   );
                 }
@@ -514,9 +529,9 @@ export async function processTaskIpc(
           );
           break;
         }
-        // Defense in depth: agent cannot set isMain via IPC.                                                                                                                                    
-        // Preserve isMain from the existing registration so IPC config                                                                                                                          
-        // updates (e.g. adding additionalMounts) don't strip the flag.                                                                                                                          
+        // Defense in depth: agent cannot set isMain via IPC.
+        // Preserve isMain from the existing registration so IPC config
+        // updates (e.g. adding additionalMounts) don't strip the flag.
         const existingGroup = registeredGroups[data.jid];
         deps.registerGroup(data.jid, {
           name: data.name,

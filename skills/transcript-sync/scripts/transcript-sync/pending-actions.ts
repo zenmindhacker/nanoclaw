@@ -125,7 +125,9 @@ export function postPendingSummaryToSysops(meetings: PendingMeeting[]): void {
     return;
   }
 
-  // Renumber actions with a global counter across all meetings in this batch
+  // Renumber actions with a global counter across all meetings in this batch.
+  // Keeps `create 7,9 <id>` semantics consistent even when each meeting gets
+  // its own Slack message.
   let globalIdx = 1;
   for (const m of meetings) {
     for (const a of m.actions) {
@@ -142,17 +144,37 @@ export function postPendingSummaryToSysops(meetings: PendingMeeting[]): void {
     }
   }
 
+  mkdirSync(messagesDir, { recursive: true });
   const now = new Date();
   const timeStr = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-  const lines: string[] = [`*transcript-sync* — ${timeStr}`];
 
+  // Helper: drop a single IPC message file atomically.
+  const postMsg = (text: string, suffix: string) => {
+    const message = {
+      type: 'message',
+      chatJid: SYSOPS_JID,
+      text,
+      timestamp: new Date().toISOString(),
+    };
+    const filename = `${Date.now()}-${suffix}.json`;
+    const filepath = join(messagesDir, filename);
+    const tmpPath = `${filepath}.tmp`;
+    writeFileSync(tmpPath, JSON.stringify(message, null, 2));
+    renameSync(tmpPath, filepath);
+  };
+
+  // Header message — short, just announces the batch.
+  const totalItems = meetings.reduce((n, m) => n + m.actions.length, 0);
+  postMsg(`*transcript-sync* — ${timeStr}\n${meetings.length} meeting(s), ${totalItems} action item(s) total`, 'pending-header');
+
+  // One message per meeting — keeps each well under Slack's ~4000 char cap
+  // so the message isn't split mid-item by Slack's server-side truncation.
   for (const m of meetings) {
     const firstIdx = m.actions[0]?.index ?? 0;
     const lastIdx = m.actions[m.actions.length - 1]?.index ?? 0;
-    lines.push('');
-    lines.push(`*${m.meetingTitle}* (${m.org})`);
-    // Show last 2 path segments for brevity
     const shortDir = m.targetDir.split('/').slice(-3).join('/');
+    const lines: string[] = [];
+    lines.push(`*${m.meetingTitle}* (${m.org})`);
     lines.push(`Routed to \`${shortDir}\``);
     lines.push('');
     lines.push('*Action items detected:*');
@@ -162,21 +184,8 @@ export function postPendingSummaryToSysops(meetings: PendingMeeting[]): void {
     }
     lines.push('');
     lines.push(`Reply: \`create all ${m.id}\`, \`create ${firstIdx},${lastIdx} ${m.id}\`, or \`skip ${m.id}\``);
+    postMsg(lines.join('\n'), `pending-${m.id.slice(0, 40)}`);
   }
 
-  const message = {
-    type: 'message',
-    chatJid: SYSOPS_JID,
-    text: lines.join('\n'),
-    timestamp: now.toISOString(),
-  };
-
-  mkdirSync(messagesDir, { recursive: true });
-  const filename = `${Date.now()}-pending-actions.json`;
-  const filepath = join(messagesDir, filename);
-  const tmpPath = `${filepath}.tmp`;
-  writeFileSync(tmpPath, JSON.stringify(message, null, 2));
-  renameSync(tmpPath, filepath);
-
-  logInfo(`[pending] posted ${meetings.length} meeting summary to #sysops`);
+  logInfo(`[pending] posted ${meetings.length} meeting summary to #sysops (split into ${meetings.length + 1} messages)`);
 }

@@ -16,12 +16,46 @@ export function formatMessages(
 ): string {
   const lines = messages.map((m) => {
     const displayTime = formatLocalTime(m.timestamp, timezone);
-    return `<message sender="${escapeXml(m.sender_name)}" time="${escapeXml(displayTime)}">${escapeXml(m.content)}</message>`;
+    const roleAttr = m.is_bot_message ? ' role="assistant"' : '';
+    return `<message sender="${escapeXml(m.sender_name)}" time="${escapeXml(displayTime)}"${roleAttr}>${escapeXml(m.content)}</message>`;
   });
 
   const header = `<context timezone="${escapeXml(timezone)}" />\n`;
 
   return `${header}<messages>\n${lines.join('\n')}\n</messages>`;
+}
+
+/**
+ * Format conversation with channel context preamble for new thread groups.
+ * Includes recent channel messages so the agent knows what's being discussed.
+ */
+export function formatWithChannelContext(
+  channelContext: NewMessage[],
+  threadMessages: NewMessage[],
+  timezone: string,
+): string {
+  const header = `<context timezone="${escapeXml(timezone)}" />\n`;
+  const parts: string[] = [header];
+
+  if (channelContext.length > 0) {
+    const contextLines = channelContext.map((m) => {
+      const displayTime = formatLocalTime(m.timestamp, timezone);
+      const roleAttr = m.is_bot_message ? ' role="assistant"' : '';
+      return `<message sender="${escapeXml(m.sender_name)}" time="${escapeXml(displayTime)}"${roleAttr}>${escapeXml(m.content)}</message>`;
+    });
+    parts.push(
+      `<channel_context>\n${contextLines.join('\n')}\n</channel_context>`,
+    );
+  }
+
+  const threadLines = threadMessages.map((m) => {
+    const displayTime = formatLocalTime(m.timestamp, timezone);
+    const roleAttr = m.is_bot_message ? ' role="assistant"' : '';
+    return `<message sender="${escapeXml(m.sender_name)}" time="${escapeXml(displayTime)}"${roleAttr}>${escapeXml(m.content)}</message>`;
+  });
+  parts.push(`<messages>\n${threadLines.join('\n')}\n</messages>`);
+
+  return parts.join('\n');
 }
 
 export function stripInternalTags(text: string): string {

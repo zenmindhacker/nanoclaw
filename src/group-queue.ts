@@ -172,7 +172,11 @@ export class GroupQueue {
       fs.writeFileSync(tempPath, JSON.stringify({ type: 'message', text }));
       fs.renameSync(tempPath, filepath);
       return true;
-    } catch {
+    } catch (err) {
+      logger.warn(
+        { groupJid, inputDir, error: err },
+        'IPC sendMessage failed — message will be queued for new container',
+      );
       return false;
     }
   }
@@ -188,8 +192,11 @@ export class GroupQueue {
     try {
       fs.mkdirSync(inputDir, { recursive: true });
       fs.writeFileSync(path.join(inputDir, '_close'), '');
-    } catch {
-      // ignore
+    } catch (err) {
+      logger.warn(
+        { groupJid, inputDir, error: err },
+        'IPC closeStdin failed — container will rely on hard timeout',
+      );
     }
   }
 

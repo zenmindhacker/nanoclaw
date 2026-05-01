@@ -1,0 +1,62 @@
+{
+  "id": "ts-2026-04-20-ganttsy-strategy-2026-04-20-10-59-edt-notes-by-gemini",
+  "meetingTitle": "Ganttsy Strategy - 2026/04/20 10:59 EDT - Notes by Gemini",
+  "meetingDate": "2026-04-20",
+  "org": "ganttsy",
+  "sourceRel": "ganttsy-strategy/transcripts/2026-04-20-ganttsy-strategy.md",
+  "targetDir": "/workspace/extra/github/ganttsy/ganttsy-strategy/transcripts",
+  "transcriptPath": "/workspace/extra/github/ganttsy/ganttsy-strategy/transcripts/2026-04-20-ganttsy-strategy.md",
+  "lineageTag": "meeting:Ganttsy Strategy - 2026/04/20 10:59 EDT - Notes by|date:2026-04-20",
+  "actions": [
+    {
+      "title": "Complete cycle five reports",
+      "context": "**Background**: Cian mentioned at the start of the meeting that he missed completing the cycle five reports because the deadline fell during his week off (vacation in Florida).\n\n**Discussion**: Cian acknowledged the miss: \"I realized my week off ended with not doing those reports... cycle five reports.\" Bart confirmed this was expected given the timing.\n\n**Decision/Direction**: Cian needs to complete these overdue reports.\n\n**Next steps**: Complete the cycle five reports that were due during the week off.",
+      "assignee": "cian@ganttsy.com",
+      "priority": "high",
+      "project": "Ganttsy Admin",
+      "index": 1
+    },
+    {
+      "title": "Finalize project detail screens with Mnell",
+      "context": "**Background**: Bart and Mnell (designer) have been refining the project detail screens. Bart intended to close this chapter last week but it dragged into this week.\n\n**Discussion**: Bart said: \"We spent a significant amount of time last week, right up until the tail end of it, refining those. I left Minnell with some fairly specific instructions over the weekend. I will be looking at what he has finalized today with him.\" He also noted they're about a day behind schedule. Cian thought they were going to do a deep dive on Friday but Bart confirmed they left it until today (Monday).\n\n**Decision/Direction**: Bart will finalize today and then share requirements with Cian so he can start wiring.\n\n**Next steps**: Complete the deep dive with Mnell today, finalize project detail screen designs, and share the finalized requirements with Cian so he can begin backend wiring.",
+      "assignee": "cian@ganttsy.com",
+      "priority": "urgent",
+      "project": "Ganttsy Admin",
+      "index": 2
+    },
+    {
+      "title": "Share finalized project detail requirements with Cian",
+      "context": "**Background**: Cian needs the finalized project detail screen requirements to begin wiring up the backend connections.\n\n**Discussion**: Cian said: \"once you've kind of mapped out the requirements, like get that to me as well so that I can kind of like just start some of the wiring.\" Bart agreed.\n\n**Decision/Direction**: Bart will share after finalizing with Mnell today.\n\n**Next steps**: Send Cian the finalized project detail screen requirements after the Mnell deep dive.",
+      "assignee": "cian@ganttsy.com",
+      "priority": "urgent",
+      "project": "Ganttsy Admin",
+      "index": 3
+    },
+    {
+      "title": "Start Mnell on Gantt chart designs",
+      "context": "**Background**: Gantt charts are the next major design component after project detail screens. Bart noted this will take at minimum two weeks (not one as originally planned) due to the complexity of the component.\n\n**Discussion**: Bart said: \"I will also starting him off on Gan charts today as well.\" He noted: \"with regards to GAN charts it won't be a week as per the plan it will be at minimum two because of how large of a component that is.\" Additionally, Bart is away all of next week, so he wants to get as much done this week as possible, leave Mnell with specific tasks, and check in where he can find Wi-Fi.\n\n**Decision/Direction**: Start Gantt chart design work this week, accepting it will take 2+ weeks total.\n\n**Next steps**: Begin Gantt chart design sessions with Mnell this week, leave him with clear tasks before Bart's vacation.",
+      "assignee": "cian@ganttsy.com",
+      "priority": "high",
+      "project": "Ganttsy Admin",
+      "index": 4
+    },
+    {
+      "title": "Share Bart-Mnell meeting transcripts with Cian",
+      "context": "**Background**: Cian doesn't automatically receive the transcripts from Bart's private meetings with Mnell, and wants to follow along with design decisions being made.\n\n**Discussion**: Cian asked: \"can you give me the trans share with me the transcripts of those chats just so I can kind of follow along.\" Bart confirmed: \"the answer is yes, I can.\" Cian also mentioned: \"We can make it so I get them\" automatically, but for now Bart made a note to share them.\n\n**Decision/Direction**: Bart will share transcripts. Longer term, they may set up automatic sharing.\n\n**Next steps**: Share existing Bart-Mnell meeting transcripts with Cian, and potentially configure automatic sharing.",
+      "assignee": "cian@ganttsy.com",
+      "priority": "high",
+      "project": "Ganttsy Admin",
+      "index": 5
+    },
+    {
+      "title": "Write followable projects spec",
+      "context": "**Background**: The Ganttsy platform has two types of project tracking: \"trackable projects\" (with events, milestones, epics) and \"followable projects\" which follow different logic. Cian needs both specs before designing the database architecture.\n\n**Discussion**: Cian asked about the followable project spec and Bart confirmed: \"what I will still deliver to you, which is on my list for this week, is to do the follow along projects.\" Cian emphasized this is blocking his work: \"I am hesitant to also design the trackable project piece without having that because that has potential to completely change what I design over here as well... I don't really want to build a special database for each type. I actually want them both to be part of our general project database.\"\n\n**Decision/Direction**: Bart will write the followable projects spec this week. Cian will wait for both specs before designing the unified database architecture.\n\n**Next steps**: Bart to write and deliver the followable projects specification this week.",
+      "assignee": "cian@ganttsy.com",
+      "priority": "high",
+      "project": "Ganttsy Admin",
+      "index": 6
+    }
+  ],
+  "createdAt": "2026-04-20T16:27:48.829Z",
+  "status": "pending"
+}

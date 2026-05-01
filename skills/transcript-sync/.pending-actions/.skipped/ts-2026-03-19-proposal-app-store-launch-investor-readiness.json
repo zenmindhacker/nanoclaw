@@ -1,0 +1,30 @@
+{
+  "id": "ts-2026-03-19-proposal-app-store-launch-investor-readiness",
+  "meetingTitle": "Proposal: App Store Launch & Investor Readiness",
+  "meetingDate": "2026-03-19",
+  "org": "ctci",
+  "sourceRel": "2026-03-19-concert.md",
+  "targetDir": "/workspace/extra/github/personal/transcripts",
+  "transcriptPath": "/workspace/extra/github/personal/transcripts/2026-03-19-concert.md",
+  "lineageTag": "meeting:Proposal: App Store Launch & Investor Readiness|date:2026-03-19",
+  "actions": [
+    {
+      "title": "Update and send proposal to Michael",
+      "context": "**Background**: Cian presented a three-phase consulting proposal to Michael (Speaker) for his app company. The phases cover: (1) App Store launch, (2) investor readiness assessment/technical due diligence, and (3) a potential long-term equity/advisory arrangement.\n\n**Discussion**: Phase 1 (App Store launch) is capped at $5,500 billed hourly at $100/hr for a developer named Anakin, with Cian estimating actual cost closer to $4K. It includes one Apple rejection cycle; additional rejection cycles bill hourly outside the cap. Timeline is 4-5 weeks. Phase 2 (investor readiness) includes architectural review, scale risk identification, cap table review, and investor deck review — flat rate at $10K-$15K for detailed remediation report and $20K for full technical due diligence, with a 6-week timeline. Cian noted: *\"80% of it is tech, 20% is investor.\"* Michael asked whether Cian could review existing investor materials first, but Cian explained he doesn't review materials outside of an engagement. A combined option was discussed where phases 1 and 2 run concurrently within 8 weeks with a $1,500 discount due to time efficiencies. Michael suggested: *\"What if I just send you what we have? Take a look at it... you may be able to say you need to invest more money in this than this.\"* Cian agreed to reword the investor section to frame it as reviewing existing materials and providing recommendations.\n\n**Decision/Direction**: Michael said *\"Nothing about it seems unreasonable\"* but wants to review with his partner Michaela before committing. Cian committed to lightly updating the proposal based on today's conversation and sending it the next morning.\n\n**Next steps**: Update the proposal to reflect discussion points (especially reword investor materials section as \"review existing investor materials and provide recommendations\"), then send to Michael by tomorrow morning (2026-03-20).",
+      "assignee": "cian@cognitivetech.net",
+      "priority": "high",
+      "project": "Cognitive Tech",
+      "index": 6
+    },
+    {
+      "title": "Send MSA and statement of work to Michael",
+      "context": "**Background**: As part of finalizing the consulting engagement, Michael asked about Cian's service agreement structure.\n\n**Discussion**: Cian explained he has a master services agreement (MSA) for US companies, with a separate statement of work (SOW) for each phase that slides in under the MSA. Michael emphasized the importance of clear expectations in contracts, sharing an anecdote about his own experience as a talent agent where detailed agreements prevented disputes. Cian agreed, noting: *\"Everything gets laid down in the proposal. And then the contract's even more detailed.\"* Michael specifically asked for a copy of the agreement.\n\n**Decision/Direction**: Cian committed to sending the MSA along with the updated proposal.\n\n**Next steps**: Send the master services agreement and relevant statement(s) of work to Michael alongside the proposal, targeted for tomorrow morning (2026-03-20).",
+      "assignee": "cian@cognitivetech.net",
+      "priority": "high",
+      "project": "Cognitive Tech",
+      "index": 7
+    }
+  ],
+  "createdAt": "2026-04-17T19:44:35.497Z",
+  "status": "pending"
+}

@@ -1,0 +1,62 @@
+{
+  "id": "ts-2026-03-26-april-2-bep-tep-launch-readiness-cora-feedback",
+  "meetingTitle": "April 2 BEP/TEP Launch Readiness & Cora Feedback",
+  "meetingDate": "2026-03-26",
+  "org": "ctci",
+  "sourceRel": "2026-03-26-lxp-replan.md",
+  "targetDir": "/workspace/extra/github/personal/transcripts",
+  "transcriptPath": "/workspace/extra/github/personal/transcripts/2026-03-26-lxp-replan.md",
+  "lineageTag": "meeting:April 2 BEP/TEP Launch Readiness & Cora Feedback|date:2026-03-26",
+  "actions": [
+    {
+      "title": "Update BEP report templates",
+      "context": "**Background**: The team is preparing to launch 8-10 BEPs/TEPs on April 2nd. As part of launch readiness, the BEP report templates need to be updated to reflect current requirements.\n\n**Discussion**: During the review of remaining tasks before the April 2nd launch, Rustam identified that the only outstanding request for BEP specifically is updating the templates. He committed to completing this quickly.\n\n**Decision/Direction**: Rustam will update the BEP templates as a priority task, aiming to complete today or by tomorrow evening at the latest.\n\n**Next steps**: Update all BEP templates. This is on the critical path for the April 2nd launch of 8-10 BEPs/TEPs.",
+      "assignee": "rustam.akimov@newvaluegroup.com",
+      "priority": "urgent",
+      "project": "Cognitive Tech",
+      "index": 10
+    },
+    {
+      "title": "Polish and deploy TEP annual goals tab",
+      "context": "**Background**: The team needed a client-facing page where clients can input their annual goals and short-term goals — data previously collected via a pre-check Typeform. This is critical for TEP launches on April 2nd, as the assessment logic needs this goal data.\n\n**Discussion**: Rustam built a working version with two tabs: one for **member management** (existing functionality) and a new **goals tab** (annual goals, short-term goals). The flow works as follows: clients specify how many goals they have, dropdown fields appear dynamically, they fill and save, data is stored in a **temporary location** (since the new TAP report doesn't exist yet), and then at launch time a second button populates this temporary data into the survey so the TAP assessment logic can process it. Rustam noted: *\"I think it should work, we need to test.\"* He expressed concern about the UI not being polished enough for client use but Greg responded: *\"Whatever you think is great is going to be more than good enough for now as long as it's functional and works properly.\"*\n\n**Decision/Direction**: Rustam will do small UI polishes over the weekend and deploy. The team will then test from there. This was identified as **the only big missing part** for launch readiness.\n\n**Next steps**: Polish the UI, deploy to production, and make available for end-to-end testing before April 2nd. Of the 10 launches on April 2nd, 7 will be TEPs that depend on this functionality.",
+      "assignee": "rustam.akimov@newvaluegroup.com",
+      "priority": "urgent",
+      "project": "Cognitive Tech",
+      "index": 11
+    },
+    {
+      "title": "Fix Edmonton BEP automation failure",
+      "context": "**Background**: The Edmonton BEP was expected to launch automatically but encountered a problem — it didn't work as an automatic process. This is relevant because the April 2nd launch of 8-10 BEPs/TEPs is intended to happen \"with the push of a button.\"\n\n**Discussion**: Rustam raised that there were hiccups with the Edmonton BEP not working automatically: *\"For BAP, Greg, actually, I think there was hiccups and it was related to why Edmonton BAP didn't work automatically. That part has to be fixed. So I kind of expect that it will be an automatic process.\"* He also noted that working on Edmonton-specific changes is actually an efficient way to test the broader logic, since changes there also exercise the section 14.1 logic.\n\n**Decision/Direction**: The automation issue must be fixed so that BEP launches work automatically for the April 2nd deadline.\n\n**Next steps**: Debug and fix whatever caused the Edmonton BEP to fail its automatic launch. Verify the fix works end-to-end.",
+      "assignee": "rustam.akimov@newvaluegroup.com",
+      "priority": "urgent",
+      "project": "Cognitive Tech",
+      "index": 12
+    },
+    {
+      "title": "Run end-to-end BEP and TEP launch test",
+      "context": "**Background**: On April 2nd, the team plans to launch 8-10 BEPs/TEPs. Of these, 2-3 are baselines (starting from zero) and approximately 7 are TEPs. The team is one week away from this milestone.\n\n**Discussion**: Greg emphasized the need for thorough testing before the launch: *\"An end-to-end internal test and then a TEP internal test, or however that happens.\"* The TEP flow involves a new goals tab where client data is temporarily stored and then populated into surveys at launch time — Rustam noted *\"I think it should work, we need to test.\"* The BEP automation also needs verification after the Edmonton fix.\n\n**Decision/Direction**: Both BEP and TEP paths need internal end-to-end testing before April 2nd. Rustam plans to deploy the TEP tab over the weekend to enable testing.\n\n**Next steps**: Once the TEP goals tab is deployed and the BEP automation is fixed, run a full end-to-end test for both BEP (baseline) and TEP launch flows before April 2nd.",
+      "assignee": "rustam.akimov@newvaluegroup.com",
+      "priority": "urgent",
+      "project": "Cognitive Tech",
+      "index": 13
+    },
+    {
+      "title": "Set up Cora Dev environment from production",
+      "context": "**Background**: Cora (the voice AI coaching assistant) is currently running in production with live users, including a high-profile engagement with Zealous (facilitated by partner Karen Watson). There is no maintained dev/staging environment, which means any changes to Cora's knowledge base or behavior go directly to production. Cian described the current risk: the deployment script *\"deletes everything out of the database and then loads it up one by one\"* leaving a 2.5-minute window where Cora has no data.\n\n**Discussion**: Greg raised concerns about AI instability — *\"you change one thing over here and it fundamentally shifts how she answers some question over there. And we had it where she was answering awesome. And now we don't. We've actually gone backwards.\"* Cian acknowledged the risk and noted he has **test scripts** that check for regressions, but emphasized the need for a proper dev environment: *\"Cora is stable right now and people are on it, and so I don't want to rush any new features or changes into production until we've had people test it in dev.\"* Rustam expressed relief at this plan, noting the stress of making changes directly in production.\n\n**Decision/Direction**: Copy Cora production into a Cora Dev instance. The structure should already exist but hasn't been maintained. This is **not urgent** — Cian said *\"not this week, maybe not next week, but soon\"* — but is important as more product ideas and feature requests come in.\n\n**Next steps**: Copy current Cora production configuration, knowledge base, and semantic database into the Dev environment. Ensure the Dev instance is functional for testing before any further Cora changes go to production.",
+      "assignee": "rustam.akimov@newvaluegroup.com",
+      "priority": "medium",
+      "project": "Cognitive Tech",
+      "index": 14
+    },
+    {
+      "title": "Research Linear API connector for GPT",
+      "context": "**Background**: The team wants to access Cora customer interaction transcripts for product insight. Greg expressed a strong desire: *\"We really, really want to find a way to have all the customer interactions fired, you know, the transcripts fired somewhere we can access them.\"* The transcripts are already being stored in Linear under the **Cora Voice Feedback Project**, with star ratings and full transcript details in each ticket.\n\n**Discussion**: Greg initially suggested piping Linear data into SharePoint so their *\"AI work partners at SharePoint\"* could analyze customer interactions. Cian pushed back and suggested a more direct approach: *\"Can't you point your AI work partner right at the Linear API?\"* and added *\"I would almost guarantee you could, or we could for you.\"* The plan evolved to building a **GPT project with custom instructions** specifically for ingesting and analyzing client feedback for the product team. Someone also noted that Linear recently announced \"Linear Agent\" with new integration capabilities.\n\n**Decision/Direction**: Cian volunteered to research whether a direct Linear API connector exists for GPT: *\"I'll search it, it's fine.\"*\n\n**Next steps**: Search for Linear API connectors compatible with GPT/custom GPT projects. If feasible, set up a GPT project configured to ingest Cora voice feedback data from Linear for product team analysis.",
+      "assignee": "cian@cognitivetech.net",
+      "priority": "low",
+      "project": "Cognitive Tech",
+      "index": 15
+    }
+  ],
+  "createdAt": "2026-04-17T19:46:18.126Z",
+  "status": "pending"
+}

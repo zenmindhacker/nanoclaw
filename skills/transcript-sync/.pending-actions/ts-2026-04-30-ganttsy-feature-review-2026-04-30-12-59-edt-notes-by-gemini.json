@@ -1,0 +1,62 @@
+{
+  "id": "ts-2026-04-30-ganttsy-feature-review-2026-04-30-12-59-edt-notes-by-gemini",
+  "meetingTitle": "Ganttsy Feature Review - 2026/04/30 12:59 EDT - Notes by Gemini",
+  "meetingDate": "2026-04-30",
+  "org": "ganttsy",
+  "sourceRel": "ganttsy-docs/transcripts/2026-04-30-ganttsy-feature-review.md",
+  "targetDir": "/workspace/extra/github/ganttsy/ganttsy-docs/transcripts",
+  "transcriptPath": "/workspace/extra/github/ganttsy/ganttsy-docs/transcripts/2026-04-30-ganttsy-feature-review.md",
+  "lineageTag": "meeting:Ganttsy Feature Review - 2026/04/30 12:59 EDT - No|date:2026-04-30",
+  "actions": [
+    {
+      "title": "Build backend for project graph stats",
+      "context": "**Background**: Mrinal updated the graphs for the project page (active streak and other project metrics), but currently the data displayed is mock data — there is no backend wired up. Rustam confirmed: \"For the graph, it's still currently mock data.\" With the upcoming-task caching infrastructure now in place from GUN-428, Rustam is ready to extend the same pattern to power the project graphs.\n\n**Discussion**: Rustam proposed reusing the same event-driven cache approach he just built for the upcoming-tasks query — recalculating values on the relevant business events rather than on read. The first metric discussed in detail was the **active streak**. Rustam asked how a user is considered \"active\" within a day — login or daily check-in? Cian clarified: \"any interaction with the life manager... not just a daily ch[eck-in], like any interaction.\"\n\nRustam's initial idea was a once-per-day cron job that decides whether each user's streak continues or resets. Cian flagged a critical constraint: **\"Make sure whatever you do there is time zone sensitive because we're going to have people all over the world.\"** Rustam confirmed dates are stored in UTC. They worked out that a single end-of-day job will not work globally — the cron has to run hourly (or every 5 minutes after midnight per zone) and process users whose local day just ended. Agreed approach: \"every hour... check if we have a user who's end date within this hour and for them recalculate their strikes.\"\n\n**Decision/Direction**: Build the backend for the project graphs using the same dispatch/cache-freshness pattern from cycle 7. Start with the active streak: log every life-manager interaction, run an hourly cron that processes users whose local day is closing and updates their streak record. Rustam will continue with this once Mrinal delivers the card components (he plans to switch to cards first, then return to graphs).\n\n**Next steps**: Implement streak logging on any life-manager interaction; add hourly cron job that is timezone-aware (matches users whose local end-of-day falls in the current hour); recalculate streak based on whether an interaction was recorded that day. Reuse the cache_freshness safeguard table so a failed run can be detected and retried.",
+      "assignee": "rustam@ganttsy.com",
+      "priority": "high",
+      "project": "Ganttsy MVP",
+      "index": 1
+    },
+    {
+      "title": "Test cron job on production branch",
+      "context": "**Background**: As part of GUN-428, Rustam introduced a cron job that scans the new `cache_freshness` table to detect upcoming-task recalculations that were triggered but never marked completed (i.e. the background event handler crashed mid-flight) and re-runs them. This is the safety net for the new event-driven, non-blocking cache update flow.\n\n**Discussion**: Rustam reported the implementation is done and tested end-to-end except for one piece: \"The only problem that I uh couldn't test is the chrome chop. Currently we're sell allow allowing chrome jobs only on the production branches. I marked it def as a preview and uh yeah I I just tested with um with direct heating on that end API.\" In other words, he hit the cron's underlying API endpoint directly, but Vercel only schedules cron jobs on production branches, so the actual scheduled trigger has not been exercised.\n\n**Decision/Direction**: Once the GUN-428 work is merged to a production branch, verify the cron job actually fires on schedule and correctly recovers stalled cache entries.\n\n**Next steps**: After deploy, confirm Vercel registers the cron, watch a scheduled run, and confirm cache_freshness rows that are stuck in the \"triggered but not completed\" state get reprocessed.",
+      "assignee": "rustam@ganttsy.com",
+      "priority": "medium",
+      "project": "Ganttsy MVP",
+      "index": 2
+    },
+    {
+      "title": "Finish timezone task and GUN-9440",
+      "context": "**Background**: While planning the rest of the cycle, Rustam listed his remaining open items beyond the graph backend work. He explicitly mentioned: \"I have a tasks for time zone and 43 9440\" as things that still need to be finished. The timezone work ties directly into the streak calculation discussion — streaks must respect each user's local end-of-day rather than UTC midnight — so this is foundational for several upcoming features.\n\n**Discussion**: Cian emphasized timezone correctness: \"we're going to have people all over the world... it'll have to run like if we're going to say run it at the end of the day, it'll have to run once an hour.\" Rustam confirmed all dates are stored in UTC, which gives a clean base for converting to per-user local time. GUN-9440 was referenced by ticket number only without elaboration in the meeting.\n\n**Decision/Direction**: Rustam to clear these remaining tickets alongside the cards and graph backend work this cycle. Nothing is currently blocking him.\n\n**Next steps**: Complete the timezone-handling task and ticket GUN-9440. Coordinate the timezone work with the streak cron design so both land consistently.",
+      "assignee": "rustam@ganttsy.com",
+      "priority": "medium",
+      "project": "Ganttsy MVP",
+      "index": 3
+    },
+    {
+      "title": "Implement card components on dev",
+      "context": "**Background**: Mrinal has finished design work on the card components and plans to ship them to dev imminently. These cards are a visible UI upgrade and unblock Rustam, who said he will switch from graph backend work to wiring up the cards as soon as the design lands.\n\n**Discussion**: Mrinal: \"the cards have been added as well so I'll probably push it to dev uh by end of the day today.\" He then noted he is moving to a new place, so worst case it slips by one day: \"max by tomorrow's... I'll probably between today and tomorrow I'll push it to dev for sure.\" Cian responded: \"this could be something [Rustam] can work on tomorrow or later today... that'll be a great upgrade.\" Rustam confirmed: \"I will continue with the graph back end once you will provide the card. I think I will switch to the cards.\"\n\n**Decision/Direction**: Mrinal pushes finalized card designs to dev today or tomorrow at the latest. Rustam picks them up immediately and integrates them, pausing graph backend work to do so.\n\n**Next steps**: Mrinal: push card designs/specs to dev by EOD 2026-04-30 or 2026-05-01 at latest. Rustam: implement cards as soon as available, then return to graph backend.",
+      "assignee": "rustam@ganttsy.com",
+      "priority": "high",
+      "project": "Ganttsy MVP",
+      "index": 4
+    },
+    {
+      "title": "Push card designs to dev",
+      "context": "**Background**: Mrinal completed the card components in design and committed to handing them off to dev so Rustam can start integration. Cards were called out as a notable visual upgrade for the app.\n\n**Discussion**: Mrinal: \"the cards have been added as well so I'll probably push it to dev uh by end of the day today.\" He flagged that he is moving to a new place, which could push delivery to the next day: \"max by tomorrow's So I'll be probably shifting to new place. I'll probably between today and tomorrow I'll push it to dev for sure.\" Cian reacted positively after seeing them zoomed in: \"They look really great. Oh, yeah. Oh, wow.\"\n\n**Decision/Direction**: Push the cards to dev today (2026-04-30); allow slip to 2026-05-01 if the move interferes.\n\n**Next steps**: Mrinal to deliver the card components/assets to the dev branch so Rustam can begin integration.",
+      "assignee": "vergel@ganttsy.com",
+      "priority": "high",
+      "project": "Ganttsy MVP",
+      "index": 5
+    },
+    {
+      "title": "Finalize Gantt chart designs after Bart input",
+      "context": "**Background**: Mrinal walked through the Gantt chart designs covering desktop and mobile, including the master board, year/month/week/day views, project expansion states (not started, in-progress, completed), tooltips/hover states, and the simplified mobile variant. The designs are nearly complete but still need clarifying input from Bart, who was not in this meeting (he had declined the calendar invite).\n\n**Discussion**: Three project visual states were defined: not started, started/in-progress, completed. For projects whose deadline keeps slipping, Mrinal chose a soft visual signal: \"if that is keep on extending will just show like a white line because we don't want to show user that okay you're lagging behind or something which is going on in a negative but just a visual slight demarcation.\" The desktop view supports nested expansion from project → milestone → phases → steps → events with arrow-based timeline navigation. The mobile design follows Bart's earlier wireframes: \"mobile are just following the wireframes which B[art] had... it is more like on the project phases.\" Cian asked if it was ready for dev; Mrinal: \"it's almost done I need some information from part. So once he's back probably it will be done if it's back on Monday. On Monday it will be done for the dev.\"\n\n**Decision/Direction**: Mrinal needs answers from Bart before the Gantt charts can ship to dev. Target completion is Monday 2026-05-04 if Bart is back. Cian will prepare backup work for next cycle in case the Gantt chart slips: \"I'll plan for next week. I think next week is got mostly Gant chart stuff for dev. But I will get some stuff ready as a backup in case in case it's not ready.\"\n\n**Next steps**: Mrinal to sync with Bart on his return, finalize the outstanding details, and push the Gantt designs to dev by Monday 2026-05-04. Add full tooltip and hover-state specs once the underlying info is locked.",
+      "assignee": "bart@ganttsy.com",
+      "priority": "high",
+      "project": "Ganttsy MVP",
+      "index": 6
+    }
+  ],
+  "createdAt": "2026-04-30T17:42:24.387Z",
+  "status": "pending"
+}

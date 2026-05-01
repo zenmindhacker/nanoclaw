@@ -9,6 +9,9 @@
  *             API key via /api/oauth/claude_cli/create_api_key.
  *             Proxy injects real OAuth token on that exchange request;
  *             subsequent requests carry the temp key which is valid as-is.
+ *
+ * OAuth tokens are read from ~/.claude/.credentials.json (kept fresh by
+ * Claude Code) and refreshed proactively when expiring.
  */
 import { createServer, Server } from 'http';
 import { request as httpsRequest } from 'https';
@@ -22,11 +25,23 @@ import { logger } from './logger.js';
 
 const CLAUDE_OAUTH_CLIENT_ID = '9d1c250a-e61b-44d9-88ed-5944d1962f5e';
 const CLAUDE_OAUTH_TOKEN_URL = 'https://platform.claude.com/v1/oauth/token';
-/** Refresh proactively when less than this many ms remain. */
-const REFRESH_BUFFER_MS = 5 * 60 * 1000;
+/** Refresh proactively when less than this many ms remain.
+ *  Must exceed the proactive-check interval (30 min) to guarantee at least
+ *  one check falls inside the refresh window before the token expires. */
+const REFRESH_BUFFER_MS = 35 * 60 * 1000;
 
 /** Credentials file path used by Claude Code. */
 const CRED_FILE = path.join(os.homedir(), '.claude', '.credentials.json');
+
+export type AuthMode = 'api-key' | 'oauth';
+
+export interface ProxyConfig {
+  authMode: AuthMode;
+}
+
+// ---------------------------------------------------------------------------
+// OAuth credential management
+// ---------------------------------------------------------------------------
 
 interface OAuthCreds {
   accessToken: string;
@@ -43,7 +58,6 @@ function readCredentials(): OAuthCreds | null {
   } catch {
     /* ignore */
   }
-
   return null;
 }
 
@@ -103,14 +117,6 @@ function fetchJson(
   });
 }
 
-/**
- * Synchronously read the current access token (no refresh).
- * Used by the container runner to inject a valid token at startup.
- */
-export function readCurrentAccessToken(): string | null {
-  return readCredentials()?.accessToken ?? null;
-}
-
 /** In-flight refresh promise — prevents concurrent refresh storms. */
 let refreshPromise: Promise<string | null> | null = null;
 
@@ -126,6 +132,18 @@ async function refreshToken(creds: OAuthCreds): Promise<string | null> {
       const json = await fetchJson(CLAUDE_OAUTH_TOKEN_URL, body);
       if (json.error) {
         logger.error({ error: json.error }, 'OAuth token refresh failed');
+        consecutiveFailures++;
+        // Notify on first failure, then every 5th to avoid spam
+        if (
+          authFailureNotifier &&
+          (consecutiveFailures === 1 || consecutiveFailures % 5 === 0)
+        ) {
+          const msg =
+            json.error === 'invalid_grant'
+              ? `⚠️ Claude OAuth token is dead (invalid_grant). I can't process any messages until you re-authenticate. Run \`claude auth login\` on the server.`
+              : `⚠️ Claude OAuth refresh failed (${json.error}). Attempt #${consecutiveFailures}. Will keep retrying.`;
+          authFailureNotifier(msg);
+        }
         return null;
       }
       const next: OAuthCreds = {
@@ -134,7 +152,15 @@ async function refreshToken(creds: OAuthCreds): Promise<string | null> {
         expiresAt: Date.now() + (Number(json.expires_in) || 3600) * 1000,
       };
       writeCredentials(next);
-      logger.info('OAuth token refreshed successfully');
+      if (consecutiveFailures > 0) {
+        logger.info(
+          { previousFailures: consecutiveFailures },
+          'OAuth token refreshed successfully (recovered)',
+        );
+      } else {
+        logger.info('OAuth token refreshed successfully');
+      }
+      consecutiveFailures = 0;
       return next.accessToken;
     } catch (err) {
       logger.error({ err }, 'OAuth token refresh error');
@@ -154,9 +180,13 @@ async function refreshToken(creds: OAuthCreds): Promise<string | null> {
 async function getOAuthToken(): Promise<string | null> {
   const creds = readCredentials();
   if (!creds) {
-    logger.warn(
-      'No OAuth credentials found (checked Keychain and ~/.claude/.credentials.json)',
-    );
+    logger.warn('No OAuth credentials found in ~/.claude/.credentials.json');
+    consecutiveFailures++;
+    if (authFailureNotifier && consecutiveFailures === 1) {
+      authFailureNotifier(
+        "⚠️ Claude credentials file is missing (~/.claude/.credentials.json). I'm completely offline until you run `claude auth login` on the server.",
+      );
+    }
     return null;
   }
   const expiresIn = creds.expiresAt - Date.now();
@@ -171,19 +201,35 @@ async function getOAuthToken(): Promise<string | null> {
   return creds.accessToken;
 }
 
-export type AuthMode = 'api-key' | 'oauth';
-
-export interface ProxyConfig {
-  authMode: AuthMode;
+/**
+ * Synchronously read the current access token (no refresh).
+ * Used by the container runner to inject a valid token at startup.
+ */
+export function readCurrentAccessToken(): string | null {
+  return readCredentials()?.accessToken ?? null;
 }
+
+// ---------------------------------------------------------------------------
+// Proxy server
+// ---------------------------------------------------------------------------
 
 export function startCredentialProxy(
   port: number,
   host = '127.0.0.1',
 ): Promise<Server> {
-  const secrets = readEnvFile(['ANTHROPIC_API_KEY', 'ANTHROPIC_BASE_URL']);
+  const secrets = readEnvFile([
+    'ANTHROPIC_API_KEY',
+    'CLAUDE_CODE_OAUTH_TOKEN',
+    'ANTHROPIC_AUTH_TOKEN',
+    'ANTHROPIC_BASE_URL',
+  ]);
 
   const authMode: AuthMode = secrets.ANTHROPIC_API_KEY ? 'api-key' : 'oauth';
+
+  // For OAuth, prefer reading from .credentials.json (auto-refreshed).
+  // Fall back to .env tokens if .credentials.json is unavailable.
+  const envOauthToken =
+    secrets.CLAUDE_CODE_OAUTH_TOKEN || secrets.ANTHROPIC_AUTH_TOKEN;
 
   const upstreamUrl = new URL(
     secrets.ANTHROPIC_BASE_URL || 'https://api.anthropic.com',
@@ -220,7 +266,9 @@ export function startCredentialProxy(
           // x-api-key only, so they pass through without token injection.
           if (headers['authorization']) {
             delete headers['authorization'];
-            const oauthToken = await getOAuthToken();
+            // Try live token from .credentials.json (auto-refreshed),
+            // fall back to static .env token
+            const oauthToken = (await getOAuthToken()) || envOauthToken;
             if (oauthToken) {
               headers['authorization'] = `Bearer ${oauthToken}`;
             }
@@ -264,6 +312,63 @@ export function startCredentialProxy(
 
     server.on('error', reject);
   });
+}
+
+// ---------------------------------------------------------------------------
+// Proactive token refresh
+// ---------------------------------------------------------------------------
+
+/** Interval handle for the background refresh timer. */
+let refreshInterval: ReturnType<typeof setInterval> | null = null;
+
+// ---------------------------------------------------------------------------
+// Auth failure notifications
+// ---------------------------------------------------------------------------
+
+/** Callback to notify the user when OAuth auth is broken. */
+let authFailureNotifier: ((message: string) => void) | null = null;
+let consecutiveFailures = 0;
+
+/**
+ * Register a callback that fires when OAuth refresh fails.
+ * Called once from index.ts after Slack connects.
+ */
+export function onAuthFailure(cb: (message: string) => void): void {
+  authFailureNotifier = cb;
+}
+
+/** Check token health and refresh proactively. Runs on a timer. */
+async function proactiveRefresh(): Promise<void> {
+  const creds = readCredentials();
+  if (!creds) return;
+  const expiresIn = creds.expiresAt - Date.now();
+  if (expiresIn < REFRESH_BUFFER_MS) {
+    logger.info(
+      { expiresInMs: expiresIn },
+      'Proactive refresh: token expiring soon',
+    );
+    await refreshToken(creds);
+  }
+}
+
+/**
+ * Start a background timer that refreshes OAuth tokens before they expire,
+ * even when no requests are coming in. Checks every 30 minutes.
+ */
+export function startProactiveRefresh(): void {
+  if (refreshInterval) return;
+  const INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
+  refreshInterval = setInterval(() => {
+    proactiveRefresh().catch((err) =>
+      logger.warn({ err }, 'Proactive refresh error'),
+    );
+  }, INTERVAL_MS);
+  // Also run once immediately on startup after a short delay
+  setTimeout(() => {
+    proactiveRefresh().catch((err) =>
+      logger.warn({ err }, 'Initial proactive refresh error'),
+    );
+  }, 5000);
 }
 
 /** Detect which auth mode the host is configured for. */

@@ -158,6 +158,51 @@ export async function calendarFallbackAttendees(
   }
 
   const { calId, ev } = best;
+
+  // Reject weak matches: if the best candidate event has no attendees AND
+  // no `Attendees:` block in the description, we have no reliable way to
+  // classify the meeting. Better to return "no match" than to anchor the
+  // file to a random same-time placeholder event — the pipeline will route
+  // this meeting to the unmatched list so the user can triage it.
+  const hasAttendeeData =
+    (ev.attendees && ev.attendees.length > 0) ||
+    (ev.description && /Attendees:/i.test(ev.description));
+  if (!hasAttendeeData) {
+    return [[], null];
+  }
+
+  // Reject title-mismatch matches: when both titles are non-trivial and
+  // share ZERO tokens (3+ chars, ignoring stopwords), the time-only match
+  // is probably wrong. This happens when two unrelated meetings overlap —
+  // e.g. a Ganttsy product call recorded by Shadow happens to overlap with
+  // a CopperTeams sync that has full attendee data. Time proximity wins
+  // the match against an event whose content is unrelated to the recording.
+  const STOP = new Set([
+    'the','and','for','with','from','this','that','have','your','our',
+    'you','are','was','will','can','call','meet','meeting','sync',
+    'weekly','daily','monthly','catch','upcoming','scheduled',
+    'cian','rustam','greg','bart','aby','vergel','team','update'
+  ]);
+  const tok = (s: string): Set<string> => {
+    const out = new Set<string>();
+    for (const t of (s || '').toLowerCase().match(/[a-z0-9]{3,}/g) || []) {
+      if (!STOP.has(t)) out.add(t);
+    }
+    return out;
+  };
+  const convTokens = tok(convTitle);
+  const evTokens = tok(ev.summary || '');
+  // Threshold: conv title has 3+ meaningful tokens (i.e. it's descriptive,
+  // not just "Sync") and the event title has at least 1. If overlap is zero,
+  // the time-only match is too risky to trust.
+  if (convTokens.size >= 3 && evTokens.size >= 1) {
+    let overlap = 0;
+    for (const t of convTokens) if (evTokens.has(t)) overlap++;
+    if (overlap === 0) {
+      return [[], null];
+    }
+  }
+
   const out: Attendee[] = [];
 
   for (const a of ev.attendees || []) {

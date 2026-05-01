@@ -152,11 +152,24 @@ export async function getWorkWranglersHours(since, until) {
   const projectId = '204851981'; // WW: Consulting
   const apiToken = getTogglCredentials();
 
-  const endpoint = `/reports/api/v2/details?workspace_id=${workspaceId}&since=${since}&until=${until}&project_ids=${projectId}`;
-  const response = await togglRequest(endpoint, apiToken);
-  const entries = response.data || [];
-
+  const baseEndpoint = `/reports/api/v2/details?workspace_id=${workspaceId}&since=${since}&until=${until}&project_ids=${projectId}`;
   const DISCOUNTED_TASKS = ['Management Consulting', 'Sales Consulting'];
+
+  // Paginate through all entries
+  let allEntries = [];
+  let page = 1, fetched = 0, totalCount = Infinity;
+  while (fetched < totalCount) {
+    const response = await togglRequest(`${baseEndpoint}&page=${page}`, apiToken);
+    const entries = response.data || [];
+    if (page === 1) totalCount = response.total_count || entries.length;
+    if (entries.length === 0) break;
+    allEntries.push(...entries);
+    fetched += entries.length;
+    page++;
+  }
+  const entries = allEntries;
+
+
 
   const result = {
     cian: 0,             // CTO Consulting seconds
@@ -207,27 +220,38 @@ export async function getTotalProjectHours(projectId, since, until, billableUser
     };
   }
 
-  // User filter — need detailed entries to filter by person
+  // User filter — need detailed entries to filter by person (paginated)
   const apiToken = getTogglCredentials();
-  const endpoint = `/reports/api/v2/details?workspace_id=${workspaceId}&since=${since}&until=${until}&project_ids=${projectId}`;
-  const response = await togglRequest(endpoint, apiToken);
-  const entries = response.data || [];
+  const baseEndpoint = `/reports/api/v2/details?workspace_id=${workspaceId}&since=${since}&until=${until}&project_ids=${projectId}`;
 
   const filters = billableUsers.map(u => u.toLowerCase());
   let totalMs = 0;
+  let page = 1;
+  let fetched = 0;
+  let totalCount = Infinity;
 
-  for (const entry of entries) {
-    const user = (entry.user || '').toLowerCase();
-    if (filters.some(f => user.includes(f))) {
-      totalMs += entry.dur || 0;
+  while (fetched < totalCount) {
+    const response = await togglRequest(`${baseEndpoint}&page=${page}`, apiToken);
+    const entries = response.data || [];
+    if (page === 1) totalCount = response.total_count || entries.length;
+    if (entries.length === 0) break;
+
+    for (const entry of entries) {
+      const user = (entry.user || '').toLowerCase();
+      if (filters.some(f => user.includes(f))) {
+        totalMs += entry.dur || 0;
+      }
     }
+
+    fetched += entries.length;
+    page++;
   }
 
   const totalSeconds = Math.round(totalMs / 1000);
   return {
     totalHours: Math.round(totalSeconds / 3600 * 100) / 100,
     totalSeconds,
-    projectFound: entries.length > 0
+    projectFound: fetched > 0
   };
 }
 

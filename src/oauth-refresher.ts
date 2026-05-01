@@ -284,15 +284,19 @@ async function checkAndRefreshAll(): Promise<void> {
         const updated = await refreshToken(entry, token, creds);
         if (updated) {
           saveTokenFile(entry.token_file, updated);
+          const expiresInMin = Math.round(
+            ((updated.expires_at ?? 0) - nowSec) / 60,
+          );
           logger.info(
             {
               id: entry.id,
               account: entry.account,
-              expiresInMin: Math.round(
-                ((updated.expires_at ?? 0) - nowSec) / 60,
-              ),
+              expiresInMin,
             },
             'Token refreshed successfully',
+          );
+          alert(
+            `Refreshed *${entry.id}* token (${entry.account}) — valid for ${expiresInMin}m`,
           );
         } else {
           // refreshToken returned null → provider rejected the refresh

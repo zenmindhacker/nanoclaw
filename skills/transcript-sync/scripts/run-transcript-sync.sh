@@ -92,6 +92,14 @@ for repo_dir in "${!REPO_FILES[@]}"; do
   cd "$repo_dir"
   label=$(basename "$repo_dir")
 
+  # Pull latest before committing to avoid divergence
+  REMOTE_URL_PULL=$(git remote get-url origin 2>/dev/null) || true
+  if [[ -n "$REMOTE_URL_PULL" ]] && [[ -f "$GITHUB_TOKEN_FILE" ]]; then
+    TOKEN_PULL=$(cat "$GITHUB_TOKEN_FILE")
+    AUTHED_URL_PULL=$(echo "$REMOTE_URL_PULL" | sed "s|https://|https://x-access-token:${TOKEN_PULL}@|")
+    git pull --rebase "$AUTHED_URL_PULL" 2>&1 | tail -1 >&2 || echo "Warning: git pull failed for $label, proceeding anyway" >&2
+  fi
+
   # Stage only the specific files transcript-sync wrote
   while IFS= read -r f; do
     [[ -z "$f" ]] && continue
@@ -105,7 +113,7 @@ for repo_dir in "${!REPO_FILES[@]}"; do
   git commit -m "Update transcripts [automated]" || continue
 
   REMOTE_URL=$(git remote get-url origin 2>/dev/null) || continue
-  AUTHED_URL=$(echo "$REMOTE_URL" | sed "s|https://|https://x-token:${TOKEN}@|")
+  AUTHED_URL=$(echo "$REMOTE_URL" | sed "s|https://|https://x-access-token:${TOKEN}@|")
   git push "$AUTHED_URL" && echo "Pushed: $label" >&2 || echo "Push failed for: $label" >&2
 done
 
