@@ -365,9 +365,12 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
   let prompt: string;
 
   if (group.isThreadGroup && group.parentJid) {
-    // Thread groups get recent parent channel context so the agent
-    // knows what's being discussed (e.g., "did you see the snyk vulns?")
-    const channelContext = getRecentChannelContext(group.parentJid, 5);
+    // Thread groups get recent parent context so the agent knows what's
+    // being discussed. DM threads get more context (20) since all threads
+    // share one DM and the user expects cross-thread awareness.
+    const isDmThread = group.parentJid.replace(/^slack:/, '').startsWith('D');
+    const contextLimit = isDmThread ? 20 : 5;
+    const channelContext = getRecentChannelContext(group.parentJid, contextLimit);
     prompt = formatWithChannelContext(
       channelContext,
       conversationHistory,
@@ -517,6 +520,19 @@ async function runAgent(
 
   // Write conversation history snapshot so the agent can page back with read_conversation_history
   writeConversationHistorySnapshot(group.folder, chatJid);
+
+  // For DM thread groups, also write the parent DM's full history so the
+  // agent can read cross-thread context when asked (e.g. "what did we discuss earlier?").
+  if (group.isThreadGroup && group.parentJid) {
+    const parentFolder = registeredGroups[group.parentJid]?.folder;
+    if (parentFolder) {
+      writeConversationHistorySnapshot(
+        group.folder,
+        group.parentJid,
+        'dm_history.json',
+      );
+    }
+  }
 
   // Write global outbound-contacts snapshot so the agent knows which JIDs
   // it's allowed to DM from any context (e.g. operator's personal DM).
