@@ -45,33 +45,127 @@ Four types of skills exist in NanoClaw. See [CONTRIBUTING.md](CONTRIBUTING.md) f
 | `/qodo-pr-resolver` | Fetch and fix Qodo PR review issues interactively or in batch |
 | `/get-qodo-rules` | Load org- and repo-level coding rules from Qodo before code tasks |
 
+## Two-Agent Setup: Cleo and Silas
+
+This repo is the **canonical codebase for two agents** that share identical code but run with separate personas and credentials.
+
+| Agent | Persona | Server user | Port | Groups dir |
+|-------|---------|-------------|------|-----------|
+| **Cleo** | Cian's assistant | `cian@cleo-lc.cognitivetech.net` | 3001 | `agents/cleo/groups/` |
+| **Silas** | Christina's assistant | `christina@cleo-lc.cognitivetech.net` | 3003 | `agents/silas/groups/` |
+
+Both agents pull from **`https://github.com/zenmindhacker/nanoclaw`** (this repo). The old `Cognitive-Technology/meridian_nanoclaw` repo is retired — do not use it.
+
+### What differs per agent
+
+- **`agents/{agent}/groups/`** — CLAUDE.md persona files and per-group configs (in git)
+- **`.env`** — credentials, `GROUPS_DIR`, `DATA_DIR` (on server only, never in git)
+- **`data/`** — runtime state: SQLite DB, sessions, conversation history, IPC (on server only)
+
+### Key env vars per agent (in `~/{user}/nanoclaw/.env` on server)
+
+```
+GROUPS_DIR=agents/cleo/groups   # or agents/silas/groups
+DATA_DIR=data
+CONTAINER_NAME_PREFIX=nc-cleo   # or nc-silas — must be unique per instance
+ASSISTANT_NAME=Cleo              # or Silas
+```
+
 ## Deployment
 
-Production Cleo runs on `cleo-lc.cognitivetech.net` (Linux, systemd). Detect where you're running and follow the matching workflow.
+Manage from Windsurf on this laptop. Use the `/deploy` workflow (`.windsurf/workflows/deploy.md`).
 
-### Detect environment
+### Deploy Cleo
 ```bash
-hostname  # "nanoclaw" = production server, anything else = dev laptop
+git push origin main
+ssh cian@cleo-lc.cognitivetech.net "cd ~/nanoclaw && git pull --ff-only && npm run build 2>&1 | tail -5"
+ssh cian@cleo-lc.cognitivetech.net "systemctl --user restart nanoclaw"
 ```
 
-### On the dev laptop (hostname != "nanoclaw")
-Edit files locally with full tool access, then deploy via git:
+### Deploy Silas
 ```bash
-npm run build                          # verify it compiles
-git add <files> && git commit -m "..."  # commit changes
-git push                                # push to origin
-ssh cian@cleo-lc.cognitivetech.net "cd nanoclaw && git pull && npm run build && sudo systemctl restart nanoclaw"
+ssh christina@cleo-lc.cognitivetech.net "cd ~/nanoclaw && git pull --ff-only && npm run build 2>&1 | tail -5"
+ssh christina@cleo-lc.cognitivetech.net "systemctl --user restart nanoclaw"
 ```
-For database changes (scheduled tasks etc.), use SSH + node since sqlite3 is not installed on the server.
 
-### On the production server (hostname == "nanoclaw")
-Edit and run everything locally — no SSH needed:
+### Rebuild Docker image (only when `container/Dockerfile` changes)
 ```bash
-npm run build
-sudo systemctl restart nanoclaw
-git add <files> && git commit -m "..."
-git push
+# Use --no-cache to avoid stale apt layers
+ssh cian@cleo-lc.cognitivetech.net "docker build --no-cache -t nanoclaw-agent:latest ~/nanoclaw/container/ 2>&1 | tail -10"
 ```
+Both agents share the same Docker image (`nanoclaw-agent:latest`). Rebuild once, applies to both.
+
+## Logs and Debugging
+
+```bash
+# App logs (structured JSON via pino)
+ssh cian@cleo-lc.cognitivetech.net "tail -50 ~/nanoclaw/logs/nanoclaw.log"
+ssh cian@cleo-lc.cognitivetech.net "tail -30 ~/nanoclaw/logs/nanoclaw.error.log"
+ssh christina@cleo-lc.cognitivetech.net "tail -50 ~/nanoclaw/logs/nanoclaw.log"
+ssh christina@cleo-lc.cognitivetech.net "tail -30 ~/nanoclaw/logs/nanoclaw.error.log"
+
+# Service status
+ssh cian@cleo-lc.cognitivetech.net "systemctl --user status nanoclaw --no-pager | head -20"
+
+# Container logs (per agent session)
+# Located at: ~/nanoclaw/groups/{groupname}/logs/container-*.log
+```
+
+## Agent Group Configs
+
+Named groups with hand-crafted CLAUDE.md files live in `agents/{agent}/groups/` and are tracked in git.
+Runtime thread groups (`t-*/`) are auto-generated on the server and gitignored.
+
+```
+agents/
+  cleo/groups/
+    global/CLAUDE.md        ← Cleo's base persona + capabilities
+    main/CLAUDE.md          ← Main group (elevated — full tool access)
+    slack_sysops/CLAUDE.md  ← #sysops channel config
+    slack_scheduled/CLAUDE.md
+  silas/groups/
+    global/CLAUDE.md        ← Silas's base persona + capabilities
+    main/CLAUDE.md
+    slack_christina-dm/CLAUDE.md
+    scheduled-tasks/CLAUDE.md
+    christina-dm/CLAUDE.md
+```
+
+## Audio Transcription
+
+Voice notes from Slack are transcribed on the **host** (not in the container) by `src/channels/slack-media.ts`.
+
+- **Primary**: OpenRouter (`OPENROUTER_API_KEY`) → `openai/gpt-4o-mini-transcribe`
+  - Uses JSON + base64 format (NOT multipart — OpenRouter rejects multipart)
+  - Endpoint: `https://openrouter.ai/api/v1/audio/transcriptions`
+  - Body: `{ model, input_audio: { data: base64, format: "m4a" } }`
+- **Fallback**: Direct OpenAI (`OPENAI_API_KEY`) → `whisper-1` with multipart/form-data
+
+If transcription fails, check `nanoclaw.error.log` for the specific error. Common cause: OpenAI quota exceeded — ensure `OPENROUTER_API_KEY` is set in `.env`.
+
+## File/PDF Attachments
+
+PDFs and other files sent via Slack are downloaded to the IPC directory by `src/channels/slack-media.ts`. The agent receives a note like:
+- `[PDF attached: /workspace/ipc/files/123-doc.pdf — run \`pdftotext <path> -\` to extract text]`
+- `pdftotext` is installed in the container image
+
+Images are saved to `/workspace/ipc/images/` and the agent uses the Read tool to view them.
+
+## Server Paths Reference
+
+| Path | What it is |
+|------|-----------|
+| `~/nanoclaw/` | NanoClaw repo (both agents) |
+| `~/nanoclaw/agents/cleo/groups/` | Cleo's group configs (in git) |
+| `~/nanoclaw/agents/silas/groups/` | Silas's group configs (in git) |
+| `~/nanoclaw/data/` | Runtime state: DB, sessions, IPC |
+| `~/nanoclaw/data/ipc/{group}/` | Per-group IPC files, images, files |
+| `~/nanoclaw/data/sessions/{group}/.claude/` | Agent memory (Claude projects) |
+| `~/nanoclaw/groups/` | Legacy runtime groups (thread context, logs) — NOT in git |
+| `~/nanoclaw/logs/nanoclaw.log` | App stdout log |
+| `~/nanoclaw/logs/nanoclaw.error.log` | App error log |
+| `~/nanoclaw/skills/` | Host-side skills (mounted into containers) |
+| `~/.config/nanoclaw/credentials/services/` | OAuth tokens (auto-refreshed) |
 
 ## Development
 
