@@ -21,9 +21,6 @@ const THINKING_REACTION = 'hourglass_flowing_sand';
 // Refresh it every 3 seconds to keep it visible during long-running tasks.
 const TYPING_REFRESH_MS = 3000;
 
-// Safety cap — auto-clear typing after this duration even if the container
-// is still running. Prevents stuck indicators on crashes/restarts.
-const MAX_TYPING_DURATION_MS = 60_000;
 
 export class SlackTypingIndicator {
   // Whether the assistant.threads.setStatus API is available per channel (detected at runtime).
@@ -39,9 +36,6 @@ export class SlackTypingIndicator {
   // Refresh timers for keeping the typing indicator alive during long tasks.
   private refreshTimers = new Map<string, ReturnType<typeof setInterval>>();
 
-  // When typing started per jid — used to enforce MAX_TYPING_DURATION_MS.
-  private typingStartedAt = new Map<string, number>();
-
   constructor(private app: App) {}
 
   /** Show or hide the typing indicator for a given jid. */
@@ -56,7 +50,6 @@ export class SlackTypingIndicator {
 
     if (isTyping) {
       if (this.thinkingTs.has(jid)) return; // already showing
-      this.typingStartedAt.set(jid, Date.now());
 
       // assistant.threads.setStatus works in both DM and channel threads
       // since the March 2026 scope update (accepts chat:write scope).
@@ -110,7 +103,6 @@ export class SlackTypingIndicator {
       const ts = this.thinkingTs.get(jid);
       if (!ts) return;
       this.thinkingTs.delete(jid);
-      this.typingStartedAt.delete(jid);
       this.stopRefresh(jid);
 
       if (ts.startsWith('assistant:')) {
@@ -172,13 +164,6 @@ export class SlackTypingIndicator {
         return;
       }
 
-      // Safety cap: auto-clear if typing has been active too long
-      const startedAt = this.typingStartedAt.get(jid);
-      if (startedAt && Date.now() - startedAt > MAX_TYPING_DURATION_MS) {
-        logger.warn({ jid }, 'Typing indicator exceeded max duration, auto-clearing');
-        this.setTyping(jid, false, undefined, undefined).catch(() => {});
-        return;
-      }
       const api = this.app.client as unknown as {
         apiCall: (
           method: string,
