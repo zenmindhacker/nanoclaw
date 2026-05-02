@@ -97,7 +97,7 @@ export async function fetchGanttsyWorkspaceTranscript(docId: string): Promise<st
       }
     }
 
-    if (transcriptStart === 0) {
+    if (transcriptStart === 0 && !speakerPattern.test(lines[0])) {
       logInfo(`[ganttsy_workspace] Doc ${docId} has no speaker patterns`);
       return null;
     }

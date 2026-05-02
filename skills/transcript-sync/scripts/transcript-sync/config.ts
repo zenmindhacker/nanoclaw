@@ -96,8 +96,18 @@ export const DEFAULT_LIMIT = 50;
 export const MIN_TRANSCRIPT_ROWS = 10;
 export const MIN_ENDED_AGO_MS = 5 * 60 * 1000; // 5 minutes
 export const DEDUP_TIME_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
-export const CALENDAR_WINDOW_MINUTES = 10;
+export const CALENDAR_WINDOW_MINUTES = 45;
 
 // Agent configuration
 export const COACHING_AGENT_TIMEOUT_SECONDS = 600;
 export const COACHING_AGENT_THINKING_LEVEL = 'medium';
+
+// LLM classifier (Stage 3: cheap model for transcript → calendar matching)
+export const LLM_CLASSIFIER_MODEL = 'anthropic/claude-haiku-4';
+export const LLM_CLASSIFIER_MAX_TOKENS = 200;
+export const LLM_TRANSCRIPT_EXCERPT_CHARS = 3000;
+export const LLM_CLASSIFIER_CONFIDENCE_THRESHOLD = 0.6;
+
+// IPC for loud failures
+export const IPC_DIR = '/workspace/ipc';
+export const SYSOPS_CHANNEL = 'slack:C07F195GB96';

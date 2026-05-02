@@ -35,6 +35,25 @@ export interface CalendarMeta {
   attendee_names: string[];
 }
 
+export interface CalendarEvent {
+  calendarId: string;
+  eventId: string;
+  title: string;
+  start: Date;
+  end: Date;
+  attendees: Attendee[];
+  description: string;
+  attendeeNames: string[];
+}
+
+export interface MatchResult {
+  event: CalendarEvent | null;
+  org: string | null;
+  confidence: number;
+  method: 'auto' | 'llm' | 'none';
+  reason: string;
+}
+
 export interface ClassificationResult {
   targetDir: string;
   reason: string;
@@ -93,6 +112,8 @@ export interface UnifiedMeeting {
   gcalEventId: string | null;
   attendees: Attendee[];
   gcalMeta: CalendarMeta | null;
+  matchResult?: MatchResult;
+  transcriptExcerpt?: string;
   shadowData?: ConversationRow;
   shadowTranscriptRows?: TranscriptRow[];
   ganttsyWorkspaceData?: {
@@ -140,6 +161,7 @@ export interface Args {
   ganttsyWorkspaceOnly: boolean;
   dryRun: boolean;
   reportOnly: boolean;
+  force: boolean;
   noCalendar: boolean;
   calendarIds: string[];
   calendarWindowMinutes: number;
