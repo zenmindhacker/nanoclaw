@@ -28,6 +28,7 @@ export * from './state.js';
 export * from './coaching.js';
 export * from './helpers.js';
 export * from './calendar.js';
+export * from './matcher.js';
 export * from './classification.js';
 export * from './confidentiality.js';
 export * from './dedup.js';

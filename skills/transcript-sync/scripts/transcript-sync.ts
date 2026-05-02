@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 /**
- * transcript-sync — Main orchestrator
+ * transcript-sync — Main orchestrator (v2: calendar-anchored LLM pipeline)
  *
- * Syncs transcripts from multiple sources (Shadow, Google Workspace)
- * to appropriate GitHub repositories based on attendee/content classification.
+ * Architecture:
+ *   Stage 1 — Ingest: batch-fetch calendar events + transcripts (Shadow, Drive)
+ *   Stage 2 — Candidate pairing: match transcripts to calendar events (±45 min)
+ *   Stage 3 — LLM classification: cheap model resolves ambiguous matches
+ *   Stage 4 — Route & commit: write markdown, git push
  *
- * All domain logic lives in ./transcript-sync/ modules; this file is the
- * thin orchestrator: CLI parsing, per-meeting processing, and the main loop.
+ * Calendar auth failures are FATAL — pipeline halts and posts to #sysops.
  */
 
 import Database from 'better-sqlite3';
@@ -25,14 +27,17 @@ import {
   DEFAULT_CALENDAR_IDS,
   DEDUP_TIME_WINDOW_MS,
   MIN_TRANSCRIPT_ROWS,
+  CALENDAR_WINDOW_MINUTES,
 } from './transcript-sync/config.js';
 
 // Types
 import type {
   Attendee,
+  CalendarEvent,
   CalendarMeta,
   ClassificationContext,
   ConversationRow,
+  MatchResult,
   State,
   Args,
   UnifiedMeeting,
@@ -44,7 +49,8 @@ import { logInfo, logError, logWarn } from './transcript-sync/logger.js';
 import { loadState, saveState } from './transcript-sync/state.js';
 import { slugify, mergeAttendees } from './transcript-sync/helpers.js';
 import { hasConfidentialityTrigger, confirmConfidentialWithLLM } from './transcript-sync/confidentiality.js';
-import { getCalendarService, assertCalendarAuthHealthy, calendarFallbackAttendees } from './transcript-sync/calendar.js';
+import { getCalendarService, assertCalendarAuthHealthy, fetchCalendarEvents, calendarEventToMeta, postCalendarFailureToSysops } from './transcript-sync/calendar.js';
+import { matchTranscript } from './transcript-sync/matcher.js';
 import { classifyTarget, classifyGanttsySubRoute, isLikelyKevinCoachingFromContent } from './transcript-sync/classification.js';
 import { scanExistingTranscripts, normalizeNames } from './transcript-sync/dedup.js';
 import type { ExistingTranscripts } from './transcript-sync/dedup.js';
@@ -70,8 +76,9 @@ function parseArgs(): Args {
     limit: 50,
     sinceDays: 30,
     reportOnly: false,
+    force: false,
     noCalendar: false,
-    calendarWindowMinutes: 10,
+    calendarWindowMinutes: CALENDAR_WINDOW_MINUTES,
     calendarIds: DEFAULT_CALENDAR_IDS,
     tasksMode: 'auto',
     tasksMinConfidence: 0.72,
@@ -91,8 +98,6 @@ function parseArgs(): Args {
       args.sinceDays = parseInt(process.argv[++i], 10);
     } else if (arg === '--report-only') {
       args.reportOnly = true;
-    } else if (arg === '--no-calendar') {
-      args.noCalendar = true;
     } else if (arg === '--calendar-window-minutes') {
       args.calendarWindowMinutes = parseInt(process.argv[++i], 10);
     } else if (arg === '--calendar-ids') {
@@ -103,6 +108,8 @@ function parseArgs(): Args {
       args.tasksMinConfidence = parseFloat(process.argv[++i]);
     } else if (arg === '--tasks-max-items') {
       args.tasksMaxItems = parseInt(process.argv[++i], 10);
+    } else if (arg === '--force') {
+      args.force = true;
     } else if (arg === '--shadow-only') {
       args.shadowOnly = true;
     } else if (arg === '--ganttsy-workspace-only') {
@@ -175,14 +182,14 @@ function clearClassification(key: string): void {
 }
 
 // ============================================================================
-// Per-meeting processing
+// Per-meeting processing (Stage 4: Route & Write)
 // ============================================================================
 
 async function processMeeting(
   meeting: UnifiedMeeting,
   args: Args,
   state: State,
-  service: any,
+  allCalendarEvents: CalendarEvent[],
   coachingPaths: string[],
   workPaths: string[],
   pendingMeetings: PendingMeeting[],
@@ -192,9 +199,6 @@ async function processMeeting(
   const title = meeting.title || `Meeting ${meeting.id}`;
 
   // --- Manual classification override ---------------------------------------
-  // User replied `classify shadow=<id> <org>` or `skip shadow=<id>` in sysops.
-  // `classify-transcript.ts` wrote the override into `.classifications.json`.
-  // We honor it here, bypassing calendar matching + auto-classifier.
   const overrideKey = `${meeting.source}=${meeting.id}`;
   const override = classifications[overrideKey];
   if (override === 'skip') {
@@ -215,7 +219,7 @@ async function processMeeting(
     return { wrote: false };
   }
 
-  // Get transcript text for confidentiality check
+  // Get transcript text
   let transcriptText = '';
   if (meeting.source === 'shadow' && meeting.shadowTranscriptRows) {
     transcriptText = meeting.shadowTranscriptRows.map(r => `${r.spkrName || ''}: ${r.transContent || ''}`).join('\n');
@@ -246,28 +250,28 @@ async function processMeeting(
     logInfo(`[confidential] ${meeting.source}=${meeting.id} LLM says OK, proceeding`);
   }
 
-  // Get gcal metadata if not already present. Still worth doing even when
-  // we have a manual override — the gcal info populates the file header so
-  // dedup against future runs works.
-  let gcalMeta = meeting.gcalMeta;
-  let gcalAttendees: Attendee[] = [];
-
-  if (!gcalMeta && service && meeting.startedAt) {
-    [gcalAttendees, gcalMeta] = await calendarFallbackAttendees(
-      service,
-      meeting.startedAt.toISOString(),
+  // --- Stage 2+3: Match transcript to calendar event -----------------------
+  // Use pre-fetched match result if available, otherwise run matcher now.
+  let matchResult = meeting.matchResult;
+  if (!matchResult) {
+    matchResult = await matchTranscript(
+      meeting.startedAt,
       title,
-      args.calendarIds,
-      args.calendarWindowMinutes
+      transcriptText,
+      allCalendarEvents,
     );
   }
 
-  const attendees = mergeAttendees(meeting.attendees, gcalAttendees);
+  // Build gcalMeta + attendees from match result
+  let gcalMeta: CalendarMeta | null = meeting.gcalMeta;
+  let attendees = [...meeting.attendees];
+
+  if (matchResult.event) {
+    gcalMeta = calendarEventToMeta(matchResult.event);
+    attendees = mergeAttendees(attendees, matchResult.event.attendees);
+  }
 
   // --- Apply manual org override (if set) ----------------------------------
-  // Skip calendar-match failure + classifier when the user already said
-  // where this should go. Clear the override so it doesn't stay "sticky"
-  // past this run.
   let targetDir: string;
   let baseReason: string;
   if (override && ORG_TARGET_DIRS[override]) {
@@ -275,56 +279,37 @@ async function processMeeting(
     baseReason = `override:${override}`;
     logInfo(`[override] ${overrideKey} → ${override} (user-classified)`);
     clearClassification(overrideKey);
-  } else {
-    // Loud fail: if a shadow meeting has no calendar match, skip + track.
-    // Silent routing to personal:no_attendees hides calendar problems
-    // (expired token, meeting outside window, meeting missing from any cal).
-    if (meeting.source === 'shadow' && !gcalMeta) {
-      logWarn(`[skip] ${meeting.source}=${meeting.id} no_calendar_match title=${JSON.stringify(title)} started=${meeting.startedAt.toISOString()}`);
-      unmatchedMeetings.push({
-        id: String(meeting.id),
-        source: meeting.source,
-        title,
-        startedAt: meeting.startedAt.toISOString(),
-        reason: 'no_calendar_match',
-      });
-      return { wrote: false };
-    }
-
-    const classified = classifyTarget(title, attendees, gcalMeta);
-    targetDir = classified.targetDir;
-    baseReason = classified.reason;
-  }
-
-  // Fail loudly when the classifier falls through to low-confidence defaults.
-  // Before: silently routed to personal/ctci — the user would find a pile
-  // of misclassified transcripts. Now: skip + surface to the user so they
-  // can manually classify. Only applies to shadow; ganttsy_workspace has
-  // its own forced routing below. Manual overrides bypass this check.
-  const AMBIGUOUS_REASONS = new Set(['personal:no_attendees', 'default:ctci']);
-  if (!override && meeting.source === 'shadow' && AMBIGUOUS_REASONS.has(baseReason)) {
-    logWarn(`[skip] ${meeting.source}=${meeting.id} classification_unclear reason=${baseReason} title=${JSON.stringify(title)}`);
+  } else if (matchResult.org && ORG_TARGET_DIRS[matchResult.org]) {
+    // LLM classified directly to an org (no calendar match needed)
+    targetDir = ORG_TARGET_DIRS[matchResult.org];
+    baseReason = matchResult.reason;
+  } else if (matchResult.method === 'none' && !matchResult.event) {
+    // No match and no LLM classification — route to unmatched
+    logWarn(`[skip] ${meeting.source}=${meeting.id} no_match title=${JSON.stringify(title)} started=${meeting.startedAt.toISOString()} reason=${matchResult.reason}`);
     unmatchedMeetings.push({
       id: String(meeting.id),
       source: meeting.source,
       title,
       startedAt: meeting.startedAt.toISOString(),
-      reason: `classification_unclear:${baseReason}`,
+      reason: matchResult.reason,
     });
     return { wrote: false };
+  } else {
+    // Have a calendar match (auto or LLM) — use attendee-based classifier
+    const classified = classifyTarget(title, attendees, gcalMeta);
+    targetDir = classified.targetDir;
+    baseReason = classified.reason;
   }
 
   const ctciDir = join(GITHUB_ROOT, 'cognitivetech/ctci-docs/transcripts');
 
-  // Kevin coaching heuristic
+  // Kevin coaching content heuristic
   if (targetDir === ctciDir && isLikelyKevinCoachingFromContent(title, transcriptText)) {
     targetDir = KEVIN_COACHING_TRANSCRIPTS;
     baseReason = 'rule:kevin_content_heuristic';
   }
 
-  // Ganttsy workspace fallback: docs from Ganttsy Drive folder always belong in Ganttsy repos.
-  // If classification didn't already route to a Ganttsy dir, force to Ganttsy sub-route.
-  // Skipped when a manual override is in effect — user's decision wins.
+  // Ganttsy workspace fallback: docs from Drive folder always route to Ganttsy repos
   const ganttsyDirs = [
     join(GITHUB_ROOT, 'ganttsy/ganttsy-docs/transcripts'),
     join(GITHUB_ROOT, 'ganttsy/ganttsy-strategy/transcripts'),
@@ -347,10 +332,7 @@ async function processMeeting(
     baseReason = `ganttsy_workspace_fallback|${result.reason}`;
   }
 
-  let reason = `${meeting.source}|${baseReason}`;
-  if (gcalAttendees.length > 0) {
-    reason = `${reason}|gcal_fallback`;
-  }
+  let reason = `${meeting.source}|${matchResult.method}|${baseReason}`;
 
   const ts = meeting.startedAt.toISOString().split('T')[0];
   const titleForFilename = (gcalMeta?.event_title || title || `meeting-${meeting.id}`).trim();
@@ -379,6 +361,8 @@ async function processMeeting(
     `- started: ${meeting.startedAt.toISOString()}`,
     `- ended: ${meeting.endedAt?.toISOString() || 'unknown'}`,
     `- routing_reason: ${reason}`,
+    `- match_method: ${matchResult.method}`,
+    `- match_confidence: ${matchResult.confidence}`,
     `- attendee_count: ${attendees.length}`,
   ];
 
@@ -448,7 +432,6 @@ async function processMeeting(
     coachingPaths.push(outPath);
   } else {
     workPaths.push(outPath);
-    // Extract action items and save as pending (human-in-the-loop approval via #sysops)
     const dateStr = meeting.startedAt.toISOString().split('T')[0];
     const pending = await extractAndSavePendingActions(
       outPath,
@@ -480,19 +463,33 @@ async function main() {
     spawnCoachingAnalysis(incompleteCoachingPaths);
   }
 
-  // Google Calendar is MANDATORY for correct routing. Without it, meetings
-  // have no attendee data and get misrouted. Use --no-calendar only for debugging.
-  const service = args.noCalendar ? null : getCalendarService();
-  if (!args.noCalendar) {
-    if (!service) {
-      throw new Error('GCAL_REQUIRED: Calendar service failed to init. Fix credentials or use --no-calendar to skip (meetings WILL be misrouted).');
-    }
-    await assertCalendarAuthHealthy(service, args.calendarIds);
+  // ==========================================================================
+  // Stage 1A: Calendar — MANDATORY. Fail loudly if broken.
+  // ==========================================================================
+  const service = getCalendarService();
+  if (!service) {
+    const msg = 'GCAL_REQUIRED: Calendar service failed to init. Fix credentials.';
+    postCalendarFailureToSysops(msg);
+    throw new Error(msg);
+  }
+  await assertCalendarAuthHealthy(service, args.calendarIds);
+
+  // Batch-fetch ALL calendar events for the sync window
+  const calTimeMin = new Date(Date.now() - args.sinceDays * 24 * 60 * 60 * 1000);
+  const calTimeMax = new Date(Date.now() + 60 * 60 * 1000); // +1h buffer
+  const allCalendarEvents = await fetchCalendarEvents(service, args.calendarIds, calTimeMin, calTimeMax);
+
+  if (allCalendarEvents.length === 0) {
+    const msg = `GCAL_EMPTY: 0 calendar events fetched for ${args.sinceDays}-day window. This is likely a bug — check calendar IDs and credentials.`;
+    postCalendarFailureToSysops(msg);
+    throw new Error(msg);
   }
 
-  logInfo(`[mode] Idempotent sync, lookback=${args.sinceDays} days`);
+  logInfo(`[mode] Idempotent sync, lookback=${args.sinceDays} days, calendar_events=${allCalendarEvents.length}`);
 
-  // Pre-scan existing transcript files for idempotent deduplication
+  // ==========================================================================
+  // Stage 1B: Pre-scan existing transcript files for deduplication
+  // ==========================================================================
   const transcriptDirs = [
     join(GITHUB_ROOT, 'ganttsy/ganttsy-docs/transcripts'),
     join(GITHUB_ROOT, 'ganttsy/ganttsy-strategy/transcripts'),
@@ -505,39 +502,35 @@ async function main() {
     PERSONAL_TRANSCRIPTS,
     TESTBOARD_TRANSCRIPTS,
   ];
-  const existingTranscripts = scanExistingTranscripts(transcriptDirs);
-  if (existingTranscripts.gcalEventIds.size > 0 || existingTranscripts.shadowConvIdxs.size > 0 || existingTranscripts.ganttsyWorkspaceDocIds.size > 0) {
+  const existingTranscripts = args.force
+    ? { gcalEventIds: new Set<string>(), shadowConvIdxs: new Set<number>(), ganttsyWorkspaceDocIds: new Set<string>() }
+    : scanExistingTranscripts(transcriptDirs);
+  if (args.force) {
+    logInfo(`[force] Bypassing dedup — all meetings in the ${args.sinceDays}-day window will be re-processed`);
+  } else if (existingTranscripts.gcalEventIds.size > 0 || existingTranscripts.shadowConvIdxs.size > 0 || existingTranscripts.ganttsyWorkspaceDocIds.size > 0) {
     logInfo(`[dedup] Existing transcripts: gcal_events=${existingTranscripts.gcalEventIds.size} shadow_convIdxs=${existingTranscripts.shadowConvIdxs.size} ganttsy_docs=${existingTranscripts.ganttsyWorkspaceDocIds.size}`);
   }
 
+  // ==========================================================================
+  // Stage 1C: Fetch transcripts from sources
+  // ==========================================================================
   const ganttsyWorkspaceMeetings: UnifiedMeeting[] = [];
   const shadowMeetings: UnifiedMeeting[] = [];
 
-  // ========================================================================
-  // Fetch Ganttsy Google Workspace meetings
-  // ========================================================================
+  // --- Ganttsy Google Workspace ---
   if (!args.shadowOnly) {
     try {
       const modifiedAfter = new Date(Date.now() - args.sinceDays * 24 * 60 * 60 * 1000).toISOString();
-
       const docs = await fetchGanttsyWorkspaceDocs(modifiedAfter, args.limit);
       const skippedGanttsyWorkspaceIds = new Set(state.skippedGanttsyWorkspaceIds || []);
 
       for (const doc of docs) {
-        if (skippedGanttsyWorkspaceIds.has(doc.id)) {
-          logInfo(`[skip] ganttsy_workspace=${doc.id} previously marked confidential`);
-          continue;
-        }
-
-        if (existingTranscripts.ganttsyWorkspaceDocIds.has(doc.id)) {
-          logInfo(`[skip] ganttsy_workspace=${doc.id} already has transcript file`);
-          continue;
-        }
+        if (skippedGanttsyWorkspaceIds.has(doc.id)) continue;
+        if (existingTranscripts.ganttsyWorkspaceDocIds.has(doc.id)) continue;
 
         const transcript = await fetchGanttsyWorkspaceTranscript(doc.id);
         if (!transcript) continue;
 
-        // Extract attendees from doc content
         const attendeeEmails = parseGanttsyWorkspaceAttendees(transcript);
         const selfEmails = ['cian@cognitivetech.net', 'cian@ganttsy.com', 'cian.whalley@newvaluegroup.com'];
         const attendees: Attendee[] = attendeeEmails.map(email => ({
@@ -547,19 +540,7 @@ async function main() {
           source: 'ganttsy_workspace',
         }));
 
-        // Try to match to gcal event
-        let gcalMeta: CalendarMeta | null = null;
-        let gcalAttendees: Attendee[] = [];
         const meetingDate = parseGanttsyWorkspaceMeetingDate(doc.name, doc.modifiedTime);
-        if (service) {
-          [gcalAttendees, gcalMeta] = await calendarFallbackAttendees(
-            service,
-            meetingDate.toISOString(),
-            doc.name,
-            args.calendarIds,
-            args.calendarWindowMinutes
-          );
-        }
 
         ganttsyWorkspaceMeetings.push({
           source: 'ganttsy_workspace',
@@ -567,9 +548,9 @@ async function main() {
           title: doc.name,
           startedAt: meetingDate,
           endedAt: null,
-          gcalEventId: gcalMeta?.event_id || null,
-          attendees: mergeAttendees(attendees, gcalAttendees),
-          gcalMeta,
+          gcalEventId: null,
+          attendees,
+          gcalMeta: null,
           ganttsyWorkspaceData: { doc, transcript },
         });
       }
@@ -580,18 +561,10 @@ async function main() {
     }
   }
 
-  // ========================================================================
-  // Fetch Shadow meetings
-  // ========================================================================
+  // --- Shadow ---
   if (!args.ganttsyWorkspaceOnly && existsSync(DB_PATH)) {
     const db = new Database(DB_PATH, { readonly: true });
 
-    // ORDER BY convIdx DESC — always fetch the newest meetings first.
-    // Previously `ORDER BY convIdx ASC LIMIT 50` silently dropped everything
-    // past the 50th-oldest conv in the window, so once >50 meetings landed
-    // in the 30-day window, new ones stopped being processed. We still cap
-    // for safety, but bump to 500 — comfortably above any plausible 30-day
-    // backlog.
     let convs: ConversationRow[] = db.prepare(`
       SELECT convIdx, convUuid, convTitle, convStartedAt, convEndedAt, convCreatedAt
       FROM SHADOW_CONVERSATION
@@ -601,40 +574,20 @@ async function main() {
       LIMIT ?
     `).all(`-${args.sinceDays} days`, Math.max(args.limit, 500)) as any[];
 
-    // Filter out conversations that already have transcript files
     convs = convs.filter(c => !existingTranscripts.shadowConvIdxs.has(c.convIdx));
-
     const skippedConvs = new Set(state.skippedConvs || []);
 
     for (const c of convs) {
-      if (skippedConvs.has(c.convIdx)) {
-        logInfo(`[skip] shadow=${c.convIdx} previously marked confidential`);
-        continue;
-      }
+      if (skippedConvs.has(c.convIdx)) continue;
 
       const rows = fetchTranscriptRows(db, c.convIdx);
       if (rows.length === 0) continue;
-
-      // Check minimum transcript length
       if (rows.length < MIN_TRANSCRIPT_ROWS) {
-        logInfo(`[skip] shadow=${c.convIdx} has only ${rows.length} rows (min=${MIN_TRANSCRIPT_ROWS}), likely incomplete`);
+        logInfo(`[skip] shadow=${c.convIdx} has only ${rows.length} rows (min=${MIN_TRANSCRIPT_ROWS})`);
         continue;
       }
 
       const shadowAttendees = fetchAttendees(db, c.convUuid);
-
-      // Try to match to gcal event
-      let gcalMeta: CalendarMeta | null = null;
-      let gcalAttendees: Attendee[] = [];
-      if (service && c.convStartedAt) {
-        [gcalAttendees, gcalMeta] = await calendarFallbackAttendees(
-          service,
-          c.convStartedAt,
-          c.convTitle,
-          args.calendarIds,
-          args.calendarWindowMinutes
-        );
-      }
 
       shadowMeetings.push({
         source: 'shadow',
@@ -642,9 +595,9 @@ async function main() {
         title: c.convTitle || `Conversation ${c.convIdx}`,
         startedAt: parseShadowDt(c.convStartedAt),
         endedAt: c.convEndedAt ? parseShadowDt(c.convEndedAt) : null,
-        gcalEventId: gcalMeta?.event_id || null,
-        attendees: mergeAttendees(shadowAttendees, gcalAttendees),
-        gcalMeta,
+        gcalEventId: null,
+        attendees: shadowAttendees,
+        gcalMeta: null,
         shadowData: c,
         shadowTranscriptRows: rows,
       });
@@ -656,39 +609,19 @@ async function main() {
     logWarn(`[shadow] DB not found at ${DB_PATH}`);
   }
 
-  // ========================================================================
+  // ==========================================================================
   // Deduplicate: prioritize Ganttsy Workspace > Shadow
-  // ========================================================================
-
-  const processedGcalEventIds = new Set<string>(existingTranscripts.gcalEventIds);
+  // ==========================================================================
   const processedTimeWindows: Date[] = [];
-
   const toProcess: UnifiedMeeting[] = [];
   const dedupedShadowIds: string[] = [];
 
-  // Add all Ganttsy Workspace meetings first (highest priority)
-  const dedupedGanttsyWorkspaceIds: string[] = [];
   for (const gw of ganttsyWorkspaceMeetings) {
-    if (gw.gcalEventId && existingTranscripts.gcalEventIds.has(gw.gcalEventId)) {
-      logInfo(`[dedup] ganttsy_workspace=${gw.id} already exists (gcal_event_id=${gw.gcalEventId}), skipping`);
-      dedupedGanttsyWorkspaceIds.push(gw.id);
-      continue;
-    }
     toProcess.push(gw);
-    if (gw.gcalEventId) {
-      processedGcalEventIds.add(gw.gcalEventId);
-    }
     processedTimeWindows.push(gw.startedAt);
   }
 
-  // Add Shadow meetings only if no higher priority duplicate
   for (const sm of shadowMeetings) {
-    if (sm.gcalEventId && processedGcalEventIds.has(sm.gcalEventId)) {
-      logInfo(`[dedup] shadow=${sm.id} matches higher priority source by gcal_event_id=${sm.gcalEventId}, skipping`);
-      dedupedShadowIds.push(sm.id);
-      continue;
-    }
-
     const isDuplicate = processedTimeWindows.some(otherTime => {
       const diff = Math.abs(sm.startedAt.getTime() - otherTime.getTime());
       return diff <= DEDUP_TIME_WINDOW_MS;
@@ -710,26 +643,22 @@ async function main() {
 
   logInfo(`Processing ${toProcess.length} meeting(s) (deduped ${dedupedShadowIds.length} shadow)`);
 
-  // ========================================================================
-  // Process meetings
-  // ========================================================================
+  // ==========================================================================
+  // Stage 2+3+4: Match, classify, route each meeting
+  // ==========================================================================
   const buckets: Map<string, number> = new Map();
   const coachingPaths: string[] = [];
   const workPaths: string[] = [];
   const pendingMeetings: PendingMeeting[] = [];
   const unmatchedMeetings: Array<{ id: string; source: string; title: string; startedAt: string; reason?: string }> = [];
-  // Load user-provided classification overrides once per run. Entries are
-  // consumed (cleared) inside processMeeting as we apply them.
+
   const classifications = loadClassifications();
   const classificationCount = Object.keys(classifications).length;
   if (classificationCount > 0) {
     logInfo(`[classifications] ${classificationCount} manual override(s) loaded`);
   }
 
-  // Apply skip overrides EAGERLY — a skipped conv would be filtered out of
-  // toProcess by the dedup step below, so processMeeting never runs and the
-  // override would never get cleared. Handle it here so the state watermark
-  // (skippedConvs) picks up the skip and the override file is cleaned up.
+  // Apply skip overrides eagerly
   for (const [key, org] of Object.entries(classifications)) {
     if (org !== 'skip') continue;
     const m = key.match(/^(\w+)=(.+)$/);
@@ -743,7 +672,7 @@ async function main() {
       state.skippedGanttsyWorkspaceIds = state.skippedGanttsyWorkspaceIds || [];
       if (!state.skippedGanttsyWorkspaceIds.includes(id)) state.skippedGanttsyWorkspaceIds.push(id);
     } else {
-      continue; // unknown source — leave the override in place for processMeeting
+      continue;
     }
     logInfo(`[override] ${key} skip (user-requested, applied eagerly)`);
     clearClassification(key);
@@ -754,11 +683,10 @@ async function main() {
   }
   let exported = 0;
 
-  // Clean up stale pending files before processing
   cleanStalePendingFiles();
 
   for (const meeting of toProcess) {
-    const result = await processMeeting(meeting, args, state, service, coachingPaths, workPaths, pendingMeetings, unmatchedMeetings, classifications);
+    const result = await processMeeting(meeting, args, state, allCalendarEvents, coachingPaths, workPaths, pendingMeetings, unmatchedMeetings, classifications);
 
     if (result.wrote) {
       exported++;
@@ -787,16 +715,14 @@ async function main() {
   }
 
   if (unmatchedMeetings.length > 0) {
-    logWarn(`[unmatched] ${unmatchedMeetings.length} shadow meeting(s) had no calendar match — NOT routed:`);
+    logWarn(`[unmatched] ${unmatchedMeetings.length} meeting(s) could not be matched or classified — NOT routed:`);
     for (const u of unmatchedMeetings) {
-      logWarn(`  - ${u.source}=${u.id} "${u.title}" started=${u.startedAt}`);
+      logWarn(`  - ${u.source}=${u.id} "${u.title}" started=${u.startedAt} reason=${u.reason}`);
     }
   }
 
   logInfo(`Done. processed=${toProcess.length} exported=${exported} coaching=${coachingPaths.length} work=${workPaths.length} pending=${pendingMeetings.length} unmatched=${unmatchedMeetings.length} deduped_shadow=${dedupedShadowIds.length}`);
 
-  // Output written file paths to stdout so the shell wrapper can git-add only these files.
-  // Also surface unmatched meetings so the gate/agent can alert the user.
   const allWrittenPaths = [...coachingPaths, ...workPaths];
   if (allWrittenPaths.length > 0 || unmatchedMeetings.length > 0) {
     console.log(JSON.stringify({ writtenFiles: allWrittenPaths, unmatched: unmatchedMeetings }));

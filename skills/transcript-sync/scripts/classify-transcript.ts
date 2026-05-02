@@ -124,7 +124,7 @@ if (!key || !org) {
 // Accept both "shadow=362" and "shadow:362" and just "362" (assume shadow)
 let normKey = key.toLowerCase().replace(':', '=');
 if (/^\d+$/.test(normKey)) normKey = `shadow=${normKey}`;
-if (!/^(shadow|ganttsy_workspace|plaud|fathom)=\S+$/.test(normKey)) {
+if (!/^(shadow|ganttsy_workspace)=\S+$/.test(normKey)) {
   die(`invalid key format "${key}"; expected <source>=<id> (e.g. shadow=362)`);
 }
 
