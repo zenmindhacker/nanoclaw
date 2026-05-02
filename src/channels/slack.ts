@@ -77,14 +77,7 @@ export class SlackChannel implements Channel {
   private getActiveThread(jid: string): string | undefined {
     const entry = this.activeThreadTs.get(jid);
     if (!entry) return undefined;
-    // DM channels (D-prefixed) keep thread context indefinitely — there's only
-    // one conversation so the thread should always be reused.
-    const channelId = jid.replace(/^slack:/, '');
-    const isDm = channelId.startsWith('D');
-    if (
-      !isDm &&
-      Date.now() - entry.setAt > SlackChannel.THREAD_CONTEXT_TTL_MS
-    ) {
+    if (Date.now() - entry.setAt > SlackChannel.THREAD_CONTEXT_TTL_MS) {
       this.activeThreadTs.delete(jid);
       return undefined;
     }
@@ -326,10 +319,8 @@ export class SlackChannel implements Channel {
 
       // Build the effective JID for this message
       let jid: string;
-      const isChannel = msg.channel_type !== 'im';
-      if (isThreadReply && channelGroup && isChannel) {
-        // Thread reply in a registered channel → route to thread group
-        // DM threads stay in the DM group (already 1-on-1, no need for isolation)
+      if (isThreadReply && channelGroup) {
+        // Thread reply → route to thread-specific group (channels and DMs)
         const threadJid = `slack:${msg.channel}:t:${messageThreadTs}`;
         jid = threadJid;
         // Auto-create thread group if it doesn't exist (via callback)
@@ -362,11 +353,9 @@ export class SlackChannel implements Channel {
       // embedded in the JID so activeThreadTs is not needed. For channel-level
       // messages and DMs, track the thread so replies and typing indicators work.
       if (!isBotMessage) {
-        // DM thread replies still route to the channel JID (no thread groups for DMs),
-        // so we must always update activeThreadTs for DMs. For channels, only set it
-        // on top-level messages (thread groups handle the rest).
-        const isDmChannel = msg.channel_type === 'im';
-        if (!isThreadReply || isDmChannel) {
+        // Only set activeThreadTs for top-level messages. Thread groups embed
+        // the thread_ts in the JID, so activeThreadTs is not needed for replies.
+        if (!isThreadReply) {
           const threadTs = messageThreadTs ?? msg.ts;
           this.activeThreadTs.set(jid, { ts: threadTs, setAt: Date.now() });
         }
