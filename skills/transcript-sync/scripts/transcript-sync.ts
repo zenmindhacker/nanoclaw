@@ -299,6 +299,29 @@ async function processMeeting(
     const classified = classifyTarget(title, attendees, gcalMeta);
     targetDir = classified.targetDir;
     baseReason = classified.reason;
+
+    // Safety net: if classifier returns ambiguous result (no attendees or
+    // unknown domain), the calendar match alone isn't enough for routing.
+    // Fall back to the LLM's org classification if available, otherwise
+    // flag as unmatched for human triage.
+    const AMBIGUOUS_REASONS = new Set(['personal:no_attendees', 'default:ctci']);
+    if (AMBIGUOUS_REASONS.has(classified.reason)) {
+      if (matchResult.org && ORG_TARGET_DIRS[matchResult.org]) {
+        targetDir = ORG_TARGET_DIRS[matchResult.org];
+        baseReason = `${classified.reason}→llm_fallback:${matchResult.org}`;
+        logInfo(`[route] ${meeting.source}=${meeting.id} classifier ambiguous (${classified.reason}), using LLM org=${matchResult.org}`);
+      } else {
+        logWarn(`[skip] ${meeting.source}=${meeting.id} classifier ambiguous (${classified.reason}), no LLM fallback`);
+        unmatchedMeetings.push({
+          id: String(meeting.id),
+          source: meeting.source,
+          title,
+          startedAt: meeting.startedAt.toISOString(),
+          reason: `ambiguous:${classified.reason}`,
+        });
+        return { wrote: false };
+      }
+    }
   }
 
   const ctciDir = join(GITHUB_ROOT, 'cognitivetech/ctci-docs/transcripts');

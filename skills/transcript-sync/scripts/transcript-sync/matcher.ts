@@ -83,19 +83,11 @@ export function tryAutoMatch(candidates: CalendarEvent[]): MatchResult | null {
     };
   }
 
-  // If there's exactly one candidate total (even without attendees), still
-  // auto-match — it's the only event in the window. The classifier will
-  // handle org routing from the transcript content if needed.
-  if (candidates.length === 1) {
-    return {
-      event: candidates[0],
-      org: null,
-      confidence: 0.75,
-      method: 'auto',
-      reason: 'auto:single_candidate_no_attendees',
-    };
-  }
-
+  // If there are candidates but none with attendees, do NOT auto-match.
+  // The event is in the right time window but has no attendee data for
+  // routing. Let the LLM see the transcript + candidates and classify
+  // the org directly — it's much better at this than blindly anchoring
+  // to an attendee-less event.
   return null; // Need LLM
 }
 
