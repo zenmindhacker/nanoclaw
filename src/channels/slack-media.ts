@@ -49,22 +49,38 @@ export async function transcribeSlackAudio(
     }
     const audioBuffer = Buffer.from(await downloadRes.arrayBuffer());
 
-    // Determine a reasonable file extension for Whisper
-    // Slack voice memos are typically M4A wrapped in a MP4 container
+    // Determine audio format from URL for OpenRouter's input_audio.format field
     const ext = fileUrl.includes('.')
       ? fileUrl.split('.').pop()!.split('?')[0]
       : 'mp4';
 
-    const formData = new FormData();
-    const blob = new Blob([audioBuffer], { type: 'audio/mpeg' });
-    formData.append('file', blob, `voice.${ext}`);
-    formData.append('model', model);
-
-    const whisperRes = await fetch(whisperEndpoint, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}` },
-      body: formData,
-    });
+    let whisperRes: Response;
+    if (useOpenRouter) {
+      // OpenRouter STT uses JSON + base64, not multipart/form-data
+      const base64Audio = audioBuffer.toString('base64');
+      whisperRes = await fetch(whisperEndpoint, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          input_audio: { data: base64Audio, format: ext },
+        }),
+      });
+    } else {
+      // OpenAI direct: standard multipart/form-data
+      const formData = new FormData();
+      const blob = new Blob([audioBuffer], { type: 'audio/mpeg' });
+      formData.append('file', blob, `voice.${ext}`);
+      formData.append('model', model);
+      whisperRes = await fetch(whisperEndpoint, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${apiKey}` },
+        body: formData,
+      });
+    }
 
     if (!whisperRes.ok) {
       const errText = await whisperRes.text();
