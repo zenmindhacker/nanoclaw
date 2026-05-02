@@ -30,7 +30,7 @@ export async function transcribeSlackAudio(
   const whisperEndpoint = useOpenRouter
     ? 'https://openrouter.ai/api/v1/audio/transcriptions'
     : 'https://api.openai.com/v1/audio/transcriptions';
-  const model = useOpenRouter ? 'openai/whisper-large-v3' : 'whisper-1';
+  const model = useOpenRouter ? 'openai/whisper-large-v3-turbo' : 'whisper-1';
 
   if (!apiKey) {
     logger.warn(
