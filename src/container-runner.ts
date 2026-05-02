@@ -854,12 +854,13 @@ export function writeOutboundContactsSnapshot(groupFolder: string): void {
 export function writeConversationHistorySnapshot(
   groupFolder: string,
   chatJid: string,
+  filename: string = 'conversation_history.json',
 ): void {
   const groupIpcDir = resolveGroupIpcPath(groupFolder);
   fs.mkdirSync(groupIpcDir, { recursive: true });
 
   // Write up to 200 messages — enough for deep history lookup
   const history = getConversationHistory(chatJid, 200);
-  const historyFile = path.join(groupIpcDir, 'conversation_history.json');
+  const historyFile = path.join(groupIpcDir, filename);
   fs.writeFileSync(historyFile, JSON.stringify(history, null, 2));
 }

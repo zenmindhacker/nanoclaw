@@ -568,6 +568,12 @@ async function main(): Promise<void> {
     prompt += `\n\n<system_note>Full conversation history (including your previous responses) is available at ${historyFile}. Use the Read tool to review it if you need context beyond what's shown above.</system_note>`;
   }
 
+  // For DM thread groups: hint about the parent DM's full history
+  const dmHistoryFile = '/workspace/ipc/dm_history.json';
+  if (fs.existsSync(dmHistoryFile)) {
+    prompt += `\n\n<system_note>This is a thread within a DM conversation. The full DM history (across all threads) is at ${dmHistoryFile}. Read it if you need context from other threads or earlier conversations.</system_note>`;
+  }
+
   if (containerInput.isScheduledTask) {
     prompt = `[SCHEDULED TASK - The following message was sent automatically and is not coming directly from the user or group.]\n\n${prompt}`;
   }
