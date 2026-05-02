@@ -16,13 +16,27 @@ import { logger } from '../logger.js';
 export async function transcribeSlackAudio(
   fileUrl: string,
 ): Promise<string | null> {
-  const env = readEnvFile(['OPENAI_API_KEY', 'SLACK_BOT_TOKEN']);
-  const openaiKey = env.OPENAI_API_KEY;
+  const env = readEnvFile([
+    'OPENROUTER_API_KEY',
+    'OPENAI_API_KEY',
+    'SLACK_BOT_TOKEN',
+  ]);
   const botToken = env.SLACK_BOT_TOKEN;
 
-  if (!openaiKey) {
-    logger.warn('OPENAI_API_KEY not set — cannot transcribe voice message');
-    return '[Voice message — transcription unavailable: set OPENAI_API_KEY in .env]';
+  // Prefer OpenRouter (shared quota, no per-key billing limits).
+  // Fall back to direct OpenAI if OR key is absent.
+  const useOpenRouter = !!env.OPENROUTER_API_KEY;
+  const apiKey = env.OPENROUTER_API_KEY || env.OPENAI_API_KEY;
+  const whisperEndpoint = useOpenRouter
+    ? 'https://openrouter.ai/api/v1/audio/transcriptions'
+    : 'https://api.openai.com/v1/audio/transcriptions';
+  const model = useOpenRouter ? 'openai/whisper-large-v3' : 'whisper-1';
+
+  if (!apiKey) {
+    logger.warn(
+      'No transcription key set — set OPENROUTER_API_KEY or OPENAI_API_KEY in .env',
+    );
+    return '[Voice message — transcription unavailable: set OPENROUTER_API_KEY in .env]';
   }
 
   try {
@@ -41,20 +55,16 @@ export async function transcribeSlackAudio(
       ? fileUrl.split('.').pop()!.split('?')[0]
       : 'mp4';
 
-    // Send to OpenAI Whisper
     const formData = new FormData();
     const blob = new Blob([audioBuffer], { type: 'audio/mpeg' });
     formData.append('file', blob, `voice.${ext}`);
-    formData.append('model', 'whisper-1');
+    formData.append('model', model);
 
-    const whisperRes = await fetch(
-      'https://api.openai.com/v1/audio/transcriptions',
-      {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${openaiKey}` },
-        body: formData,
-      },
-    );
+    const whisperRes = await fetch(whisperEndpoint, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}` },
+      body: formData,
+    });
 
     if (!whisperRes.ok) {
       const errText = await whisperRes.text();
@@ -62,7 +72,7 @@ export async function transcribeSlackAudio(
     }
 
     const result = (await whisperRes.json()) as { text: string };
-    logger.info({ fileUrl }, 'Voice message transcribed');
+    logger.info({ fileUrl, useOpenRouter }, 'Voice message transcribed');
     return `[Voice message]: ${result.text}`;
   } catch (err) {
     logger.error({ fileUrl, err }, 'Failed to transcribe voice message');
