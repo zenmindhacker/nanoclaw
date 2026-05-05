@@ -41,11 +41,12 @@ RUN npm install -g agent-browser @anthropic-ai/claude-code
 # reproducible and avoids surprise binary downloads at build time.
 RUN npm install -g opencode-ai
 
-# `delegate` wrapper from container/skills/delegate/bin/ goes on PATH
-# so the agent can invoke it as a normal command. The skill auto-copies
-# from container/skills/ to /home/node/.claude/skills/ at container spawn
-# (see container-runner.ts), so that's the runtime path.
-ENV PATH="/home/node/.claude/skills/delegate/bin:${PATH}"
+# Bake the delegate skill into the image. The session mount overlays
+# /home/node/.claude/ so we can't rely on runtime copy. /opt/delegate/ is
+# always available regardless of what's mounted.
+COPY skills/delegate/ /opt/delegate/
+RUN chmod +x /opt/delegate/bin/delegate
+ENV PATH="/opt/delegate/bin:${PATH}"
 
 # Create app directory
 WORKDIR /app
