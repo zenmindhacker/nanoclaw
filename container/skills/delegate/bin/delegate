@@ -20,7 +20,7 @@ set -euo pipefail
 # container/skills/delegate/ gets auto-copied into the per-group session
 # at /home/node/.claude/skills/delegate/ at container spawn. Default to that
 # path; allow override via $SKILL_DIR for testing.
-SKILL_DIR="${SKILL_DIR:-/home/node/.claude/skills/delegate}"
+SKILL_DIR="${SKILL_DIR:-/opt/delegate}"
 CATALOG="$SKILL_DIR/models.json"
 
 if ! command -v opencode &>/dev/null; then
