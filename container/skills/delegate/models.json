@@ -17,7 +17,12 @@
     "reasoning-cheap": { "model": "deepseek-v4-pro",  "rationale": "thinking mode provides explicit chain-of-thought at fraction of frontier cost" },
     "draft":           { "model": "deepseek-v4-flash","rationale": "fast general-purpose drafting at near-zero cost" },
     "translate":       { "model": "qwen",             "rationale": "Qwen excels at non-English tasks; cheap" },
-    "extract":         { "model": "haiku",            "rationale": "structured JSON extraction is Haiku's sweet spot" }
+    "extract":         { "model": "haiku",            "rationale": "structured JSON extraction is Haiku's sweet spot" },
+    "image":           { "model": "nano-banana-pro",  "rationale": "default image gen — best quality, 2K/4K, text rendering, multi-subject" },
+    "image-art":       { "model": "flux-pro",         "rationale": "artistic/creative, sharp textures, style reproduction" },
+    "image-cheap":     { "model": "flux-klein",       "rationale": "cheapest image gen, bulk thumbnails, quick drafts" },
+    "speech":          { "model": "tts",              "rationale": "text-to-speech with OpenAI voices" },
+    "video":           { "model": "veo-3.1",          "rationale": "high quality video with native audio (confirm with user first!)" }
   },
 
   "models": {
@@ -101,6 +106,67 @@
       "strengths": ["very-long-context", "fast", "multimodal", "vision"],
       "weaknesses": ["uneven instruction-following on complex prompts"],
       "use_when": "long-context with images/PDFs; fast bulk reads; vision tasks V4 Pro can't do"
+    },
+
+    "nano-banana-pro": {
+      "id": "google/gemini-3-pro-image-preview",
+      "type": "image",
+      "cost_per_image": 0.08,
+      "strengths": ["best-quality", "2K/4K", "text-in-images", "multi-subject", "infographics"],
+      "use_when": "professional/print quality, text-heavy images, infographics, multi-element compositions"
+    },
+    "flux-pro": {
+      "id": "black-forest-labs/flux.2-pro",
+      "type": "image",
+      "cost_per_image": 0.03,
+      "strengths": ["artistic", "creative", "sharp-textures", "style-reproduction"],
+      "use_when": "artistic/stylized images, character consistency, creative work"
+    },
+    "flux-klein": {
+      "id": "black-forest-labs/flux.2-klein-4b",
+      "type": "image",
+      "cost_per_image": 0.014,
+      "strengths": ["cheapest", "fast", "bulk"],
+      "use_when": "bulk generation, thumbnails, quick drafts, cost-sensitive"
+    },
+    "seedream": {
+      "id": "bytedance-seed/seedream-4.5",
+      "type": "image",
+      "cost_per_image": 0.04,
+      "strengths": ["photo-realistic", "editing-consistency", "portrait-refinement"],
+      "use_when": "photo-realistic edits, portraits, consistent lighting/color"
+    },
+    "riverflow-pro": {
+      "id": "sourceful/riverflow-v2-pro",
+      "type": "image",
+      "cost_per_image": 0.15,
+      "strengths": ["perfect-text-rendering", "custom-fonts", "4K"],
+      "use_when": "text-heavy images (posters, slides, signage), custom font rendering"
+    },
+    "tts": {
+      "id": "openai/gpt-4o-mini-tts-2025-12-15",
+      "type": "speech",
+      "voices": ["alloy", "echo", "fable", "onyx", "nova", "shimmer"],
+      "default_voice": "nova",
+      "use_when": "read text aloud, generate audio messages, accessibility"
+    },
+    "veo-3.1": {
+      "id": "google/veo-3.1",
+      "type": "video",
+      "duration": "4-8s",
+      "use_when": "high quality video with native audio — CONFIRM WITH USER (expensive)"
+    },
+    "sora-2-pro": {
+      "id": "openai/sora-2-pro",
+      "type": "video",
+      "duration": "varies",
+      "use_when": "physics-accurate motion, multi-shot consistency — CONFIRM WITH USER"
+    },
+    "kling-v3": {
+      "id": "kwaivgi/kling-v3.0-pro",
+      "type": "video",
+      "duration": "3-15s",
+      "use_when": "longer clips, first/last frame control — CONFIRM WITH USER"
     }
   }
 }

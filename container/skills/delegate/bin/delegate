@@ -1,41 +1,41 @@
 #!/usr/bin/env bash
-# delegate — wrapper around `opencode run` for orchestrator → worker handoff.
+# delegate — unified interface for text delegation (via opencode) and
+# multimodal generation (image/speech/video via curl to OpenRouter).
 #
 # Usage:
-#   delegate <model-or-task-key> "<prompt>"           # e.g. delegate kimi "summarize this"
-#   delegate --task <key> "<prompt>"                  # explicit task lookup
-#   delegate --model <key> "<prompt>"                 # explicit model lookup
-#   delegate --json <key> "<prompt>"                  # raw JSON output (default: text)
-#   delegate --cwd <dir> <key> "<prompt>"             # set working dir for the worker
-#   delegate --system "<sys>" <key> "<prompt>"        # add a system prompt
-#   delegate --file <path> <key> "<prompt>"           # attach a file (repeatable)
-#   delegate list                                     # show catalog (tasks + models)
-#   delegate cost <key> <input_tokens> <output_tokens>  # estimate cost
+#   delegate <task-or-model> "<prompt>"               # e.g. delegate kimi "summarize this"
+#   delegate image "a zen garden at sunset"           # image gen (default: Nano Banana)
+#   delegate image-pro "detailed infographic of..."   # high-quality image
+#   delegate speech "Hello world" --voice nova        # TTS
+#   delegate video "a cat jumping over a fence"       # video gen (confirms cost)
+#   delegate --json <key> "<prompt>"                  # raw JSON output (text tasks only)
+#   delegate --cwd <dir> <key> "<prompt>"             # set working dir (text tasks only)
+#   delegate --system "<sys>" <key> "<prompt>"        # system prompt (text tasks only)
+#   delegate --file <path> <key> "<prompt>"           # attach file (text tasks only)
+#   delegate list                                     # show full catalog
+#   delegate cost <key> <input_tokens> <output_tokens>
 #
-# Lookup order: tasks.<key> → models.<key>. So `delegate code-cheap "..."` resolves
-# to whatever model is currently mapped to the `code-cheap` task in models.json.
-# Update the catalog without touching this script.
+# Lookup order: tasks.<key> → models.<key>. Update the catalog without touching this script.
 set -euo pipefail
 
-# container/skills/delegate/ gets auto-copied into the per-group session
-# at /home/node/.claude/skills/delegate/ at container spawn. Default to that
-# path; allow override via $SKILL_DIR for testing.
 SKILL_DIR="${SKILL_DIR:-/opt/delegate}"
 CATALOG="$SKILL_DIR/models.json"
+OR_BASE="https://openrouter.ai/api/v1"
+IPC_DIR="/workspace/ipc"
 
-if ! command -v opencode &>/dev/null; then
-  echo "delegate: opencode CLI not installed in this container" >&2
-  echo "  install in the agent-runner image; see SKILL.md" >&2
-  exit 127
-fi
 if [[ ! -f "$CATALOG" ]]; then
   echo "delegate: catalog missing at $CATALOG" >&2
+  exit 1
+fi
+if [[ -z "${OPENROUTER_API_KEY:-}" ]]; then
+  echo "delegate: OPENROUTER_API_KEY not set" >&2
   exit 1
 fi
 
 JSON=0
 CWD=""
 SYS=""
+VOICE=""
 declare -a FILES=()
 declare -a EXTRA=()
 
@@ -46,33 +46,56 @@ while [[ $# -gt 0 ]]; do
     --cwd) CWD="$2"; shift 2 ;;
     --system) SYS="$2"; shift 2 ;;
     --file) FILES+=("$2"); shift 2 ;;
-    --task|--model) shift ;; # ignored — disambiguation handled by lookup
+    --voice) VOICE="$2"; shift 2 ;;
+    --task|--model) shift ;;
     list)
-      python3 - <<PYEOF
-import json
-d = json.load(open("$CATALOG"))
-print("\n=== TASKS (use case → model) ===")
+      python3 - "$CATALOG" <<'PYEOF'
+import json, sys
+d = json.load(open(sys.argv[1]))
+print("\n=== TEXT TASKS ===")
 for k, v in d.get("tasks", {}).items():
-    print(f"  {k:<20} → {v['model']:<16} ({v['rationale']})")
-print("\n=== MODELS (key → id, $/Mtok) ===")
+    m = d["models"].get(v["model"], {})
+    mtype = m.get("type", "text")
+    if mtype == "text" or "type" not in m:
+        print(f"  {k:<20} → {v['model']:<18} ({v['rationale']})")
+print("\n=== MULTIMODAL TASKS ===")
+for k, v in d.get("tasks", {}).items():
+    m = d["models"].get(v["model"], {})
+    mtype = m.get("type", "text")
+    if mtype in ("image", "speech", "video"):
+        print(f"  {k:<20} → {v['model']:<18} [{mtype}] ({v['rationale']})")
+print("\n=== TEXT MODELS ===")
 for k, v in d.get("models", {}).items():
-    print(f"  {k:<16} {v['id']:<32} in=\${v['input_per_mtok']:.2f} out=\${v['output_per_mtok']:.2f} ctx={v['context']}")
+    if "type" not in v:
+        print(f"  {k:<18} {v['id']:<38} in=${v['input_per_mtok']:.2f} out=${v['output_per_mtok']:.2f} ctx={v['context']}")
+print("\n=== IMAGE MODELS ===")
+for k, v in d.get("models", {}).items():
+    if v.get("type") == "image":
+        print(f"  {k:<18} {v['id']:<38} ~${v.get('cost_per_image', '?')}/img")
+print("\n=== SPEECH/VIDEO MODELS ===")
+for k, v in d.get("models", {}).items():
+    if v.get("type") in ("speech", "video"):
+        extra = f"voices={v['voices']}" if "voices" in v else f"duration={v.get('duration','?')}"
+        print(f"  {k:<18} {v['id']:<38} {extra}")
 PYEOF
       exit 0
       ;;
     cost)
       KEY="$2"; IN="$3"; OUT="$4"
-      python3 - "$KEY" "$IN" "$OUT" <<'PYEOF'
+      python3 - "$CATALOG" "$KEY" "$IN" "$OUT" <<'PYEOF'
 import json, sys
-key, tin, tout = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
-d = json.load(open("/home/node/.claude/skills/delegate/models.json"))
+d = json.load(open(sys.argv[1]))
+key, tin, tout = sys.argv[2], int(sys.argv[3]), int(sys.argv[4])
 if key in d.get("tasks", {}):
     key = d["tasks"][key]["model"]
 m = d["models"].get(key)
 if not m:
     print(f"unknown model/task: {key}", file=sys.stderr); sys.exit(2)
-cost = (tin / 1_000_000) * m["input_per_mtok"] + (tout / 1_000_000) * m["output_per_mtok"]
-print(f"{key} ({m['id']}): ${cost:.4f}  (in={tin} @ ${m['input_per_mtok']}/Mtok, out={tout} @ ${m['output_per_mtok']}/Mtok)")
+if "cost_per_image" in m:
+    print(f"{key} ({m['id']}): ~${m['cost_per_image']}/image")
+else:
+    cost = (tin / 1_000_000) * m["input_per_mtok"] + (tout / 1_000_000) * m["output_per_mtok"]
+    print(f"{key} ({m['id']}): ${cost:.4f}  (in={tin} out={tout})")
 PYEOF
       exit 0
       ;;
@@ -88,24 +111,154 @@ fi
 KEY="${EXTRA[0]}"
 PROMPT="${EXTRA[*]:1}"
 
-# Resolve model id from catalog (task → model → id)
-MODEL_ID=$(python3 - "$CATALOG" "$KEY" <<'PYEOF'
+# Resolve model from catalog (task → model key → model entry)
+RESOLVED=$(python3 - "$CATALOG" "$KEY" <<'PYEOF'
 import json, sys
-catalog, key = sys.argv[1], sys.argv[2]
-d = json.load(open(catalog))
+d = json.load(open(sys.argv[1]))
+key = sys.argv[2]
 if key in d.get("tasks", {}):
     key = d["tasks"][key]["model"]
 m = d.get("models", {}).get(key)
 if not m:
     print(f"ERROR: unknown task/model key: {key}", file=sys.stderr)
     sys.exit(2)
-print(m["id"])
+# Output: type|id|extra
+mtype = m.get("type", "text")
+mid = m["id"]
+extra = ""
+if mtype == "speech":
+    extra = m.get("default_voice", "nova")
+print(f"{mtype}|{mid}|{extra}")
 PYEOF
 )
 
-# Build opencode command. XDG_DATA_HOME=/workspace/extra makes opencode
-# read auth.json from /workspace/extra/opencode/auth.json (the host's
-# ~/.local/share/opencode/auth.json mounted in via mount-allowlist).
+MODEL_TYPE=$(echo "$RESOLVED" | cut -d'|' -f1)
+MODEL_ID=$(echo "$RESOLVED" | cut -d'|' -f2)
+MODEL_EXTRA=$(echo "$RESOLVED" | cut -d'|' -f3)
+
+# ── MULTIMODAL: image generation ──────────────────────────────────────
+if [[ "$MODEL_TYPE" == "image" ]]; then
+  mkdir -p "$IPC_DIR/images"
+  OUTFILE="$IPC_DIR/images/$(date +%s)-generated.png"
+
+  RESPONSE=$(curl -s -X POST "$OR_BASE/chat/completions" \
+    -H "Authorization: Bearer $OPENROUTER_API_KEY" \
+    -H "Content-Type: application/json" \
+    -d "$(python3 -c "
+import json, sys
+print(json.dumps({
+    'model': '$MODEL_ID',
+    'messages': [{'role': 'user', 'content': sys.argv[1]}],
+    'modalities': ['text', 'image']
+}))
+" "$PROMPT")")
+
+  # Extract base64 image from response
+  python3 - "$RESPONSE" "$OUTFILE" <<'PYEOF'
+import json, sys, base64
+resp = json.loads(sys.argv[1])
+outfile = sys.argv[2]
+# Look for image content in the response
+choices = resp.get("choices", [])
+for choice in choices:
+    msg = choice.get("message", {})
+    content = msg.get("content", [])
+    if isinstance(content, list):
+        for part in content:
+            if part.get("type") == "image_url":
+                data = part["image_url"]["url"]
+                if data.startswith("data:"):
+                    b64 = data.split(",", 1)[1]
+                    with open(outfile, "wb") as f:
+                        f.write(base64.b64decode(b64))
+                    print(outfile)
+                    sys.exit(0)
+    # Some models return inline base64 differently
+    if isinstance(content, str) and "base64" in resp.get("_raw", ""):
+        break
+# If no image found, print the text response or error
+if "error" in resp:
+    print(f"ERROR: {resp['error']}", file=sys.stderr)
+    sys.exit(1)
+# Try alternate response format
+for choice in choices:
+    msg = choice.get("message", {})
+    content = msg.get("content", "")
+    if isinstance(content, str):
+        print(content)
+        sys.exit(0)
+print("ERROR: no image in response", file=sys.stderr)
+print(json.dumps(resp)[:500], file=sys.stderr)
+sys.exit(1)
+PYEOF
+  exit $?
+fi
+
+# ── MULTIMODAL: text-to-speech ────────────────────────────────────────
+if [[ "$MODEL_TYPE" == "speech" ]]; then
+  mkdir -p "$IPC_DIR"
+  OUTFILE="$IPC_DIR/$(date +%s)-speech.mp3"
+  USE_VOICE="${VOICE:-$MODEL_EXTRA}"
+
+  curl -s "$OR_BASE/audio/speech" \
+    -H "Authorization: Bearer $OPENROUTER_API_KEY" \
+    -H "Content-Type: application/json" \
+    -d "$(python3 -c "
+import json, sys
+print(json.dumps({
+    'model': '$MODEL_ID',
+    'input': sys.argv[1],
+    'voice': '$USE_VOICE',
+    'response_format': 'mp3'
+}))
+" "$PROMPT")" \
+    -o "$OUTFILE"
+
+  if [[ -s "$OUTFILE" ]]; then
+    echo "$OUTFILE"
+  else
+    echo "ERROR: TTS returned empty response" >&2
+    exit 1
+  fi
+  exit 0
+fi
+
+# ── MULTIMODAL: video generation ──────────────────────────────────────
+if [[ "$MODEL_TYPE" == "video" ]]; then
+  echo "delegate: video generation via $MODEL_ID"
+  echo "  prompt: $PROMPT"
+  echo "  NOTE: This is async and expensive. The video URL will be returned when ready."
+
+  RESPONSE=$(curl -s -X POST "$OR_BASE/video/generations" \
+    -H "Authorization: Bearer $OPENROUTER_API_KEY" \
+    -H "Content-Type: application/json" \
+    -d "$(python3 -c "
+import json, sys
+print(json.dumps({
+    'model': '$MODEL_ID',
+    'prompt': sys.argv[1]
+}))
+" "$PROMPT")")
+
+  echo "$RESPONSE" | python3 -c "
+import json, sys
+r = json.load(sys.stdin)
+if 'error' in r:
+    print(f\"ERROR: {r['error']}\", file=sys.stderr)
+    sys.exit(1)
+gen_id = r.get('id') or r.get('generation_id')
+print(f'Video generation started: {gen_id}')
+print(f'Poll status: GET {\"$OR_BASE\"}/video/generations/{gen_id}')
+"
+  exit $?
+fi
+
+# ── TEXT: delegation via opencode ─────────────────────────────────────
+if ! command -v opencode &>/dev/null; then
+  echo "delegate: opencode CLI not installed — needed for text tasks" >&2
+  exit 127
+fi
+
 CMD=(env "XDG_DATA_HOME=/workspace/extra" opencode run --model "$MODEL_ID" --dangerously-skip-permissions)
 [[ $JSON -eq 1 ]] && CMD+=(--format json)
 [[ -n "$SYS" ]] && CMD+=(--system "$SYS")
@@ -113,10 +266,8 @@ for f in "${FILES[@]}"; do
   CMD+=(--file "$f")
 done
 
-# Execute (set --cwd via shell, opencode runs in that dir)
 if [[ -n "$CWD" ]]; then
   cd "$CWD"
 fi
 
-# Pipe prompt via stdin so it handles long prompts cleanly
 printf '%s' "$PROMPT" | "${CMD[@]}"
