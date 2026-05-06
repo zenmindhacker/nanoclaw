@@ -123,14 +123,15 @@ function buildVolumeMounts(
       readonly: false,
     });
 
-    // Global memory directory (read-only for non-main)
-    // Only directory mounts are supported, not file mounts
+    // Global directory — shared persona, facts, and memory.
+    // Read-write for all groups so the agent can update its own
+    // personality, preferences, and knowledge from any context.
     const globalDir = path.join(GROUPS_DIR, 'global');
     if (fs.existsSync(globalDir)) {
       mounts.push({
         hostPath: globalDir,
         containerPath: '/workspace/global',
-        readonly: true,
+        readonly: false,
       });
     }
   }
