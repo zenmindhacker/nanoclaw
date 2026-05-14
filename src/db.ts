@@ -420,6 +420,30 @@ export function getConversationHistory(
 }
 
 /**
+ * Get conversation history across a parent channel AND all its threads.
+ * Used to give thread groups full cross-thread context so the agent can
+ * see what was discussed in sibling threads (not just the parent channel).
+ */
+export function getConversationHistoryWithThreads(
+  parentJid: string,
+  limit: number = 200,
+): NewMessage[] {
+  const sql = `
+    SELECT * FROM (
+      SELECT id, chat_jid, sender, sender_name, content, timestamp, is_from_me, is_bot_message
+      FROM messages
+      WHERE (chat_jid = ? OR chat_jid LIKE ?)
+        AND content != '' AND content IS NOT NULL
+      ORDER BY timestamp DESC
+      LIMIT ?
+    ) ORDER BY timestamp
+  `;
+  // Match parent JID and all thread JIDs (e.g., slack:D0AR39MFNN4:t:*)
+  const threadPattern = `${parentJid}:%`;
+  return db.prepare(sql).all(parentJid, threadPattern, limit) as NewMessage[];
+}
+
+/**
  * Get recent channel-level messages (both sides) for context when starting a new thread.
  * Returns a small window of recent channel activity so the agent knows what's being discussed.
  */
