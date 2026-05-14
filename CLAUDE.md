@@ -307,6 +307,67 @@ The agent container runs on **Bun**; the host runs on **Node** (pnpm). They comm
 - **Changing the Dockerfile entrypoint or the dynamic-spawn command** (`src/container-runner.ts` line ~301) → keep `exec bun ...` so signals forward cleanly. The image has no `/app/dist`; don't reintroduce a tsc build step.
 - **Changing session-DB pragmas** (`container/agent-runner/src/db/connection.ts`) → `journal_mode=DELETE` is load-bearing for cross-mount visibility. Read the comment block at the top of the file first.
 
+## Two-Agent Setup: Cleo and Silas
+
+This repo is the **canonical codebase for two agents** that share identical code but run with separate personas and credentials.
+
+| Agent | Persona | Server user | Port | Groups dir |
+|-------|---------|-------------|------|-----------|
+| **Cleo** | Cian's assistant | `cian@cleo-lc.cognitivetech.net` | 3001 | `agents/cleo/groups/` |
+| **Silas** | Christina's assistant | `christina@cleo-lc.cognitivetech.net` | 3003 | `agents/silas/groups/` |
+
+Both agents pull from **`https://github.com/zenmindhacker/nanoclaw`** (this repo).
+
+### What differs per agent
+
+- **`agents/{agent}/groups/`** — CLAUDE.md persona files and per-group configs (in git)
+- **`.env`** — credentials, `GROUPS_DIR`, `DATA_DIR` (on server only, never in git)
+- **`data/`** — runtime state: SQLite DB, sessions, conversation history, IPC (on server only)
+
+### Key env vars per agent (in `~/{user}/nanoclaw/.env` on server)
+
+```
+GROUPS_DIR=agents/cleo/groups   # or agents/silas/groups
+DATA_DIR=data
+CONTAINER_NAME_PREFIX=nc-cleo   # or nc-silas — must be unique per instance
+ASSISTANT_NAME=Cleo             # or Silas
+```
+
+## Deployment
+
+Manage from the dev laptop. Push to origin, then SSH to each server.
+
+### Deploy Cleo
+```bash
+git push origin v2-migration
+ssh cian@cleo-lc.cognitivetech.net "cd ~/nanoclaw && git pull --ff-only && pnpm install && pnpm run build 2>&1 | tail -5"
+ssh cian@cleo-lc.cognitivetech.net "systemctl --user restart nanoclaw"
+```
+
+### Deploy Silas
+```bash
+ssh christina@cleo-lc.cognitivetech.net "cd ~/nanoclaw && git pull --ff-only && pnpm install && pnpm run build 2>&1 | tail -5"
+ssh christina@cleo-lc.cognitivetech.net "systemctl --user restart nanoclaw"
+```
+
+### Rebuild Docker image (when `container/Dockerfile` changes)
+```bash
+ssh cian@cleo-lc.cognitivetech.net "docker build --no-cache -t nanoclaw-agent:latest ~/nanoclaw/container/ 2>&1 | tail -10"
+```
+Both agents share the same Docker image (`nanoclaw-agent:latest`). Rebuild once, applies to both.
+
+## Logs and Debugging
+
+```bash
+# App logs
+ssh cian@cleo-lc.cognitivetech.net "tail -50 ~/nanoclaw/logs/nanoclaw.log"
+ssh cian@cleo-lc.cognitivetech.net "tail -30 ~/nanoclaw/logs/nanoclaw.error.log"
+ssh christina@cleo-lc.cognitivetech.net "tail -50 ~/nanoclaw/logs/nanoclaw.log"
+
+# Service status
+ssh cian@cleo-lc.cognitivetech.net "systemctl --user status nanoclaw --no-pager | head -20"
+```
+
 ## CJK font support
 
 Agent containers ship without CJK fonts by default (~200MB saved). If you notice signals the user works with Chinese/Japanese/Korean content — conversing in CJK, CJK timezone (e.g., `Asia/Tokyo`, `Asia/Shanghai`, `Asia/Seoul`, `Asia/Taipei`, `Asia/Hong_Kong`), system locale hint, or mentions of needing to render CJK in screenshots/PDFs/scraped pages — offer to enable it:
