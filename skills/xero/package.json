@@ -1,0 +1,25 @@
+{
+  "name": "@cian/xero-workflows",
+  "version": "1.0.0",
+  "description": "Xero API workflows - P&L, Invoices, Budget comparison",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "xero-workflows": "./bin/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/bin/cli.ts",
+    "start": "node dist/bin/cli.js"
+  },
+  "dependencies": {
+    "xero-node": "^13.4.0",
+    "commander": "^11.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  }
+}

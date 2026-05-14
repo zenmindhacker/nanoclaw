@@ -1,0 +1,22 @@
+{
+  "id": "ts-2026-04-17-dashboard-commitment-vs-completion-integrity-metric",
+  "meetingTitle": "Dashboard: Commitment vs. Completion Integrity Metric",
+  "meetingDate": "2026-04-17",
+  "org": "ctci",
+  "sourceRel": "2026-04-17-bci-tanium-proposal-review-with-telus.md",
+  "targetDir": "/workspace/extra/github/nvs/nvs-docs/transcripts",
+  "transcriptPath": "/workspace/extra/github/nvs/nvs-docs/transcripts/2026-04-17-bci-tanium-proposal-review-with-telus.md",
+  "lineageTag": "meeting:Dashboard: Commitment vs. Completion Integrity Met|date:2026-04-17",
+  "actions": [
+    {
+      "title": "Design calculation strategy for dashboard integrity metric",
+      "context": "**Background**: The team is building a dashboard that includes a large percentage metric (bottom-left, currently showing 70%). The original design showed total task completion across all activated projects, but this was identified as demotivating — users with multiple projects could have hundreds of tasks, meaning the completion percentage would stay low for a long time (e.g., \"it's going to take some work to complete all those tasks... you're never going to be really looking at a positive number like 80% complete\").\n\n**Discussion**: The team proposed instead measuring against the user's **stated time commitment per project** — during onboarding, users declare how many hours per week they want to spend on each project. The metric would calculate how many tasks fit into those committed hours and grade completion against that subset rather than the total. Cian challenged the time-window approach: a forward-looking window (\"today + 30 days\") would always start at 0% because \"we can't have worked in the future.\" After back-and-forth, Cian proposed a **sliding window looking backward**: \"if you look at the last 30 days of how much time you've committed to work and how much time you've actually worked, what is your percentage over the last 30 days?\" He coined it the **\"integrity metric\"** — \"I promised myself I would work 40 hours on these projects over the last month, I only worked 20. My integrity metric is 50%.\" The day/week/month toggles would each be sliding windows looking back from today. Year may be stripped as too far out.\n\n**Decision/Direction**: The team agreed on the sliding-window, backward-looking integrity metric approach. The speaker said they'd replace the donut chart with a line graph for this metric and may rethink the adjacent productivity heat map. The speaker's team will finalize all chart calculations and share them with Cian.\n\n**Next steps**: Once all dashboard calculations are defined, Cian needs to determine whether to calculate them **live in the frontend** or via **batch jobs** (Cian mentioned \"it might have to be like a nightly job we run, which is not really a problem\"). This includes designing the data views needed for the sliding-window integrity metric across day/week/month intervals.",
+      "assignee": "cian@cognitivetech.net",
+      "priority": "medium",
+      "project": "Cognitive Tech",
+      "index": 1
+    }
+  ],
+  "createdAt": "2026-04-20T13:06:42.134Z",
+  "status": "pending"
+}

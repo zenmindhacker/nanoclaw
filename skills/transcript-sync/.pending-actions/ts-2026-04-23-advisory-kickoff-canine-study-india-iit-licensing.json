@@ -1,0 +1,54 @@
+{
+  "id": "ts-2026-04-23-advisory-kickoff-canine-study-india-iit-licensing",
+  "meetingTitle": "Advisory Kickoff: Canine Study, India IIT, Licensing",
+  "meetingDate": "2026-04-23",
+  "org": "ctci",
+  "sourceRel": "ctci-docs/transcripts/2026-04-23-advisory-kickoff-canine-study-india-iit-licensing.md",
+  "targetDir": "/workspace/extra/github/cognitivetech/ctci-docs/transcripts",
+  "transcriptPath": "/workspace/extra/github/cognitivetech/ctci-docs/transcripts/2026-04-23-advisory-kickoff-canine-study-india-iit-licensing.md",
+  "lineageTag": "meeting:Advisory Kickoff: Canine Study, India IIT, Licensi|date:2026-04-23",
+  "actions": [
+    {
+      "title": "Send mutual NDA link to advisory team",
+      "context": "**Background**: Cian and the biotech team (Kirk, George, Aaron) are formalizing an advisory relationship. Before sharing sensitive materials like the data room, both parties need an NDA in place. Currently no NDA has been signed between them.\n\n**Discussion**: At the end of the call, Cian asked \"have we signed an NDA yet?\" and the team confirmed they hadn't. The speaker requested a mutual NDA. Cian offered to send one: \"I'll just fire the link over. It's on my website. Use it so much.\" He committed to sending it \"right after this call.\"\n\n**Decision/Direction**: Cian will send his standard mutual NDA via a link on his website. This is a prerequisite for receiving data room access.\n\n**Next steps**: Send the NDA link immediately. Once signed, the team will share data room access (currently on Google Drive).",
+      "assignee": "cian@cognitivetech.net",
+      "priority": "urgent",
+      "project": "Cognitive Tech",
+      "index": 2
+    },
+    {
+      "title": "Prepare advisory proposal document for first 3 months",
+      "context": "**Background**: The team is a biotech startup with a unique immunotherapy technology (repurposed biologics for allergy/autoimmune treatment). They have a canine clinical study in its third cohort in Florida, are planning an investigator-initiated trial (IIT) in India, and are pursuing bridge financing ahead of a Series A. They need advisory help across multiple domains: technology development, business development & strategic licensing, HR & team constellation, capital raising, and IP strategy.\n\n**Discussion**: The team outlined their key challenges: project management capabilities, surveying the competitive landscape with AI, understanding regulatory pathways for their niche repurposed biologic, structuring Series A engagement, and building BD capabilities ahead of canine study data readout (expected Q1 2027). Cian recommended an equity-only advisory deal to avoid cash burn, referencing the **FAST (Founders Advisors Standard Template)** from Y Combinator — \"less than a percent\" equity for a couple hours a month of advisory time. The speaker suggested: \"if I give you access to the data room... perhaps you can come up with some type of a plan of attack for maybe say the first kind of three months, start with something and see how that goes.\"\n\n**Decision/Direction**: Cian agreed to review all available materials (data room, corporate overview, publications) and draft a short proposal covering key advisory topics and a 3-month plan of attack.\n\n**Next steps**: Cian to prepare a Word doc summarizing discussion topics and proposed advisory engagement plan. Deadline: **mid next week (~May 6, 2026)**. Cian noted he's traveling but may have it sooner. Aaron will coordinate booking the next call once the proposal is received.",
+      "assignee": "cian@cognitivetech.net",
+      "priority": "high",
+      "project": "Cognitive Tech",
+      "index": 3
+    },
+    {
+      "title": "Draft protocol for engaging large pharma inquiries",
+      "context": "**Background**: The team has received unsolicited interest from a top-5 pharmaceutical company. A junior BD associate reached out first, followed a week later by a senior contact out of Switzerland (\"Matthew\"). They met and shared a non-confidential deck, but the pharma company said they were \"too early\" and needed clinical data. Meanwhile, China has also been aggressive with outreach (invitation for a full tour), which the team declined despite holding a Chinese patent.\n\n**Discussion**: Cian raised significant concerns about information leakage to large pharma: \"I would be very careful like what kind of data we'd give them to make sure it's strategic.\" He cited the **Ford windshield wiper story** and his brother's experience in the LiDAR/auto industry where companies use contracts to extract information then disappear, leaving startups to enforce IP without resources. Cian emphasized: \"the biggest leverage we have is that nobody knows what this is and we would want to know what value they can bring to the table before we even tell them anything.\" The team agreed, noting a scientist had advised them 10 years ago to \"keep this under the radar\" and focus on framing as a complementary/adjunct therapy. The speaker suggested that \"if there's something... if you sign with them when we sign our NDA, that would be optimal.\"\n\n**Decision/Direction**: Cian proposed developing a formal protocol for handling inbound pharma interest — especially during bridge financing — to prevent accidental disclosure. The team's stance should be: \"What can you do for me? What's your offer?\" before revealing anything.\n\n**Next steps**: Develop a written engagement protocol covering: (1) what information can be shared at each stage, (2) NDA requirements before any substantive discussion, (3) qualifying questions to assess pharma intent/value, (4) escalation process for inbound inquiries. Include in the advisory proposal document.",
+      "assignee": "cian@cognitivetech.net",
+      "priority": "medium",
+      "project": "Cognitive Tech",
+      "index": 4
+    },
+    {
+      "title": "Review FAST advisory agreement template for equity deal",
+      "context": "**Background**: Cian and the biotech team agreed to formalize an advisory relationship. Given the startup's cash constraints (currently in bridge financing ahead of Series A), Cian recommended avoiding cash-based consulting fees.\n\n**Discussion**: Cian proactively raised the cash sensitivity: \"I know there's cash constraints and if I were your advisor already, I'd be saying like, you don't want to take on more consultants and more salaries right now.\" He proposed an **equity-only advisory deal** using the **FAST (Founders Advisors Standard Template)** from Y Combinator, describing it as a \"safe, secure investment for future equity\" — similar to a SAFE but for advisors. He suggested \"less than a percent\" equity for \"a couple hours a month\" of advisory time. The team responded positively: \"Yeah, sounds good.\"\n\n**Decision/Direction**: Both parties agreed on an equity-only advisory structure using the FAST template. Scope would be advisory-level (a few hours/month), not a consulting or operational role.\n\n**Next steps**: Review the standard FAST agreement template, adapt terms for this engagement (equity percentage, vesting, scope of advisory services), and include proposed terms in the advisory proposal document.",
+      "assignee": "cian@cognitivetech.net",
+      "priority": "medium",
+      "project": "Cognitive Tech",
+      "index": 5
+    },
+    {
+      "title": "Follow up on data room access after NDA signing",
+      "context": "**Background**: The team has nearly completed their investor data room (\"95% there\") which is being hosted on Google Drive, with plans to move to a dedicated platform later. The data room contains published research, study data, and materials for potential investors. Cian asked about the data room setup during the call.\n\n**Discussion**: The speaker offered to share the data room with Cian: \"I'll pass that the data room to you as well because there's some good juicy nectar in there.\" The data room contents are described as \"either published or at least semi-confident. Nothing hypersensitive,\" though they have some unpublished internal data that won't be shared. Access is contingent on NDA signing. The team also mentioned having sent publications and that reviewing the data room would help Cian \"get a real sense of like what the actual package looks like for potential investors.\"\n\n**Decision/Direction**: Data room access will be shared with Cian after mutual NDA is signed. This will inform the advisory proposal.\n\n**Next steps**: Once NDA is executed, follow up with Aaron/team to get Google Drive data room access. Review contents to inform the 3-month advisory proposal.",
+      "assignee": "cian@cognitivetech.net",
+      "priority": "medium",
+      "project": "Cognitive Tech",
+      "index": 6
+    }
+  ],
+  "createdAt": "2026-04-29T18:25:24.886Z",
+  "status": "pending"
+}

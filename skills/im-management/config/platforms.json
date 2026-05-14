@@ -1,0 +1,49 @@
+{
+  "my_identities": {
+    "whatsapp": "+16726677729",
+    "signal": "+16726677729",
+    "instagram": "@cianwhalley",
+    "facebook": "710936256",
+    "linkedin": "ACoAAAIF0RsBdOCCRmGx-sSPqbks8WxUN9_OxMQ"
+  },
+  "beeper_accounts": {
+    "signal": "local-signal_ba_KFp3H3Ed5ZfTYPVAMNgx3VR5ZVs",
+    "instagram": "local-instagram_ba_GT4LlnYbAfM1h-v8DFC4mCImsXQ",
+    "facebook": "facebookgo",
+    "linkedin": "linkedin"
+  },
+  "credentials": {
+    "attio": "~/.openclaw/credentials/attio",
+    "beeper": "~/.openclaw/credentials/beeper"
+  },
+  "attio": {
+    "im_list_id": "569a3e1a-84e1-4fd0-9aab-39f7f0a64483"
+  },
+  "import_status": {
+    "whatsapp": {
+      "status": "done",
+      "months": 6,
+      "completed_date": "2026-02-22"
+    },
+    "signal": {
+      "status": "done",
+      "months": 6,
+      "completed_date": "2026-02-23",
+      "contacts_imported": 2
+    },
+    "instagram": {
+      "status": "done",
+      "months": 6,
+      "completed_date": "2026-02-23",
+      "contacts_imported": 10
+    },
+    "facebook": {
+      "status": "skip",
+      "reason": "daily sync only"
+    },
+    "linkedin": {
+      "status": "skip",
+      "reason": "daily sync only"
+    }
+  }
+}

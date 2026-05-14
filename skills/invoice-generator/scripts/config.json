@@ -1,0 +1,150 @@
+{
+  "workspace_id": "8629306",
+  "projects": {
+    "work-wranglers": {
+      "id": "204851981",
+      "name": "WW: Consulting",
+      "accountCode": "200",
+      "taxType": "TAX001",
+      "dashboardId": 2443864
+    },
+    "copperteams": {
+      "id": "214367650",
+      "name": "Kora MVP",
+      "accountCode": "200",
+      "taxType": "TAX001",
+      "dashboardId": 2437491
+    },
+    "ganttsy": {
+      "id": "215944745",
+      "name": "Ganttsy MVP",
+      "accountCode": "200",
+      "taxType": "TAX001",
+      "dashboardId": 2437484
+    },
+    "kevin-lee": {
+      "id": "214643451",
+      "name": "Kevin Lee Executive Coaching",
+      "accountCode": "200",
+      "taxType": "TAX001"
+    },
+    "nvs": {
+      "id": "207382186",
+      "name": "NVS: CTO Consulting",
+      "accountCode": "311",
+      "taxType": "TAX002"
+    }
+  },
+  "clients": {
+    "work-wranglers": {
+      "contactName": "Work Wranglers",
+      "retainerHours": null,
+      "retainerRate": null,
+      "excessRate": 150,
+      "description": "WW: Consulting",
+      "personRates": {
+        "cian": {
+          "productCode": "CTOCONSULT",
+          "rate": 175,
+          "description": "Cian - CTO Consulting Services",
+          "tasks": [
+            "CTO Consulting"
+          ]
+        },
+        "cianDiscounted": {
+          "productCode": "SALESCONSULT",
+          "rate": 125,
+          "description": "Cian - Sales Consulting (Discounted)",
+          "tasks": [
+            "Management Consulting",
+            "Sales Consulting"
+          ]
+        },
+        "rustam": {
+          "productCode": "SRDEVCONSULT",
+          "rate": 130,
+          "description": "Rustam - Sr Dev Consulting Services",
+          "tasks": [
+            "Sr Dev Consulting"
+          ]
+        }
+      }
+    },
+    "copperteams": {
+      "contactName": "CopperTeams Inc.",
+      "retainerHours": 11,
+      "retainerRate": 275,
+      "excessRate": 225,
+      "retainerDescription": "Monthly retainer services - under 20 hours/month",
+      "excessDescription": "Excess Hours (prior month)",
+      "retainerItemCode": "FCTO-LOW",
+      "excessItemCode": "FCTO-TIER3",
+      "billableUsers": [
+        "Cian"
+      ]
+    },
+    "ganttsy": {
+      "contactName": "Ganttsy (1001330116 ONTARIO INC.)",
+      "retainerHours": 40,
+      "retainerRate": 225,
+      "excessRate": 225,
+      "retainerDescription": "Monthly retainer services",
+      "excessDescription": "Excess Hours (prior month)",
+      "retainerItemCode": "FCTO-TIER3",
+      "excessItemCode": "FCTO-TIER3",
+      "billableUsers": [
+        "Cian"
+      ]
+    },
+    "kevin-lee": {
+      "contactName": "Kevin Lee",
+      "retainerHours": 1,
+      "retainerRate": 1400,
+      "excessRate": null,
+      "retainerDescription": "Executive Coaching Weekly Retainer",
+      "itemCode": "EXEC-COACH-BI-WEEK",
+      "copyFromPriorMonth": true
+    },
+    "nvs": {
+      "contactName": "NEW VALUE SOLUTIONS GROUP INC.",
+      "retainerHours": null,
+      "retainerRate": 661.5,
+      "excessRate": null,
+      "taxType": "TAX002",
+      "accountCode": "311",
+      "copyFromPriorMonth": true,
+      "priorInvoiceNumber": "9213",
+      "processing": {
+        "ar": {
+          "sender": "ar@newvaluegroup.com",
+          "billableUser": "Rustam",
+          "togglProjectId": "204851981",
+          "billAccountCode": "311",
+          "billTaxType": "TAX002",
+          "billDescription": "Rustam Akimov - Consulting Services"
+        },
+        "ap": {
+          "sender": "ap@newvaluegroup.com",
+          "invoiceDescription": "Consulting Services - Purchase Order",
+          "invoiceAccountCode": "200",
+          "invoiceTaxType": "TAX001"
+        },
+        "processedLabel": "NVS-Processed",
+        "skippedLabel": "NVS-Skipped",
+        "needsReviewLabel": "NVS-Needs-Review"
+      }
+    }
+  },
+  "slack": {
+    "sysopsWebhook": null
+  },
+  "toggl": {
+    "api_url": "https://api.track.toggl.com/reports/api/v2",
+    "credentials_file": "~/.openclaw/credentials/toggl"
+  },
+  "xero": {
+    "client_id": "REDACTED_XERO_CLIENT_ID",
+    "client_secret": "REDACTED_XERO_CLIENT_SECRET",
+    "tokens_file": "~/.openclaw/credentials/xero-tokens.json"
+  }
+}

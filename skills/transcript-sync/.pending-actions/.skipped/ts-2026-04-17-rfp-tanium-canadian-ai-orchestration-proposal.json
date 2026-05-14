@@ -1,0 +1,38 @@
+{
+  "id": "ts-2026-04-17-rfp-tanium-canadian-ai-orchestration-proposal",
+  "meetingTitle": "RFP: Tanium + Canadian AI Orchestration Proposal",
+  "meetingDate": "2026-04-17",
+  "org": "ctci",
+  "sourceRel": "ctci-docs/transcripts/2026-04-17-vouchers-texas.md",
+  "targetDir": "/workspace/extra/github/cognitivetech/ctci-docs/transcripts",
+  "transcriptPath": "/workspace/extra/github/cognitivetech/ctci-docs/transcripts/2026-04-17-vouchers-texas.md",
+  "lineageTag": "meeting:RFP: Tanium + Canadian AI Orchestration Proposal|date:2026-04-17",
+  "actions": [
+    {
+      "title": "Respond to Sted's emails over the weekend",
+      "context": "**Background**: The team is working on an RFP response for BCI (BC Investment) that combines Tanium endpoint management with an AI orchestration layer built by Cognitive Tech. The proposal has two options: Option A (Tanium + AI orchestration) and Option B (standalone Tanium). The submission target is Monday.\n\n**Discussion**: Sted mentioned that Adrian is helping him work on the proposal over the weekend, and that Cian and Mauro should be available by email. Sted said: \"if you get emails on it just when you get a chance if you don't mind responding to the email.\" He also noted: \"any input I'm going to need from you Cian I would need it on the weekend.\"\n\n**Decision/Direction**: Cian confirmed availability for weekend email responses.\n\n**Next steps**: Monitor email from Sted over the weekend and respond promptly to any questions about the AI orchestration component, technical architecture, or proposal content.",
+      "assignee": "cian@cognitivetech.net",
+      "priority": "urgent",
+      "project": "Cognitive Tech",
+      "index": 1
+    },
+    {
+      "title": "Clarify section 6.2 agent governance toolkit scope",
+      "context": "**Background**: The proposal document contains multiple sections including AI-powered decision intelligence content. Sted was reviewing which sections apply to Option A vs Option C and needed clarification on what's required across all options.\n\n**Discussion**: Sted asked whether certain content (use cases, governance, SOC2 alignment) was relevant to Option A or only Option C. Cian clarified: \"You don't need the agent governance toolkit, but the other stuff is all [needed].\" Specifically: \"Everything else is needed, except for 6.2.\" Regarding section 6.3, Cian noted: \"6.3 is partially agents, but it could also be any part of the system would probably it'd be good for it to behave like that.\"\n\n**Decision/Direction**: Section 6.2 (agent governance toolkit) is NOT needed for Option A. All other sections including 6.3 are needed. The back design is a requirement regardless of which option BCI chooses.\n\n**Next steps**: Ensure the proposal correctly scopes section 6.2 as Option C only, while keeping all other sections as applicable to all options. This context should be reflected if Sted asks for clarification over the weekend.",
+      "assignee": "cian@cognitivetech.net",
+      "priority": "high",
+      "project": "Cognitive Tech",
+      "index": 2
+    },
+    {
+      "title": "Be available for Monday 9:30am PT review meeting",
+      "context": "**Background**: The team is targeting Monday for proposal submission. Sted proposed a review meeting to walk through the document before submission.\n\n**Discussion**: Various availability was discussed. Sted proposed 9:30 Pacific on Monday. Cian said: \"My Monday's not great either. I could do 9:30 or I could do 2:30.\" Multiple team members confirmed 9:30 works. The meeting was booked for 9:30-10:30 Pacific, with flexibility for people to join when they can.\n\n**Decision/Direction**: Meeting booked for Monday 9:30-10:30 AM Pacific. Cian indicated he may not need to attend much: \"But I help me, I think, at this point\" — suggesting his main contributions will be over the weekend via email.\n\n**Next steps**: Join the Monday review meeting at 9:30 AM Pacific (2026-04-21) to walk through the final proposal document and confirm technical accuracy of the AI orchestration sections.",
+      "assignee": "cian@cognitivetech.net",
+      "priority": "high",
+      "project": "Cognitive Tech",
+      "index": 3
+    }
+  ],
+  "createdAt": "2026-04-20T15:11:37.441Z",
+  "status": "pending"
+}
