@@ -24,4 +24,8 @@ describe('resolveProviderName', () => {
     expect(resolveProviderName('', 'opencode')).toBe('opencode');
     expect(resolveProviderName(null, '')).toBe('claude');
   });
+
+  it('uses explicit defaultProvider arg over env fallback', () => {
+    expect(resolveProviderName(null, null, 'opencode')).toBe('opencode');
+  });
 });

@@ -218,8 +218,10 @@ export function killContainer(sessionId: string, reason: string, onExit?: () => 
 export function resolveProviderName(
   sessionProvider: string | null | undefined,
   containerConfigProvider: string | null | undefined,
+  defaultProvider?: string,
 ): string {
-  return (sessionProvider || containerConfigProvider || 'claude').toLowerCase();
+  const fallback = defaultProvider || process.env.NANOCLAW_DEFAULT_PROVIDER || 'claude';
+  return (sessionProvider || containerConfigProvider || fallback).toLowerCase();
 }
 
 function resolveProviderContribution(
