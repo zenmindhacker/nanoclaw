@@ -17,13 +17,7 @@ import os from 'os';
 
 import { logger } from './logger.js';
 
-const CRED_DIR = path.join(
-  os.homedir(),
-  '.config',
-  'nanoclaw',
-  'credentials',
-  'services',
-);
+const CRED_DIR = path.join(os.homedir(), '.config', 'nanoclaw', 'credentials', 'services');
 const REGISTRY_PATH = path.join(CRED_DIR, 'oauth-registry.json');
 const REDIRECT_URI = 'https://cleo.cognitivetech.net/auth/callback';
 
@@ -51,13 +45,9 @@ function loadRegistry(): OAuthRegistry | null {
   }
 }
 
-function loadClientCredentials(
-  filename: string,
-): { client_id: string; client_secret: string } | null {
+function loadClientCredentials(filename: string): { client_id: string; client_secret: string } | null {
   try {
-    const raw = JSON.parse(
-      fs.readFileSync(path.join(CRED_DIR, filename), 'utf-8'),
-    );
+    const raw = JSON.parse(fs.readFileSync(path.join(CRED_DIR, filename), 'utf-8'));
     const creds = raw.installed || raw.web || raw;
     if (creds.client_id && creds.client_secret) return creds;
     return null;
@@ -73,11 +63,7 @@ function saveTokenFile(filename: string, token: Record<string, unknown>): void {
   fs.renameSync(tmpPath, filePath);
 }
 
-function postForm(
-  url: string,
-  body: string,
-  headers: Record<string, string>,
-): Promise<Record<string, unknown>> {
+function postForm(url: string, body: string, headers: Record<string, string>): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
     const u = new URL(url);
     const req = httpsRequest(
@@ -123,8 +109,7 @@ function buildAuthUrl(entry: RegistryEntry, clientId: string): string {
       client_id: clientId,
       redirect_uri: REDIRECT_URI,
       response_type: 'code',
-      scope:
-        (loadTokenFileRaw(entry.token_file)?.scope as string) || 'openid email',
+      scope: (loadTokenFileRaw(entry.token_file)?.scope as string) || 'openid email',
       access_type: 'offline',
       prompt: 'consent',
       state: entry.id,
@@ -136,8 +121,7 @@ function buildAuthUrl(entry: RegistryEntry, clientId: string): string {
     client_id: clientId,
     redirect_uri: REDIRECT_URI,
     response_type: 'code',
-    scope:
-      'openid profile email accounting.transactions accounting.contacts offline_access',
+    scope: 'openid profile email accounting.transactions accounting.contacts offline_access',
     state: entry.id,
   });
   return `https://login.xero.com/identity/connect/authorize?${params}`;
@@ -154,10 +138,7 @@ function loadTokenFileRaw(filename: string): Record<string, unknown> | null {
 let server: Server | null = null;
 let alertCallback: ((msg: string) => void) | null = null;
 
-export function startOAuthCallbackServer(
-  port: number,
-  opts?: { onAlert?: (msg: string) => void },
-): Promise<Server> {
+export function startOAuthCallbackServer(port: number, opts?: { onAlert?: (msg: string) => void }): Promise<Server> {
   alertCallback = opts?.onAlert ?? null;
 
   return new Promise((resolve, reject) => {
@@ -190,10 +171,7 @@ export function startOAuthCallbackServer(
         const authUrl = buildAuthUrl(entry, creds.client_id);
         res.writeHead(302, { location: authUrl });
         res.end();
-        logger.info(
-          { id: entryId },
-          'OAuth flow started, redirecting to provider',
-        );
+        logger.info({ id: entryId }, 'OAuth flow started, redirecting to provider');
         return;
       }
 
@@ -230,14 +208,9 @@ export function startOAuthCallbackServer(
 
           const json = await postForm(entry.token_url, body, {});
           if (json.error) {
-            logger.error(
-              { id: entry.id, error: json.error },
-              'Token exchange failed',
-            );
+            logger.error({ id: entry.id, error: json.error }, 'Token exchange failed');
             res.writeHead(500, { 'content-type': 'text/html' });
-            res.end(
-              `<h1>Auth failed</h1><p>${json.error_description || json.error}</p>`,
-            );
+            res.end(`<h1>Auth failed</h1><p>${json.error_description || json.error}</p>`);
             return;
           }
 
@@ -259,10 +232,7 @@ export function startOAuthCallbackServer(
           if (json.scope) token.scope = json.scope;
 
           saveTokenFile(entry.token_file, token);
-          logger.info(
-            { id: entry.id, account: entry.account },
-            'OAuth re-auth complete',
-          );
+          logger.info({ id: entry.id, account: entry.account }, 'OAuth re-auth complete');
 
           const msg = `OAuth re-auth complete for *${entry.id}* (${entry.account})`;
           if (alertCallback) {
@@ -274,15 +244,11 @@ export function startOAuthCallbackServer(
           }
 
           res.writeHead(200, { 'content-type': 'text/html' });
-          res.end(
-            '<html><body><h1>Auth complete</h1><p>You can close this tab.</p></body></html>',
-          );
+          res.end('<html><body><h1>Auth complete</h1><p>You can close this tab.</p></body></html>');
         } catch (err) {
           logger.error({ id: entry.id, err }, 'Token exchange error');
           res.writeHead(500, { 'content-type': 'text/html' });
-          res.end(
-            '<h1>Auth error</h1><p>Token exchange failed. Check server logs.</p>',
-          );
+          res.end('<h1>Auth error</h1><p>Token exchange failed. Check server logs.</p>');
         }
         return;
       }

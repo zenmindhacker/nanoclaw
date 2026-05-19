@@ -14,13 +14,7 @@ import { request as httpsRequest } from 'https';
 
 import { logger } from './logger.js';
 
-const CRED_DIR = path.join(
-  os.homedir(),
-  '.config',
-  'nanoclaw',
-  'credentials',
-  'services',
-);
+const CRED_DIR = path.join(os.homedir(), '.config', 'nanoclaw', 'credentials', 'services');
 const REGISTRY_PATH = path.join(CRED_DIR, 'oauth-registry.json');
 
 /** Refresh when less than this many seconds remain. */
@@ -96,9 +90,7 @@ function loadTokenFile(filename: string): TokenFile | null {
 
 function loadClientCredentials(filename: string): ClientCredentials | null {
   try {
-    const raw = JSON.parse(
-      fs.readFileSync(path.join(CRED_DIR, filename), 'utf-8'),
-    );
+    const raw = JSON.parse(fs.readFileSync(path.join(CRED_DIR, filename), 'utf-8'));
     // Google uses { installed: { client_id, client_secret } }
     // Xero uses flat { client_id, client_secret }
     const creds = raw.installed || raw.web || raw;
@@ -121,11 +113,7 @@ function saveTokenFile(filename: string, token: TokenFile): void {
 // HTTP helper
 // ---------------------------------------------------------------------------
 
-function postForm(
-  url: string,
-  body: string,
-  headers: Record<string, string>,
-): Promise<Record<string, unknown>> {
+function postForm(url: string, body: string, headers: Record<string, string>): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
     const u = new URL(url);
     const req = httpsRequest(
@@ -190,20 +178,13 @@ async function refreshToken(
 
   const headers: Record<string, string> = {};
   if (entry.auth_method === 'basic_auth') {
-    headers['authorization'] =
-      'Basic ' +
-      Buffer.from(`${creds.client_id}:${creds.client_secret}`).toString(
-        'base64',
-      );
+    headers['authorization'] = 'Basic ' + Buffer.from(`${creds.client_id}:${creds.client_secret}`).toString('base64');
   }
 
   const json = await postForm(entry.token_url, body, headers);
 
   if (json.error) {
-    logger.error(
-      { id: entry.id, error: json.error, desc: json.error_description },
-      'OAuth token refresh failed',
-    );
+    logger.error({ id: entry.id, error: json.error, desc: json.error_description }, 'OAuth token refresh failed');
     return null;
   }
 
@@ -266,17 +247,11 @@ async function checkAndRefreshAll(): Promise<void> {
     const remaining = expiresAt - nowSec;
 
     if (remaining < REFRESH_BUFFER_SEC) {
-      logger.info(
-        { id: entry.id, account: entry.account, remainingSec: remaining },
-        'Token expiring soon, refreshing',
-      );
+      logger.info({ id: entry.id, account: entry.account, remainingSec: remaining }, 'Token expiring soon, refreshing');
 
       const creds = loadClientCredentials(entry.client_file);
       if (!creds) {
-        logger.error(
-          { id: entry.id, clientFile: entry.client_file },
-          'Client credentials not found',
-        );
+        logger.error({ id: entry.id, clientFile: entry.client_file }, 'Client credentials not found');
         continue;
       }
 
@@ -284,9 +259,7 @@ async function checkAndRefreshAll(): Promise<void> {
         const updated = await refreshToken(entry, token, creds);
         if (updated) {
           saveTokenFile(entry.token_file, updated);
-          const expiresInMin = Math.round(
-            ((updated.expires_at ?? 0) - nowSec) / 60,
-          );
+          const expiresInMin = Math.round(((updated.expires_at ?? 0) - nowSec) / 60);
           logger.info(
             {
               id: entry.id,
@@ -295,9 +268,7 @@ async function checkAndRefreshAll(): Promise<void> {
             },
             'Token refreshed successfully',
           );
-          alert(
-            `Refreshed *${entry.id}* token (${entry.account}) — valid for ${expiresInMin}m`,
-          );
+          alert(`Refreshed *${entry.id}* token (${entry.account}) — valid for ${expiresInMin}m`);
         } else {
           // refreshToken returned null → provider rejected the refresh
           alert(
@@ -312,10 +283,7 @@ async function checkAndRefreshAll(): Promise<void> {
         );
       }
     } else {
-      logger.debug(
-        { id: entry.id, remainingMin: Math.round(remaining / 60) },
-        'Token still valid',
-      );
+      logger.debug({ id: entry.id, remainingMin: Math.round(remaining / 60) }, 'Token still valid');
     }
   }
 }
@@ -348,8 +316,7 @@ export function getTokenHealth(): TokenHealth[] {
         }
         const expiresAt = getExpiresAtSec(token);
         const remainingMin = Math.round((expiresAt - nowSec) / 60);
-        const status: TokenHealth['status'] =
-          remainingMin > 10 ? 'ok' : remainingMin > 0 ? 'expiring' : 'expired';
+        const status: TokenHealth['status'] = remainingMin > 10 ? 'ok' : remainingMin > 0 ? 'expiring' : 'expired';
         results.push({
           id: entry.id,
           account: entry.account,
@@ -387,20 +354,14 @@ function alert(msg: string): void {
   }
 }
 
-export function startOAuthRefresher(opts?: {
-  onAlert?: (msg: string) => void;
-}): void {
+export function startOAuthRefresher(opts?: { onAlert?: (msg: string) => void }): void {
   if (refreshInterval) return;
   alertCallback = opts?.onAlert ?? null;
   logger.info('OAuth token refresher started');
   // Run immediately, then on interval
-  checkAndRefreshAll().catch((err) =>
-    logger.error({ err }, 'OAuth refresh error on startup'),
-  );
+  checkAndRefreshAll().catch((err) => logger.error({ err }, 'OAuth refresh error on startup'));
   refreshInterval = setInterval(() => {
-    checkAndRefreshAll().catch((err) =>
-      logger.error({ err }, 'OAuth refresh error'),
-    );
+    checkAndRefreshAll().catch((err) => logger.error({ err }, 'OAuth refresh error'));
   }, CHECK_INTERVAL_MS);
 }
 

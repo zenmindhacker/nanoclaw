@@ -13,14 +13,8 @@ import { logger } from '../logger.js';
  * Download a Slack-hosted audio file and transcribe it via OpenAI Whisper.
  * Returns a formatted transcript string or a fallback message.
  */
-export async function transcribeSlackAudio(
-  fileUrl: string,
-): Promise<string | null> {
-  const env = readEnvFile([
-    'OPENROUTER_API_KEY',
-    'OPENAI_API_KEY',
-    'SLACK_BOT_TOKEN',
-  ]);
+export async function transcribeSlackAudio(fileUrl: string): Promise<string | null> {
+  const env = readEnvFile(['OPENROUTER_API_KEY', 'OPENAI_API_KEY', 'SLACK_BOT_TOKEN']);
   const botToken = env.SLACK_BOT_TOKEN;
 
   // Prefer OpenRouter (shared quota, no per-key billing limits).
@@ -33,9 +27,7 @@ export async function transcribeSlackAudio(
   const model = useOpenRouter ? 'openai/gpt-4o-mini-transcribe' : 'whisper-1';
 
   if (!apiKey) {
-    logger.warn(
-      'No transcription key set — set OPENROUTER_API_KEY or OPENAI_API_KEY in .env',
-    );
+    logger.warn('No transcription key set — set OPENROUTER_API_KEY or OPENAI_API_KEY in .env');
     return '[Voice message — transcription unavailable: set OPENROUTER_API_KEY in .env]';
   }
 
@@ -50,9 +42,7 @@ export async function transcribeSlackAudio(
     const audioBuffer = Buffer.from(await downloadRes.arrayBuffer());
 
     // Determine audio format from URL for OpenRouter's input_audio.format field
-    const ext = fileUrl.includes('.')
-      ? fileUrl.split('.').pop()!.split('?')[0]
-      : 'mp4';
+    const ext = fileUrl.includes('.') ? fileUrl.split('.').pop()!.split('?')[0] : 'mp4';
 
     let whisperRes: Response;
     if (useOpenRouter) {

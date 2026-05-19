@@ -17,11 +17,7 @@
 import type { WebClient } from '@slack/web-api';
 
 import { ASSISTANT_NAME } from '../config.js';
-import {
-  getLatestStoredTimestamp,
-  messageExists,
-  storeMessageDirect,
-} from '../db.js';
+import { getLatestStoredTimestamp, messageExists, storeMessageDirect } from '../db.js';
 import { logger } from '../logger.js';
 import type { RegisteredGroup } from '../types.js';
 
@@ -49,11 +45,7 @@ export class SlackThreadSync {
    * Called when a new thread group is created.
    * Returns the number of messages inserted.
    */
-  async backfillThread(
-    channelId: string,
-    threadTs: string,
-    threadJid: string,
-  ): Promise<number> {
+  async backfillThread(channelId: string, threadTs: string, threadJid: string): Promise<number> {
     let inserted = 0;
     try {
       let cursor: string | undefined;
@@ -69,9 +61,7 @@ export class SlackThreadSync {
           if (!msg.ts || !msg.text) continue;
           if (messageExists(msg.ts, threadJid)) continue;
 
-          const isBotMessage =
-            (msg.bot_id != null && msg.user === this.botUserId) ||
-            msg.user === this.botUserId;
+          const isBotMessage = (msg.bot_id != null && msg.user === this.botUserId) || msg.user === this.botUserId;
 
           storeMessageDirect({
             id: msg.ts,
@@ -91,16 +81,10 @@ export class SlackThreadSync {
       } while (cursor);
 
       if (inserted > 0) {
-        logger.info(
-          { threadJid, channelId, threadTs, inserted },
-          'Thread backfill complete',
-        );
+        logger.info({ threadJid, channelId, threadTs, inserted }, 'Thread backfill complete');
       }
     } catch (err) {
-      logger.warn(
-        { threadJid, channelId, threadTs, error: err },
-        'Thread backfill failed',
-      );
+      logger.warn({ threadJid, channelId, threadTs, error: err }, 'Thread backfill failed');
     }
     return inserted;
   }
@@ -110,11 +94,7 @@ export class SlackThreadSync {
    * Compares the latest stored timestamp against the inbound message.
    * If there's a gap, fetches missing messages from Slack.
    */
-  async fillGaps(
-    channelId: string,
-    jid: string,
-    threadTs?: string,
-  ): Promise<number> {
+  async fillGaps(channelId: string, jid: string, threadTs?: string): Promise<number> {
     const latestStored = getLatestStoredTimestamp(jid);
     if (!latestStored) return 0; // No history yet, nothing to gap-fill
 
@@ -144,9 +124,7 @@ export class SlackThreadSync {
         if (!msg.ts || !msg.text) continue;
         if (messageExists(msg.ts, jid)) continue;
 
-        const isBotMessage =
-          (msg.bot_id != null && msg.user === this.botUserId) ||
-          msg.user === this.botUserId;
+        const isBotMessage = (msg.bot_id != null && msg.user === this.botUserId) || msg.user === this.botUserId;
 
         storeMessageDirect({
           id: msg.ts,
@@ -162,10 +140,7 @@ export class SlackThreadSync {
       }
 
       if (inserted > 0) {
-        logger.info(
-          { jid, channelId, inserted },
-          'Gap fill: inserted missing messages',
-        );
+        logger.info({ jid, channelId, inserted }, 'Gap fill: inserted missing messages');
       }
       return inserted;
     } catch (err) {
@@ -178,19 +153,12 @@ export class SlackThreadSync {
    * Reconcile all active Slack groups on startup.
    * Iterates thread groups and runs gap detection for each.
    */
-  async startupReconciliation(
-    groups: Record<string, RegisteredGroup>,
-  ): Promise<void> {
-    const slackGroups = Object.entries(groups).filter(([jid]) =>
-      jid.startsWith('slack:'),
-    );
+  async startupReconciliation(groups: Record<string, RegisteredGroup>): Promise<void> {
+    const slackGroups = Object.entries(groups).filter(([jid]) => jid.startsWith('slack:'));
 
     if (slackGroups.length === 0) return;
 
-    logger.info(
-      { groupCount: slackGroups.length },
-      'Slack sync: starting reconciliation',
-    );
+    logger.info({ groupCount: slackGroups.length }, 'Slack sync: starting reconciliation');
 
     for (const [jid, group] of slackGroups) {
       const parts = jid.replace(/^slack:/, '').split(':t:');
@@ -223,10 +191,7 @@ export class SlackThreadSync {
       }
     }, SYNC_INTERVAL_MS);
 
-    logger.info(
-      { intervalMs: SYNC_INTERVAL_MS },
-      'Slack sync: periodic sync started',
-    );
+    logger.info({ intervalMs: SYNC_INTERVAL_MS }, 'Slack sync: periodic sync started');
   }
 
   stop(): void {

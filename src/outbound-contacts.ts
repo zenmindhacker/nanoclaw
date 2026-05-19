@@ -52,29 +52,20 @@ export function loadOutboundContacts(): OutboundContact[] {
     const raw = fs.readFileSync(CONTACTS_FILE, 'utf-8');
     const parsed = JSON.parse(raw) as ContactsFile;
     if (!parsed || !Array.isArray(parsed.contacts)) {
-      logger.warn(
-        { file: CONTACTS_FILE },
-        'outbound_contacts.json missing "contacts" array — ignoring',
-      );
+      logger.warn({ file: CONTACTS_FILE }, 'outbound_contacts.json missing "contacts" array — ignoring');
       cached = [];
       cachedJids = new Set();
       return cached;
     }
     const valid = parsed.contacts.filter(
-      (c): c is OutboundContact =>
-        typeof c?.jid === 'string' &&
-        c.jid.length > 0 &&
-        typeof c?.name === 'string',
+      (c): c is OutboundContact => typeof c?.jid === 'string' && c.jid.length > 0 && typeof c?.name === 'string',
     );
     cached = valid;
     cachedJids = new Set(valid.map((c) => c.jid));
     logger.info({ count: valid.length }, 'Loaded global outbound contacts');
     return cached;
   } catch (err) {
-    logger.warn(
-      { err, file: CONTACTS_FILE },
-      'Failed to load outbound_contacts.json — keeping previous contacts',
-    );
+    logger.warn({ err, file: CONTACTS_FILE }, 'Failed to load outbound_contacts.json — keeping previous contacts');
     return cached;
   }
 }

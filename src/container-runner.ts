@@ -565,10 +565,7 @@ export function writeConversationHistorySnapshot(
  * DM/channel, not just the parent-level messages.
  * Safe to call on every runAgent — the file is small.
  */
-export function writeCrossThreadHistorySnapshot(
-  groupFolder: string,
-  parentJid: string,
-): void {
+export function writeCrossThreadHistorySnapshot(groupFolder: string, parentJid: string): void {
   const groupIpcDir = resolveGroupIpcPath(groupFolder);
   fs.mkdirSync(groupIpcDir, { recursive: true });
 

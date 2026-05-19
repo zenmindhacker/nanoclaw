@@ -53,8 +53,7 @@ function readCredentials(): OAuthCreds | null {
   try {
     const data = JSON.parse(fs.readFileSync(CRED_FILE, 'utf-8'));
     const o = data?.claudeAiOauth;
-    if (o?.accessToken && o?.refreshToken && o?.expiresAt)
-      return o as OAuthCreds;
+    if (o?.accessToken && o?.refreshToken && o?.expiresAt) return o as OAuthCreds;
   } catch {
     /* ignore */
   }
@@ -80,10 +79,7 @@ function writeCredentials(creds: OAuthCreds): void {
   }
 }
 
-function fetchJson(
-  url: string,
-  body: string,
-): Promise<Record<string, unknown>> {
+function fetchJson(url: string, body: string): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
     const u = new URL(url);
     const req = httpsRequest(
@@ -134,10 +130,7 @@ async function refreshToken(creds: OAuthCreds): Promise<string | null> {
         logger.error({ error: json.error }, 'OAuth token refresh failed');
         consecutiveFailures++;
         // Notify on first failure, then every 5th to avoid spam
-        if (
-          authFailureNotifier &&
-          (consecutiveFailures === 1 || consecutiveFailures % 5 === 0)
-        ) {
+        if (authFailureNotifier && (consecutiveFailures === 1 || consecutiveFailures % 5 === 0)) {
           const msg =
             json.error === 'invalid_grant'
               ? `⚠️ Claude OAuth token is dead (invalid_grant). I can't process any messages until you re-authenticate. Run \`claude auth login\` on the server.`
@@ -153,10 +146,7 @@ async function refreshToken(creds: OAuthCreds): Promise<string | null> {
       };
       writeCredentials(next);
       if (consecutiveFailures > 0) {
-        logger.info(
-          { previousFailures: consecutiveFailures },
-          'OAuth token refreshed successfully (recovered)',
-        );
+        logger.info({ previousFailures: consecutiveFailures }, 'OAuth token refreshed successfully (recovered)');
       } else {
         logger.info('OAuth token refreshed successfully');
       }
@@ -191,10 +181,7 @@ async function getOAuthToken(): Promise<string | null> {
   }
   const expiresIn = creds.expiresAt - Date.now();
   if (expiresIn < REFRESH_BUFFER_MS) {
-    logger.info(
-      { expiresInMs: expiresIn },
-      'OAuth token expiring soon, refreshing...',
-    );
+    logger.info({ expiresInMs: expiresIn }, 'OAuth token expiring soon, refreshing...');
     const refreshed = await refreshToken(creds);
     return refreshed ?? creds.accessToken; // fall back to existing if refresh fails
   }
@@ -213,10 +200,7 @@ export function readCurrentAccessToken(): string | null {
 // Proxy server
 // ---------------------------------------------------------------------------
 
-export function startCredentialProxy(
-  port: number,
-  host = '127.0.0.1',
-): Promise<Server> {
+export function startCredentialProxy(port: number, host = '127.0.0.1'): Promise<Server> {
   const secrets = readEnvFile([
     'ANTHROPIC_API_KEY',
     'CLAUDE_CODE_OAUTH_TOKEN',
@@ -228,12 +212,9 @@ export function startCredentialProxy(
 
   // For OAuth, prefer reading from .credentials.json (auto-refreshed).
   // Fall back to .env tokens if .credentials.json is unavailable.
-  const envOauthToken =
-    secrets.CLAUDE_CODE_OAUTH_TOKEN || secrets.ANTHROPIC_AUTH_TOKEN;
+  const envOauthToken = secrets.CLAUDE_CODE_OAUTH_TOKEN || secrets.ANTHROPIC_AUTH_TOKEN;
 
-  const upstreamUrl = new URL(
-    secrets.ANTHROPIC_BASE_URL || 'https://api.anthropic.com',
-  );
+  const upstreamUrl = new URL(secrets.ANTHROPIC_BASE_URL || 'https://api.anthropic.com');
   const isHttps = upstreamUrl.protocol === 'https:';
   const makeRequest = isHttps ? httpsRequest : httpRequest;
 
@@ -243,12 +224,11 @@ export function startCredentialProxy(
       req.on('data', (c) => chunks.push(c));
       req.on('end', async () => {
         const body = Buffer.concat(chunks);
-        const headers: Record<string, string | number | string[] | undefined> =
-          {
-            ...(req.headers as Record<string, string>),
-            host: upstreamUrl.host,
-            'content-length': body.length,
-          };
+        const headers: Record<string, string | number | string[] | undefined> = {
+          ...(req.headers as Record<string, string>),
+          host: upstreamUrl.host,
+          'content-length': body.length,
+        };
 
         // Strip hop-by-hop headers that must not be forwarded by proxies
         delete headers['connection'];
@@ -290,10 +270,7 @@ export function startCredentialProxy(
         );
 
         upstream.on('error', (err) => {
-          logger.error(
-            { err, url: req.url },
-            'Credential proxy upstream error',
-          );
+          logger.error({ err, url: req.url }, 'Credential proxy upstream error');
           if (!res.headersSent) {
             res.writeHead(502);
             res.end('Bad Gateway');
@@ -343,10 +320,7 @@ async function proactiveRefresh(): Promise<void> {
   if (!creds) return;
   const expiresIn = creds.expiresAt - Date.now();
   if (expiresIn < REFRESH_BUFFER_MS) {
-    logger.info(
-      { expiresInMs: expiresIn },
-      'Proactive refresh: token expiring soon',
-    );
+    logger.info({ expiresInMs: expiresIn }, 'Proactive refresh: token expiring soon');
     await refreshToken(creds);
   }
 }
@@ -359,15 +333,11 @@ export function startProactiveRefresh(): void {
   if (refreshInterval) return;
   const INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
   refreshInterval = setInterval(() => {
-    proactiveRefresh().catch((err) =>
-      logger.warn({ err }, 'Proactive refresh error'),
-    );
+    proactiveRefresh().catch((err) => logger.warn({ err }, 'Proactive refresh error'));
   }, INTERVAL_MS);
   // Also run once immediately on startup after a short delay
   setTimeout(() => {
-    proactiveRefresh().catch((err) =>
-      logger.warn({ err }, 'Initial proactive refresh error'),
-    );
+    proactiveRefresh().catch((err) => logger.warn({ err }, 'Initial proactive refresh error'));
   }, 5000);
 }
 

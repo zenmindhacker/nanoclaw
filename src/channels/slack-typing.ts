@@ -21,7 +21,6 @@ const THINKING_REACTION = 'hourglass_flowing_sand';
 // Refresh it every 3 seconds to keep it visible during long-running tasks.
 const TYPING_REFRESH_MS = 3000;
 
-
 export class SlackTypingIndicator {
   // Whether the assistant.threads.setStatus API is available per channel (detected at runtime).
   // undefined = not yet tested, true = works, false = not available (fall back to reaction).
@@ -57,10 +56,7 @@ export class SlackTypingIndicator {
         try {
           await (
             this.app.client as unknown as {
-              apiCall: (
-                method: string,
-                args: Record<string, unknown>,
-              ) => Promise<void>;
+              apiCall: (method: string, args: Record<string, unknown>) => Promise<void>;
             }
           ).apiCall('assistant.threads.setStatus', {
             channel_id: channelId,
@@ -75,10 +71,7 @@ export class SlackTypingIndicator {
           return;
         } catch (err) {
           this.assistantStatusAvailable.set(channelId, false);
-          logger.info(
-            { jid, err },
-            'assistant.threads.setStatus unavailable, falling back to reaction',
-          );
+          logger.info({ jid, err }, 'assistant.threads.setStatus unavailable, falling back to reaction');
         }
       }
 
@@ -91,10 +84,7 @@ export class SlackTypingIndicator {
             timestamp: lastUserMessageTs,
             name: THINKING_REACTION,
           });
-          this.thinkingTs.set(
-            jid,
-            `reaction:${channelId}:${lastUserMessageTs}`,
-          );
+          this.thinkingTs.set(jid, `reaction:${channelId}:${lastUserMessageTs}`);
         } catch (err) {
           logger.warn({ jid, err }, 'Failed to add thinking reaction');
         }
@@ -111,10 +101,7 @@ export class SlackTypingIndicator {
         try {
           await (
             this.app.client as unknown as {
-              apiCall: (
-                method: string,
-                args: Record<string, unknown>,
-              ) => Promise<void>;
+              apiCall: (method: string, args: Record<string, unknown>) => Promise<void>;
             }
           ).apiCall('assistant.threads.setStatus', {
             channel_id: channelId,
@@ -122,10 +109,7 @@ export class SlackTypingIndicator {
             status: '',
           });
         } catch (err) {
-          logger.warn(
-            { jid, err },
-            'Failed to clear assistant typing indicator',
-          );
+          logger.warn({ jid, err }, 'Failed to clear assistant typing indicator');
         }
       } else if (ts.startsWith('reaction:')) {
         // Remove the thinking emoji reaction
@@ -165,10 +149,7 @@ export class SlackTypingIndicator {
       }
 
       const api = this.app.client as unknown as {
-        apiCall: (
-          method: string,
-          args: Record<string, unknown>,
-        ) => Promise<void>;
+        apiCall: (method: string, args: Record<string, unknown>) => Promise<void>;
       };
       try {
         await api.apiCall('assistant.threads.setStatus', {
@@ -186,12 +167,7 @@ export class SlackTypingIndicator {
               thread_ts: threadTs,
               status: '',
             })
-            .catch((err) =>
-              logger.warn(
-                { jid, err },
-                'Failed to re-clear typing indicator after race',
-              ),
-            );
+            .catch((err) => logger.warn({ jid, err }, 'Failed to re-clear typing indicator after race'));
         }
       } catch {
         // If refresh fails, stop trying — indicator will expire naturally

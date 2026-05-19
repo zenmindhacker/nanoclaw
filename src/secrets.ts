@@ -63,9 +63,7 @@ function resolveCredentialsDir(): string | null {
     const allowlist = loadMountAllowlist();
     if (!allowlist?.defaultMounts) return null;
 
-    const credMount = allowlist.defaultMounts.find(
-      (dm) => dm.containerName === 'credentials',
-    );
+    const credMount = allowlist.defaultMounts.find((dm) => dm.containerName === 'credentials');
     if (!credMount) return null;
 
     const mountPath = credMount.path.startsWith('~')
@@ -135,8 +133,7 @@ export function getSecretsForGroup(
       const applies =
         entry.groups.includes('*') ||
         entry.groups.includes(groupFolder) ||
-        (inheritFromFolder !== undefined &&
-          entry.groups.includes(inheritFromFolder));
+        (inheritFromFolder !== undefined && entry.groups.includes(inheritFromFolder));
       if (!applies) continue;
 
       const value = process.env[entry.env_var];
@@ -158,10 +155,7 @@ export function getSecretsForGroup(
   }
 
   if (missing.length > 0) {
-    logger.warn(
-      { groupFolder, missing },
-      'Some secrets not found — check .env or credentials.json',
-    );
+    logger.warn({ groupFolder, missing }, 'Some secrets not found — check .env or credentials.json');
   }
 
   return { env, missing };
