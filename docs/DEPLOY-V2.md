@@ -7,8 +7,9 @@ Follow this top to bottom on each server. Cleo first, then Silas.
 ## Pre-flight (local, before touching servers)
 
 ```bash
-# Push the v2-migration branch to origin
-git push origin v2-migration
+git checkout main
+git pull origin main
+git push origin main   # after merging v2 work locally
 ```
 
 ---
@@ -121,37 +122,43 @@ Remove from `.env`:
 
 ### OpenCode Go (for the OpenCode provider)
 
-Register with `x-api-key` header (Zen uses x-api-key, not Bearer):
+OpenCode **Go** is a separate product from OpenCode Zen. Go uses different model IDs, a different API base path, and **Bearer** auth on `chat/completions` (not `x-api-key` — that header only works on `/models`).
+
+Get your API key from the [OpenCode Zen console](https://opencode.ai/zen/dashboard) (subscribe to Go there).
+
 ```bash
 onecli secrets create --name "OpenCode Go" --type generic \
-  --value <your-zen-api-key> \
+  --value <your-go-api-key> \
   --host-pattern opencode.ai \
-  --header-name x-api-key --value-format "{value}"
+  --header-name Authorization --value-format "Bearer {value}"
 ```
 
-Get your Zen API key from: https://opencode.ai/zen/dashboard
+Cleo and Silas on the same host can share one OneCLI gateway and one Go secret if they use the same Zen/Go account.
 
 ---
 
-## 4. Configure OpenCode in .env
+## 4. Configure OpenCode Go in .env
 
-Add to `~/nanoclaw/.env`:
+Add to `~/nanoclaw/.env` on **both** Cleo and Silas:
 
 ```bash
-# OpenCode Go as primary provider
-OPENCODE_PROVIDER=opencode
-OPENCODE_MODEL=opencode/kimi-k2.6
-OPENCODE_SMALL_MODEL=opencode/deepseek-v4-flash
-ANTHROPIC_BASE_URL=https://opencode.ai/zen/v1
+# OpenCode Go (not regular Zen — note opencode-go/ prefix and /zen/go/v1 path)
+OPENCODE_PROVIDER=opencode-go
+OPENCODE_MODEL=opencode-go/kimi-k2.6
+OPENCODE_SMALL_MODEL=opencode-go/deepseek-v4-flash
+ANTHROPIC_BASE_URL=https://opencode.ai/zen/go/v1
+
+# Default provider for new agent groups (host reads this at spawn)
+NANOCLAW_DEFAULT_PROVIDER=opencode
 ```
 
-> **Model IDs for OpenCode Go** (as of May 2026):
-> - `opencode/kimi-k2.6` — best for complex tasks, ~5750 req/month on Go
-> - `opencode/deepseek-v4-flash` — cheapest, ~158k req/month, good for scheduled tasks
-> - `opencode/deepseek-v4-pro` — balanced, ~17k req/month
-> - `opencode/qwen3.6-plus` — good all-rounder, ~16k req/month
+> **Model IDs for OpenCode Go** ([docs](https://opencode.ai/docs/go/), May 2026):
+> - `opencode-go/kimi-k2.6` — best for complex tasks, ~5750 req/month on Go
+> - `opencode-go/deepseek-v4-flash` — cheapest, ~158k req/month, good for scheduled tasks
+> - `opencode-go/deepseek-v4-pro` — balanced, ~17k req/month
+> - `opencode-go/qwen3.6-plus` — good all-rounder, ~16k req/month
 
-For agent groups you want to keep on Claude (e.g. main control group), set `agent_provider=claude` via `ncl` after wiring (see step 6).
+For agent groups you want to keep on Claude, set `provider` to `claude` in `container_configs` via `ncl groups config update` or per-group `container.json`.
 
 ---
 
@@ -174,74 +181,101 @@ docker builder prune -f
 
 ## 6. Wire Slack to an agent group
 
-v2 uses webhooks for Slack (not Socket Mode). The webhook server runs on port 3000.
+v2 uses webhooks for Slack (not Socket Mode). Cleo and Silas run on the same host but **different ports** — open both in the firewall (`ufw allow 3000/tcp`, `ufw allow 3002/tcp`).
 
-### Update your Slack app
+| Agent | systemd user | `WEBHOOK_PORT` | Slack Request URL |
+|-------|--------------|----------------|-------------------|
+| Cleo  | `cian`       | `3000`         | `http://cleo-lc.cognitivetech.net:3000/webhook/slack` |
+| Silas | `christina`  | `3002`         | `http://cleo-lc.cognitivetech.net:3002/webhook/slack` |
 
-1. Go to [api.slack.com/apps](https://api.slack.com/apps) → your NanoClaw app
-2. **Event Subscriptions** → set Request URL to `https://cleo-lc.cognitivetech.net:3000/webhook/slack`
-   - (or whatever port/domain your server uses)
-3. Under bot events, confirm these are subscribed: `message.channels`, `message.groups`, `message.im`, `app_mention`
-4. **Interactivity & Shortcuts** → set same URL
-5. Click **Reinstall app** when prompted
+### Update each Slack app
+
+1. Go to [api.slack.com/apps](https://api.slack.com/apps) → the bot's app
+2. **Event Subscriptions** → Request URL (see table above)
+3. Bot events: `message.channels`, `message.groups`, `message.im`, `message.mpim`, `app_mention`
+4. **Interactivity & Shortcuts** → same URL
+5. Save (Slack sends `url_verification`; the server responds automatically)
 
 ### Add tokens to .env
 
 ```bash
-# Cleo server — cian's Slack workspace
 SLACK_BOT_TOKEN=xoxb-...
 SLACK_SIGNING_SECRET=...
-WEBHOOK_PORT=3000
-
-# Sync to container env dir
-mkdir -p data/env && cp .env data/env/env
+WEBHOOK_PORT=3000   # or 3002 for Silas
+ONECLI_URL=http://172.17.0.1:10254
 ```
 
-### Wire the channel via ncl CLI
+### Bootstrap the first DM agent (required once per install)
+
+v2 does not auto-wire existing Slack DMs. Run on the server **while `nanoclaw` is running**:
 
 ```bash
-# List groups to find your agent group ID
-ncl groups list
+# Cleo example — replace IDs from your Slack workspace
+pnpm exec tsx scripts/init-first-agent.ts \
+  --channel slack \
+  --user-id 'slack:U07F1909LCQ' \
+  --platform-id 'slack:D0AFGMS9UE6' \
+  --display-name 'Cian' \
+  --agent-name 'Cleo' \
+  --role owner
 
-# Wire Slack to Cleo's main agent group
-# Replace <agent-group-id> with the ID from the list above
-ncl wirings create \
-  --messaging-group slack:D<your-dm-id> \
-  --agent-group <agent-group-id> \
-  --session-mode shared
+# Silas example
+pnpm exec tsx scripts/init-first-agent.ts \
+  --channel slack \
+  --user-id 'slack:U0APY537WSG' \
+  --platform-id 'slack:D0AQ91FEWE6' \
+  --display-name 'Christina' \
+  --agent-name 'Silas' \
+  --role owner
 ```
 
-Or run `/manage-channels` from inside a Claude Code session and follow the interactive flow.
+Ensure `GROUPS_DIR` in `.env` points at the right tree (`agents/cleo/groups` or `agents/silas/groups`). The script creates `dm-with-<name>/` under that directory.
+
+**Universal persona:** put shared identity in `groups/global/CLAUDE.md` (loaded for every group). Per-channel notes go in `groups/<folder>/CLAUDE.local.md` only when needed.
+
+Grant OpenCode Go + Anthropic secrets to the new OneCLI agent:
+
+```bash
+AGENT_ID=$(onecli agents list | jq -r '.data[] | select(.identifier=="<agentGroupId>") | .id')
+OPENCODE_ID=$(onecli secrets list | jq -r '.data[] | select(.name=="OpenCode Go") | .id')
+ANTHROPIC_ID=$(onecli secrets list | jq -r '.data[] | select(.name=="Anthropic") | .id')
+onecli agents set-secrets --id "$AGENT_ID" --secret-ids "$OPENCODE_ID,$ANTHROPIC_ID"
+
+# Provider in central DB (or rely on NANOCLAW_DEFAULT_PROVIDER=opencode)
+pnpm exec tsx -e "
+import { initDb } from './src/db/connection.js';
+import { runMigrations } from './src/db/migrations/index.js';
+import path from 'path';
+const db = initDb(path.join('data', 'v2.db'));
+runMigrations(db);
+db.prepare(\"UPDATE container_configs SET provider='opencode' WHERE agent_group_id=?\").run('<agentGroupId>');
+"
+```
+
+If you change Go model or `.env` after a failed run, clear the stale OpenCode session:
+
+```bash
+SESSION_DIR=data/v2-sessions/<agentGroupId>/<sessionId>
+pnpm exec tsx scripts/q.ts "$SESSION_DIR/outbound.db" \
+  "DELETE FROM session_state WHERE key LIKE 'continuation:%';"
+rm -rf "$SESSION_DIR/opencode-xdg"
+docker stop $(docker ps --filter name=nanoclaw-v2 -q) 2>/dev/null || true
+```
+
+Or use `/manage-channels` for additional channels after the first agent exists.
 
 ---
 
 ## 7. Set OpenCode as the provider for specific groups
 
-By default, agent groups use Claude. Switch specific groups to OpenCode:
+With `NANOCLAW_DEFAULT_PROVIDER=opencode` in `.env`, new groups default to OpenCode at spawn. Override per group in the DB or materialized `groups/<folder>/container.json`:
 
 ```bash
-# Find the agent group ID
 ncl groups list
-
-# Set provider on a group (e.g. a scheduled-tasks group)
-ncl groups update --id <group-id> --agent-provider opencode
+ncl groups config update --id <group-id> --provider opencode
 ```
 
-Or edit `data/v2-sessions/<group-id>/container.json`:
-```json
-{
-  "provider": "opencode"
-}
-```
-
-Grant the OpenCode Go secret to that agent:
-```bash
-AGENT_ID=$(onecli agents list | jq -r '.data[] | select(.identifier=="<agentGroupId>") | .id')
-CURRENT=$(onecli agents secrets --id "$AGENT_ID" | jq -r '[.data[]] | join(",")')
-OPENCODE_SECRET_ID=$(onecli secrets list | jq -r '.data[] | select(.name=="OpenCode Go") | .id')
-MERGED=$(printf '%s' "$CURRENT,$OPENCODE_SECRET_ID" | tr ',' '\n' | sort -u | paste -sd ',' -)
-onecli agents set-secrets --id "$AGENT_ID" --secret-ids "$MERGED"
-```
+The container runner resolves: session → `container_configs.provider` → `NANOCLAW_DEFAULT_PROVIDER` → `claude`.
 
 ---
 
@@ -295,13 +329,9 @@ The v1 codebase is intact on `main` with the rollback tag `pre-update-baeef79-20
 ## Ongoing: switching models per group
 
 ```env
-# In .env, OPENCODE_* sets the default for all OpenCode groups.
-# To use different models per group, set container.json per session:
-# data/v2-sessions/<group-id>/container.json
-{
-  "provider": "opencode",
-  "model": "opencode/deepseek-v4-flash"
-}
+# In .env, OPENCODE_* sets the default for all OpenCode Go groups.
+OPENCODE_MODEL=opencode-go/kimi-k2.6
+OPENCODE_SMALL_MODEL=opencode-go/deepseek-v4-flash
 ```
 
-Per-group model overrides are also configurable via `ncl groups update --model <model-id>` once the CLI gains that field (check `ncl groups update --help` on the server).
+Restart the container (or clear `opencode-xdg` + `session_state`) after changing models in `.env`.
