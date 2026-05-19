@@ -5,7 +5,6 @@
  */
 import { ChildProcess, execSync, spawn } from 'child_process';
 import fs from 'fs';
-import os from 'os';
 import path from 'path';
 
 import { OneCLI } from '@onecli-sh/sdk';
@@ -515,61 +514,4 @@ export async function buildAgentGroupImage(agentGroupId: string): Promise<void> 
   updateContainerConfigScalars(agentGroup.id, { image_tag: imageTag });
 
   log.info('Per-agent-group image built', { agentGroupId, imageTag });
-}
-
-/**
- * Write the global outbound-contacts snapshot into a group's IPC directory
- * so the agent can discover JIDs it's allowed to DM from any context.
- * Safe to call on every runAgent — the file is small.
- */
-export function writeOutboundContactsSnapshot(groupFolder: string): void {
-  const groupIpcDir = resolveGroupIpcPath(groupFolder);
-  fs.mkdirSync(groupIpcDir, { recursive: true });
-
-  const contactsFile = path.join(groupIpcDir, 'outbound_contacts.json');
-  fs.writeFileSync(
-    contactsFile,
-    JSON.stringify(
-      {
-        contacts: getOutboundContacts(),
-        lastSync: new Date().toISOString(),
-      },
-      null,
-      2,
-    ),
-  );
-}
-
-/**
- * Write full conversation history to the group's IPC directory.
- * The container's read_conversation_history MCP tool reads this file,
- * allowing the agent to page back through history when needed.
- */
-export function writeConversationHistorySnapshot(
-  groupFolder: string,
-  chatJid: string,
-  filename: string = 'conversation_history.json',
-): void {
-  const groupIpcDir = resolveGroupIpcPath(groupFolder);
-  fs.mkdirSync(groupIpcDir, { recursive: true });
-
-  // Write up to 200 messages — enough for deep history lookup
-  const history = getConversationHistory(chatJid, 200);
-  const historyFile = path.join(groupIpcDir, filename);
-  fs.writeFileSync(historyFile, JSON.stringify(history, null, 2));
-}
-
-/**
- * Write cross-thread conversation history (parent + all sibling threads).
- * Gives thread groups full context of what was discussed across the entire
- * DM/channel, not just the parent-level messages.
- * Safe to call on every runAgent — the file is small.
- */
-export function writeCrossThreadHistorySnapshot(groupFolder: string, parentJid: string): void {
-  const groupIpcDir = resolveGroupIpcPath(groupFolder);
-  fs.mkdirSync(groupIpcDir, { recursive: true });
-
-  const history = getConversationHistoryWithThreads(parentJid, 200);
-  const historyFile = path.join(groupIpcDir, 'dm_history.json');
-  fs.writeFileSync(historyFile, JSON.stringify(history, null, 2));
 }

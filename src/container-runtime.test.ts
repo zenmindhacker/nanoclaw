@@ -34,9 +34,9 @@ beforeEach(() => {
 // --- Pure functions ---
 
 describe('readonlyMountArgs', () => {
-  it('returns --mount flag with type=bind and readonly', () => {
+  it('returns -v flag with :ro suffix', () => {
     const args = readonlyMountArgs('/host/path', '/container/path');
-    expect(args).toEqual(['--mount', 'type=bind,source=/host/path,target=/container/path,readonly']);
+    expect(args).toEqual(['-v', '/host/path:/container/path:ro']);
   });
 });
 
@@ -72,27 +72,9 @@ describe('ensureContainerRuntimeRunning', () => {
     expect(log.debug).toHaveBeenCalledWith('Container runtime already running');
   });
 
-  it('auto-starts when system status fails', () => {
-    // First call (system status) fails
+  it('throws when docker info fails', () => {
     mockExecSync.mockImplementationOnce(() => {
-      throw new Error('not running');
-    });
-    // Second call (system start) succeeds
-    mockExecSync.mockReturnValueOnce('');
-
-    ensureContainerRuntimeRunning();
-
-    expect(mockExecSync).toHaveBeenCalledTimes(2);
-    expect(mockExecSync).toHaveBeenNthCalledWith(2, `${CONTAINER_RUNTIME_BIN} system start`, {
-      stdio: 'pipe',
-      timeout: 30000,
-    });
-    expect(logger.info).toHaveBeenCalledWith('Container runtime started');
-  });
-
-  it('throws when both status and start fail', () => {
-    mockExecSync.mockImplementation(() => {
-      throw new Error('failed');
+      throw new Error('Cannot connect to the Docker daemon');
     });
 
     expect(() => ensureContainerRuntimeRunning()).toThrow('Container runtime is required but failed to start');
@@ -122,7 +104,7 @@ describe('cleanupOrphans', () => {
 
     cleanupOrphans();
 
-    // ls + 2 stop calls (only running nanoclaw- containers)
+    // ps + 2 stop calls
     expect(mockExecSync).toHaveBeenCalledTimes(3);
     expect(mockExecSync).toHaveBeenNthCalledWith(2, `${CONTAINER_RUNTIME_BIN} stop -t 1 nanoclaw-group1-111`, {
       stdio: 'pipe',
@@ -137,7 +119,7 @@ describe('cleanupOrphans', () => {
   });
 
   it('does nothing when no orphans exist', () => {
-    mockExecSync.mockReturnValueOnce('[]');
+    mockExecSync.mockReturnValueOnce('');
 
     cleanupOrphans();
 
@@ -145,9 +127,9 @@ describe('cleanupOrphans', () => {
     expect(log.info).not.toHaveBeenCalled();
   });
 
-  it('warns and continues when ls fails', () => {
+  it('warns and continues when ps fails', () => {
     mockExecSync.mockImplementationOnce(() => {
-      throw new Error('container not available');
+      throw new Error('docker not available');
     });
 
     cleanupOrphans(); // should not throw
@@ -159,11 +141,7 @@ describe('cleanupOrphans', () => {
   });
 
   it('continues stopping remaining containers when one stop fails', () => {
-    const lsOutput = JSON.stringify([
-      { status: 'running', configuration: { id: 'nanoclaw-a-1' } },
-      { status: 'running', configuration: { id: 'nanoclaw-b-2' } },
-    ]);
-    mockExecSync.mockReturnValueOnce(lsOutput);
+    mockExecSync.mockReturnValueOnce('nanoclaw-a-1\nnanoclaw-b-2\n');
     // First stop fails
     mockExecSync.mockImplementationOnce(() => {
       throw new Error('already stopped');
