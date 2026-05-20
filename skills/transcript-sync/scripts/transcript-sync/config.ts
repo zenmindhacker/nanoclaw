@@ -47,8 +47,9 @@ export const GANTTSY_WORKSPACE_FOLDER = '1gRFJ45HMM0ebyjqFxmAdlXa-oHklYT0G';
 export const GANTTSY_GOOGLE_TOKEN = `${CREDENTIALS_ROOT}/ganttsy-google-token.json`;
 export const GANTTSY_GOOGLE_OAUTH_CLIENT = `${CREDENTIALS_ROOT}/ganttsy-google-oauth-client.json`;
 
-// OpenRouter (for LLM action extraction)
+// OpenRouter (for legacy/fallback LLM action extraction)
 export const OPENROUTER_KEY_PATH = `${CREDENTIALS_ROOT}/openrouter`;
+export const OPENCODE_GO_BASE_URL = process.env.TRANSCRIPT_SYNC_OPENCODE_GO_BASE_URL || 'https://opencode.ai/zen/go/v1';
 
 // Linear integration
 export const TRANSCRIPT_TASKS_SCRIPT = `${SKILLS_ROOT}/transcript-sync/scripts/transcript-to-linear-llm.ts`;
@@ -103,7 +104,8 @@ export const COACHING_AGENT_TIMEOUT_SECONDS = 600;
 export const COACHING_AGENT_THINKING_LEVEL = 'medium';
 
 // LLM classifier (Stage 3: cheap model for transcript → calendar matching)
-export const LLM_CLASSIFIER_MODEL = 'anthropic/claude-haiku-4';
+export const LLM_CLASSIFIER_MODEL =
+  process.env.TRANSCRIPT_SYNC_LLM_MODEL || process.env.OPENCODE_SMALL_MODEL || 'opencode-go/deepseek-v4-flash';
 export const LLM_CLASSIFIER_MAX_TOKENS = 200;
 export const LLM_TRANSCRIPT_EXCERPT_CHARS = 3000;
 export const LLM_CLASSIFIER_CONFIDENCE_THRESHOLD = 0.6;

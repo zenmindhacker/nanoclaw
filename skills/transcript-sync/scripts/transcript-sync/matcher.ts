@@ -14,6 +14,7 @@ import { existsSync, readFileSync } from 'fs';
 import {
   CALENDAR_WINDOW_MINUTES,
   OPENROUTER_KEY_PATH,
+  OPENCODE_GO_BASE_URL,
   LLM_CLASSIFIER_MODEL,
   LLM_CLASSIFIER_MAX_TOKENS,
   LLM_TRANSCRIPT_EXCERPT_CHARS,
@@ -109,6 +110,20 @@ function getOpenRouterKey(): string | null {
   }
 }
 
+function getOpenCodeApiKey(): string {
+  // In production this value is a placeholder: OneCLI injects the real
+  // OpenCode Go credential for opencode.ai through the configured proxy.
+  return process.env.OPENCODE_API_KEY || process.env.ANTHROPIC_API_KEY || process.env.OPENCODE_PROVIDER || 'opencode-go';
+}
+
+function isOpenCodeGoModel(model: string): boolean {
+  return model.startsWith('opencode-go/');
+}
+
+function openCodeGoModelId(model: string): string {
+  return model.replace(/^opencode-go\//, '');
+}
+
 function buildLLMPrompt(
   transcriptExcerpt: string,
   transcriptTitle: string,
@@ -172,27 +187,11 @@ interface LLMResponse {
 }
 
 async function callLLM(prompt: string): Promise<LLMResponse | null> {
-  const apiKey = getOpenRouterKey();
-  if (!apiKey) {
-    logWarn('[matcher] OpenRouter key not found, LLM classification unavailable');
-    return null;
-  }
-
   try {
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://nanoclaw.com',
-      },
-      body: JSON.stringify({
-        model: LLM_CLASSIFIER_MODEL,
-        max_tokens: LLM_CLASSIFIER_MAX_TOKENS,
-        temperature: 0,
-        messages: [{ role: 'user', content: prompt }],
-      }),
-    });
+    const response = isOpenCodeGoModel(LLM_CLASSIFIER_MODEL)
+      ? await callOpenCodeGo(prompt)
+      : await callOpenRouter(prompt);
+    if (!response) return null;
 
     if (!response.ok) {
       const body = await response.text();
@@ -237,6 +236,45 @@ async function callLLM(prompt: string): Promise<LLMResponse | null> {
     logError(`[matcher] LLM call failed: ${err.message}`);
     return null;
   }
+}
+
+async function callOpenCodeGo(prompt: string): Promise<Response> {
+  return fetch(`${OPENCODE_GO_BASE_URL}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${getOpenCodeApiKey()}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: openCodeGoModelId(LLM_CLASSIFIER_MODEL),
+      max_tokens: LLM_CLASSIFIER_MAX_TOKENS,
+      temperature: 0,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  });
+}
+
+async function callOpenRouter(prompt: string): Promise<Response | null> {
+  const apiKey = getOpenRouterKey();
+  if (!apiKey) {
+    logWarn('[matcher] OpenRouter key not found, LLM classification unavailable');
+    return null;
+  }
+
+  return fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': 'https://nanoclaw.com',
+    },
+    body: JSON.stringify({
+      model: LLM_CLASSIFIER_MODEL,
+      max_tokens: LLM_CLASSIFIER_MAX_TOKENS,
+      temperature: 0,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  });
 }
 
 /**
