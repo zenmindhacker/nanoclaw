@@ -311,7 +311,7 @@ All token files use consistent fields:
 ### Refresh Architecture
 - **Host refresher** (`src/oauth-refresher.ts`): Runs every 30 min in the main process. Proactively refreshes tokens expiring within 35 min (buffer exceeds check interval so tokens can't expire between cycles).
 - **Container consumers**: Read tokens from `/workspace/extra/credentials/` (read-only mount). May have fallback refresh logic.
-- **Scheduled health check**: `oauth-token-refresh` task verifies token health, alerts #sysops on issues.
+- **No scheduled duplicate**: Do not run the legacy `oauth-token-refresh` scheduled task in v2; the host refresher is the owner.
 
 ### Adding a New OAuth Token
 1. Run the provider's auth flow to get initial tokens

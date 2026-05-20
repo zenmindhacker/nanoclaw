@@ -42,11 +42,12 @@ Recovered task families include:
 
 - `transcript-sync`
 - `nvs-email-processor`
-- `oauth-token-refresh`
 - `catch-up-auditor`
 - `pending-actions-reminder`
 - `transcript-unmatched-reminder`
 - Sysops thread tasks (`task-1776189304150-2vcn87`, `task-1776189458812-e2qae3`, `task-1776189463143-bq5zvi`)
+
+Do **not** recover legacy `oauth-token-refresh`: OAuth refresh is host-owned by `src/oauth-refresher.ts`.
 
 ## v1 note
 

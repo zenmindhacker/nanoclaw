@@ -50,6 +50,12 @@ interface V1Task {
   script: string | null;
 }
 
+const SKIP_TASK_IDS = new Set([
+  // Host-side src/oauth-refresher.ts now owns refresh + error logging. Keeping
+  // the legacy scheduled health check would run a second refresh path.
+  'oauth-token-refresh',
+]);
+
 function nextProcessAfter(task: V1Task): { processAfter: string; recurrence: string | null } | null {
   const now = new Date();
 
@@ -190,6 +196,12 @@ function main(): void {
 
   for (const task of tasks) {
     try {
+      if (SKIP_TASK_IDS.has(task.id)) {
+        console.log(`SKIP:${task.id}: superseded by host OAuth refresher`);
+        skipped++;
+        continue;
+      }
+
       const group = groups.get(task.group_folder);
       if (!group) {
         console.error(`SKIP:${task.id}: missing registered group ${task.group_folder}`);
