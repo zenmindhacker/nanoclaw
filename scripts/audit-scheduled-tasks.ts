@@ -134,7 +134,7 @@ function main(): void {
   const missingFromDb = manifest.filter((m) => !foundIds.has(`${m.agentFolder}:${m.id}`));
 
   if (jsonOut) {
-    console.log(JSON.stringify({ found, missingFromDb, pendingCleoNote: true }, null, 2));
+    console.log(JSON.stringify({ found, missingFromDb }, null, 2));
   } else {
     console.log('# Scheduled task audit\n');
     console.log(`Sessions root: ${sessionsRoot()}\n`);
@@ -157,9 +157,6 @@ function main(): void {
       }
       console.log('');
     }
-    console.log(
-      'Cleo slack_scheduled tasks: documented in agents/cleo/groups/slack_scheduled/CLAUDE.md; require v2 wiring before seeding.',
-    );
   }
 
   closeDb();
