@@ -24,6 +24,7 @@ import { registerWebhookAdapter } from '../webhook-server.js';
 import { getAskQuestionRender } from '../db/sessions.js';
 import { normalizeOptions, type NormalizedOption } from './ask-question.js';
 import type { ChannelAdapter, ChannelSetup, InboundMessage } from './adapter.js';
+import { isTranscribableAudioAttachment, transcribeAudioBuffer } from '../transcription.js';
 
 /** Adapter with optional gateway support (e.g., Discord). */
 interface GatewayAdapter extends Adapter {
@@ -74,6 +75,8 @@ export interface ChatSdkBridgeConfig {
    * and reactions still target the head of the reply.
    */
   maxTextLength?: number;
+  /** Transcribe audio attachments before the message reaches the agent. */
+  transcribeAudioAttachments?: boolean;
 }
 
 /**
@@ -135,6 +138,8 @@ export function createChatSdkBridge(config: ChatSdkBridgeConfig): ChannelAdapter
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const serialized = message.toJSON() as Record<string, any>;
 
+    const voiceTranscripts: string[] = [];
+
     // Download attachment data before serialization loses fetchData()
     if (message.attachments && message.attachments.length > 0) {
       const enriched = [];
@@ -152,6 +157,14 @@ export function createChatSdkBridge(config: ChatSdkBridgeConfig): ChannelAdapter
           try {
             const buffer = await att.fetchData();
             entry.data = buffer.toString('base64');
+            if (config.transcribeAudioAttachments && isTranscribableAudioAttachment(entry)) {
+              voiceTranscripts.push(
+                await transcribeAudioBuffer(buffer, {
+                  filename: typeof entry.name === 'string' ? entry.name : undefined,
+                  mimeType: typeof entry.mimeType === 'string' ? entry.mimeType : undefined,
+                }),
+              );
+            }
           } catch (err) {
             log.warn('Failed to download attachment', { type: att.type, err });
           }
@@ -159,6 +172,11 @@ export function createChatSdkBridge(config: ChatSdkBridgeConfig): ChannelAdapter
         enriched.push(entry);
       }
       serialized.attachments = enriched;
+    }
+
+    if (voiceTranscripts.length > 0) {
+      const existingText = typeof serialized.text === 'string' ? serialized.text : '';
+      serialized.text = [voiceTranscripts.join('\n'), existingText].filter(Boolean).join('\n');
     }
 
     // Extract reply context via platform-specific hook

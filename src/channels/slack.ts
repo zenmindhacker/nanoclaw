@@ -16,7 +16,12 @@ registerChannelAdapter('slack', {
       botToken: env.SLACK_BOT_TOKEN,
       signingSecret: env.SLACK_SIGNING_SECRET,
     });
-    const bridge = createChatSdkBridge({ adapter: slackAdapter, concurrency: 'concurrent', supportsThreads: true });
+    const bridge = createChatSdkBridge({
+      adapter: slackAdapter,
+      concurrency: 'concurrent',
+      supportsThreads: true,
+      transcribeAudioAttachments: true,
+    });
     bridge.resolveChannelName = async (platformId: string) => {
       try {
         const info = await slackAdapter.fetchThread(platformId);
