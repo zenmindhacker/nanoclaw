@@ -13,6 +13,7 @@ const envConfig = readEnvFile([
   'ONECLI_API_KEY',
   'TZ',
   'OAUTH_ALERT_SLACK_CHANNEL',
+  'NANOCLAW_DEFAULT_PROVIDER',
 ]);
 
 export const ASSISTANT_NAME = process.env.ASSISTANT_NAME || envConfig.ASSISTANT_NAME || 'Andy';
@@ -81,3 +82,10 @@ export const TIMEZONE = resolveConfigTimezone();
 /** Slack destination for host OAuth refresher failure alerts (channel:platformId). */
 export const OAUTH_ALERT_SLACK_CHANNEL =
   process.env.OAUTH_ALERT_SLACK_CHANNEL || envConfig.OAUTH_ALERT_SLACK_CHANNEL || 'slack:C07F195GB96';
+
+/** Default agent provider when DB `container_configs.provider` is unset (container runner + materialized JSON). */
+export const NANOCLAW_DEFAULT_PROVIDER = (
+  process.env.NANOCLAW_DEFAULT_PROVIDER ||
+  envConfig.NANOCLAW_DEFAULT_PROVIDER ||
+  'claude'
+).toLowerCase();

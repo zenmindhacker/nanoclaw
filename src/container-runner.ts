@@ -15,6 +15,7 @@ import {
   CONTAINER_INSTALL_LABEL,
   DATA_DIR,
   GROUPS_DIR,
+  NANOCLAW_DEFAULT_PROVIDER,
   ONECLI_API_KEY,
   ONECLI_URL,
   TIMEZONE,
@@ -220,7 +221,7 @@ export function resolveProviderName(
   containerConfigProvider: string | null | undefined,
   defaultProvider?: string,
 ): string {
-  const fallback = defaultProvider || process.env.NANOCLAW_DEFAULT_PROVIDER || 'claude';
+  const fallback = defaultProvider || NANOCLAW_DEFAULT_PROVIDER;
   return (sessionProvider || containerConfigProvider || fallback).toLowerCase();
 }
 
