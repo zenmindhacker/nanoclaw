@@ -47,7 +47,18 @@ Recovered task families include:
 - `transcript-unmatched-reminder`
 - Sysops thread tasks (`task-1776189304150-2vcn87`, `task-1776189458812-e2qae3`, `task-1776189463143-bq5zvi`)
 
-Do **not** recover legacy `oauth-token-refresh` (duplicate refresh writer). Host owns refresh via `src/oauth-refresher.ts`; seed read-only `oauth-health-check` from `scripts/scheduled-tasks.manifest.json` for Cleo `#sysops` reporting and `ncl oauth-*` repair.
+Do **not** recover legacy `oauth-token-refresh` (duplicate refresh writer). Host owns refresh via `src/oauth-refresher.ts`; seed read-only `oauth-health-check` from `scripts/scheduled-tasks.manifest.json` for Cleo `#sysops` reporting and `ncl oauth-*` repair. See [OAuth hybrid repair](oauth-hybrid-repair.md).
+
+## Cleo — OAuth health check
+
+| Field | Value |
+|-------|-------|
+| Task id | `oauth-health-check` |
+| Cron (UTC) | `0 */1 * * *` |
+| Agent folder | `agents/cleo/groups/slack_scheduled` |
+| Script | `bash /workspace/agent/oauth-health-gate.sh` |
+
+The script is a read-only gate. It wakes Cleo only when token files are expired, missing, malformed, or lack refresh data. Cleo then uses host-side `ncl oauth-health` / `ncl oauth-refresh-now` and reports problems to `#sysops`; the container does not write token files.
 
 ## v1 note
 

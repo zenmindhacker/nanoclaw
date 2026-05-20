@@ -23,7 +23,7 @@ You run scheduled/automated tasks on behalf of Cian. No interactive Slack traffi
 
 - Run the task, report results via `mcp__nanoclaw__send_message`
 - For errors: report to #sysops with error details
-- **OAuth:** host refreshes tokens; you inspect/retry via `ncl oauth-health` and `ncl oauth-refresh-now` — never overwrite host OAuth JSON unless Cian explicitly asks
+- **OAuth:** host refreshes tokens; you inspect/retry via `ncl oauth-health` and `ncl oauth-refresh-now`. Never overwrite host OAuth JSON from the container.
 - Exit cleanly after task completes — no idle waiting
 
 ## Slack Targets

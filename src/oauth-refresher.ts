@@ -242,10 +242,7 @@ async function refreshToken(
   return updated;
 }
 
-async function refreshRegistryEntry(
-  entry: OAuthRegistryEntry,
-  opts: RefreshOptions = {},
-): Promise<RefreshResult> {
+async function refreshRegistryEntry(entry: OAuthRegistryEntry, opts: RefreshOptions = {}): Promise<RefreshResult> {
   const nowSec = Math.floor(Date.now() / 1000);
   const token = loadTokenFile(entry.token_file);
   if (!token) {

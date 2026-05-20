@@ -15,7 +15,7 @@ NanoClaw uses **three credential lanes**. Pick the right one before adding or ch
 | **Host OAuth files** | `~/.config/nanoclaw/credentials/services/` on host | Host refresher + operator re-auth | Google, Xero, and other OAuth refresh-token flows |
 | **Agent-editable files** | `/workspace/extra/credentials/` in container | **You** (the agent) | Keys and tokens you discover or the user gives you that are **not** host-managed |
 
-**Do not** put OAuth refresh tokens or host-managed secrets into agent-editable files unless the operator explicitly asks you to mirror something for a one-off script.
+**Do not** put OAuth refresh tokens or host-managed secrets into agent-editable files. Host OAuth files stay host-owned; agents inspect and request repair through `ncl oauth-*`.
 
 ---
 

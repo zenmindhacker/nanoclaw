@@ -294,6 +294,7 @@ This project uses pnpm with `minimumReleaseAge: 4320` (3 days) in `pnpm-workspac
 | [docs/migration-dev.md](docs/migration-dev.md) | Migration development guide — testing, debugging, dev loop |
 | [docs/agent-owned-code.md](docs/agent-owned-code.md) | Where agent durable code lives; commit/push expectations |
 | [docs/server-sync.md](docs/server-sync.md) | Safe Cleo/Silas server pull workflow (snapshot diffs first) |
+| [docs/oauth-hybrid-repair.md](docs/oauth-hybrid-repair.md) | OAuth refresh ownership, #sysops alerts, Cleo health checks, and `ncl oauth-*` repair |
 
 ## OAuth Token Management
 
@@ -313,6 +314,8 @@ All token files use consistent fields:
 - **Container consumers**: Read tokens from `/workspace/extra/credentials/` (read-only mount). Do not write host OAuth token files from containers.
 - **Cleo repair path**: `ncl oauth-health`, `ncl oauth-refresh-now`, `ncl oauth-refresh-one --id <registry-id>` (host executes; agents with CLI access). Optional read-only scheduled `oauth-health-check` wakes Cleo when the pre-script gate finds problems.
 - **No legacy writer task**: Do not recover v1 `oauth-token-refresh` (it duplicated refresh). Use `oauth-health-check` from `scripts/scheduled-tasks.manifest.json` instead.
+
+Runbook: [docs/oauth-hybrid-repair.md](docs/oauth-hybrid-repair.md).
 
 ### Adding a New OAuth Token
 1. Run the provider's auth flow to get initial tokens
