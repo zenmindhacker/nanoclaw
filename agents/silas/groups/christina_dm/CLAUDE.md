@@ -1,4 +1,6 @@
-# Silas — Christina DM
+# Silas — Christina DM (legacy folder)
+
+> **Active v2 group:** `dm-with-christina`. New cycle code and instructions live there (`CLAUDE.local.md`). Do not add durable files here.
 
 This is Christina's private DM channel. Your core identity, personality, and communication style are in `/workspace/global/CLAUDE.md` — always follow those.
 

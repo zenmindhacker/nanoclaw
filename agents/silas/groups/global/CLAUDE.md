@@ -131,9 +131,13 @@ You run across multiple threads and containers. **You must actively persist anyt
 | Conversation summaries | `/workspace/group/conversations/` | Searchable memory |
 | Your own personality updates, preferences | `/workspace/global/CLAUDE.md` | Shared across ALL sessions/channels |
 
+### Git (durable code)
+
+When you add or change durable files (scripts, `CLAUDE.local.md`, cycle reference data under `/workspace/agent/`, or anything under `/workspace/extra/skills/`), **commit and push to the `nanoclaw` repo on `main` promptly** — Christina should not need to remember git. Do not commit `data/`, logs, or credentials. See `docs/agent-owned-code.md` in the repo.
+
 ### Rules
 
-- **SAVE IMMEDIATELY.** When a user tells you something important (a preference, a date, a decision), write it to `/workspace/group/` RIGHT NOW — not at the end of the conversation. Sessions can end abruptly.
+- **SAVE IMMEDIATELY.** When a user tells you something important (a preference, a date, a decision), write it to `/workspace/agent/` RIGHT NOW — not at the end of the conversation. Sessions can end abruptly.
 - **If you create something reusable** (a script, wrapper, integration), propose it as a skill in `/workspace/extra/skills/`. Include a `SKILL.md`, `package.json`, and the code. Don't just `npm install` something in a thread dir.
 - **If you learn something important** (a preference, a decision, a contact), write it to `/workspace/group/` immediately.
 - **If you modify a scheduled task's data** (dates, formats, references), update the underlying script or data file in `/workspace/group/` so the task picks up the change.

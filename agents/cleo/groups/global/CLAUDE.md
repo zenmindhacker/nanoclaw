@@ -195,10 +195,14 @@ You run across multiple threads and containers. **You must actively persist anyt
 | What | Where | Why |
 |------|-------|-----|
 | Shared knowledge, contacts, project docs | `/workspace/global/` or `/workspace/extra/repos/` | Survives across all sessions/channels |
-| Channel-specific notes | `/workspace/group/` | Persists for that channel |
+| Channel-specific notes | `/workspace/agent/` (`CLAUDE.local.md`) | Persists for that channel |
 | Scripts, tools, integrations | `/workspace/extra/skills/<name>/` | Available everywhere |
 | Conversation summaries | `/workspace/group/conversations/` | Searchable memory |
 | Your own personality updates | `/workspace/global/CLAUDE.md` | Shared across ALL sessions/channels |
+
+### Git (durable code)
+
+When you add or change durable files (scripts, `CLAUDE.local.md`, reference data under `/workspace/agent/`, or anything under `/workspace/extra/skills/`), **commit and push to the `nanoclaw` repo on `main` promptly** — the operator should not need to remember git. Do not commit `data/`, logs, or credentials. See `docs/agent-owned-code.md` in the repo.
 
 ### Rules
 

@@ -207,6 +207,10 @@ Four types of skills. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full taxono
 | `/update-nanoclaw` | Bring upstream updates into a customized install |
 | `/init-onecli` | Install OneCLI Agent Vault and migrate `.env` credentials |
 
+## Agent-owned code (Cleo / Silas)
+
+Durable scripts, `CLAUDE.local.md`, and per-group assets live under `agents/cleo/groups/` and `agents/silas/groups/` (active v2 folder per channel). **Commit and push** after agent-authored changes; do not leave server-only copies. Runtime state (`data/`, session DBs, `logs/`) and credentials stay out of git. Full policy: [docs/agent-owned-code.md](docs/agent-owned-code.md). Server updates: [docs/server-sync.md](docs/server-sync.md).
+
 ## Two-Agent Setup: Cleo and Silas
 
 Before creating a PR, adding a skill, or preparing any contribution, you MUST read [CONTRIBUTING.md](CONTRIBUTING.md). It covers accepted change types, the four skill types and their guidelines, `SKILL.md` format rules, and the pre-submission checklist.
@@ -288,6 +292,8 @@ This project uses pnpm with `minimumReleaseAge: 4320` (3 days) in `pnpm-workspac
 | [docs/build-and-runtime.md](docs/build-and-runtime.md) | Runtime split (Node host + Bun container), lockfiles, image build surface, CI, key invariants |
 | [docs/v1-to-v2-changes.md](docs/v1-to-v2-changes.md) | v1→v2 architecture diff — vocabulary for where v1 things moved |
 | [docs/migration-dev.md](docs/migration-dev.md) | Migration development guide — testing, debugging, dev loop |
+| [docs/agent-owned-code.md](docs/agent-owned-code.md) | Where agent durable code lives; commit/push expectations |
+| [docs/server-sync.md](docs/server-sync.md) | Safe Cleo/Silas server pull workflow (snapshot diffs first) |
 
 ## OAuth Token Management
 

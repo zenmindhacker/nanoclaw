@@ -1,0 +1,16 @@
+{
+  "tasks": [
+    {
+      "id": "cycle-daily-briefing",
+      "agentFolder": "dm-with-christina",
+      "recurrence": "0 11 * * *",
+      "prompt": "Deliver Christina's daily cycle briefing. The pre-task script attached today's briefing in scriptOutput. Send it in this DM — keep the structure and tone warm and supportive. Do not re-run cycle_briefing.mjs unless scriptOutput is missing.",
+      "script": "cd /workspace/agent && node cycle_briefing.mjs --task-json $(date -u +%Y-%m-%d)"
+    }
+  ],
+  "pendingCleo": [
+    {
+      "note": "Cleo production v2 DB only wires dm-with-cian. slack_scheduled tasks (im-sync, im-digest, im-audit, ganttsy-resume-daily, shadow-transcript-sync) are documented in agents/cleo/groups/slack_scheduled/CLAUDE.md but need a v2 agent group + messaging wiring before seeding. Use /manage-channels or ncl after Slack channel is registered."
+    }
+  ]
+}
