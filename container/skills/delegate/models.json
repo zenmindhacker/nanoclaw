@@ -1,172 +1,103 @@
 {
   "_meta": {
-    "purpose": "Catalog of worker models the orchestrator can delegate to via OpenCode. Refresh prices quarterly from https://models.dev.",
-    "lastReviewed": "2026-05-05",
-    "pricing_units": "USD per 1M tokens",
-    "notes": "Model IDs use OpenRouter format `openrouter/<provider>/<model>`. Prices approximate. Use the catalog as data — never hardcode IDs in scripts."
+    "purpose": "Worker catalog for delegate — OpenCode Go text models + legacy OpenRouter image/video only.",
+    "lastReviewed": "2026-05-20",
+    "pricing_units": "USD per 1M tokens (approximate; Go subscription caps apply separately)",
+    "orchestrator": "opencode-go/kimi-k2.6 — do NOT delegate back to Kimi for routine work; you are already on Kimi.",
+    "notes": "Text model IDs use opencode-go/<model>. Image/video use OpenRouter via /workspace/extra/credentials/openrouter. Persona voice notes use the separate voice-note skill."
   },
 
   "tasks": {
-    "code-cheap":      { "model": "qwen-coder",       "rationale": "code specialist, far cheaper than Sonnet, strong on refactors / boilerplate" },
-    "code-quick":      { "model": "deepseek-v4-flash","rationale": "fast single-file edits, general coding, near-zero cost" },
-    "code-frontier":   { "model": "claude-sonnet",    "rationale": "when reasoning over a large change matters; reach for this only when cheaper models fail" },
-    "summarize":       { "model": "kimi",             "rationale": "2M context king; great for transcripts and long docs" },
-    "summarize-fast":  { "model": "deepseek-v4-flash","rationale": "short text summaries at near-zero cost" },
-    "long-context":    { "model": "deepseek-v4-pro",  "rationale": "1M context + strong reasoning; replaces MiniMax" },
-    "doc-synthesis":   { "model": "deepseek-v4-pro",  "rationale": "multi-file → briefing doc; structured output from large inputs" },
-    "reasoning-cheap": { "model": "deepseek-v4-pro",  "rationale": "thinking mode provides explicit chain-of-thought at fraction of frontier cost" },
-    "draft":           { "model": "deepseek-v4-flash","rationale": "fast general-purpose drafting at near-zero cost" },
-    "translate":       { "model": "qwen",             "rationale": "Qwen excels at non-English tasks; cheap" },
-    "extract":         { "model": "haiku",            "rationale": "structured JSON extraction is Haiku's sweet spot" },
-    "image":           { "model": "nano-banana-pro",  "rationale": "default image gen — best quality, 2K/4K, text rendering, multi-subject" },
-    "image-art":       { "model": "flux-pro",         "rationale": "artistic/creative, sharp textures, style reproduction" },
-    "image-cheap":     { "model": "flux-klein",       "rationale": "cheapest image gen, bulk thumbnails, quick drafts" },
-    "speech":          { "model": "tts",              "rationale": "text-to-speech with OpenAI voices" },
-    "video":           { "model": "veo-3.1",          "rationale": "high quality video with native audio (confirm with user first!)" }
+    "code-cheap":      { "model": "qwen-plus",        "rationale": "fast coding/refactors; different family than orchestrator Kimi" },
+    "code-quick":      { "model": "deepseek-flash",   "rationale": "tiny edits, near-zero cost, low latency" },
+    "code-frontier":   { "model": "glm-5",            "rationale": "harder multi-step code only when flash/qwen failed — still not Kimi" },
+    "summarize":       { "model": "deepseek-pro",     "rationale": "long docs/transcripts — use DeepSeek Pro, NOT Kimi (you are Kimi)" },
+    "summarize-fast":  { "model": "deepseek-flash",   "rationale": "short summaries; cheapest" },
+    "long-context":    { "model": "deepseek-pro",     "rationale": "multi-doc synthesis with strong reasoning" },
+    "doc-synthesis":   { "model": "deepseek-pro",     "rationale": "briefings from large inputs" },
+    "reasoning-cheap": { "model": "deepseek-pro",     "rationale": "planning/analysis without burning orchestrator turns" },
+    "draft":           { "model": "qwen-plus",        "rationale": "prose drafts for you to review" },
+    "translate":       { "model": "qwen-plus",        "rationale": "multilingual; cheap" },
+    "extract":         { "model": "deepseek-flash",   "rationale": "structured JSON / classification" },
+    "image":           { "model": "nano-banana-pro",  "rationale": "OpenRouter multimodal — default image gen" },
+    "image-art":       { "model": "flux-pro",         "rationale": "artistic/stylized images" },
+    "image-cheap":     { "model": "flux-klein",       "rationale": "bulk/thumbnail images" },
+    "video":           { "model": "veo-3.1",          "rationale": "expensive; confirm with user first" }
   },
 
   "models": {
-    "deepseek-v4-pro": {
-      "id": "openrouter/deepseek/deepseek-v4-pro",
+    "deepseek-pro": {
+      "id": "opencode-go/deepseek-v4-pro",
       "context": 1000000,
       "input_per_mtok": 0.80,
       "output_per_mtok": 3.20,
-      "strengths": ["reasoning", "long-context", "doc-synthesis", "thinking-mode", "1M tokens"],
-      "weaknesses": ["open model — discount self-reported benchmarks by ~8 months vs frontier"],
-      "use_when": "reasoning tasks, multi-document synthesis, long-context analysis, ADR drafting. Best open alternative to Opus."
+      "strengths": ["reasoning", "long-context", "doc-synthesis"],
+      "use_when": "summaries, multi-doc work, analysis — never use for live chat with the user"
     },
-    "deepseek-v4-flash": {
-      "id": "openrouter/deepseek/deepseek-v4-flash",
+    "deepseek-flash": {
+      "id": "opencode-go/deepseek-v4-flash",
       "context": 256000,
       "input_per_mtok": 0.10,
       "output_per_mtok": 0.40,
-      "strengths": ["very-fast", "very-cheap", "284B/13B-active", "code", "drafts"],
-      "weaknesses": ["weaker reasoning than V4 Pro"],
-      "use_when": "default workhorse for delegation — drafts, summaries, code edits, routine tasks. Near-zero cost."
+      "strengths": ["very-fast", "very-cheap", "extract", "quick-edits"],
+      "use_when": "default worker for extracts, quick code, fast summaries"
     },
-    "kimi": {
-      "id": "openrouter/moonshotai/kimi-k2.6",
-      "context": 2000000,
-      "input_per_mtok": 0.60,
-      "output_per_mtok": 2.50,
-      "strengths": ["longest-context", "summarization", "fast", "cheap", "agentic-coding"],
-      "weaknesses": ["weaker on pure reasoning vs V4 Pro"],
-      "use_when": "transcripts, long doc analysis, bulk summarization, anything 256k+ tokens"
-    },
-    "qwen-coder": {
-      "id": "openrouter/qwen/qwen3-coder",
-      "context": 256000,
-      "input_per_mtok": 0.40,
-      "output_per_mtok": 1.60,
-      "strengths": ["code", "refactoring", "many-language"],
-      "weaknesses": ["less polished prose"],
-      "use_when": "code generation, refactor, boilerplate, autocomplete-style tasks"
-    },
-    "qwen": {
-      "id": "openrouter/qwen/qwen3-235b-a22b-07-25",
-      "context": 128000,
-      "input_per_mtok": 0.30,
-      "output_per_mtok": 1.20,
-      "strengths": ["multilingual", "general", "cheap"],
-      "weaknesses": ["weaker reasoning than frontier"],
-      "use_when": "translation, multilingual tasks, general writing where cost matters"
-    },
-    "haiku": {
-      "id": "openrouter/anthropic/claude-haiku-4.5",
-      "context": 200000,
-      "input_per_mtok": 1.00,
-      "output_per_mtok": 5.00,
-      "strengths": ["fast", "reliable JSON", "follows instructions precisely"],
-      "weaknesses": ["pricier than open-weight cheap tier"],
-      "use_when": "structured extraction, classification, anything where you need predictable shape"
-    },
-    "claude-sonnet": {
-      "id": "openrouter/anthropic/claude-sonnet-4.6",
-      "context": 200000,
-      "input_per_mtok": 3.00,
-      "output_per_mtok": 15.00,
-      "strengths": ["code", "reasoning", "tool-use", "instruction-following"],
-      "weaknesses": ["expensive — use only when cheaper models fail"],
-      "use_when": "complex multi-file code work where qwen-coder or V4 Flash have tried and failed"
-    },
-    "gpt5-mini": {
-      "id": "openrouter/openai/gpt-5-mini",
-      "context": 400000,
+    "qwen-plus": {
+      "id": "opencode-go/qwen3.6-plus",
+      "context": 1000000,
       "input_per_mtok": 0.50,
       "output_per_mtok": 2.00,
-      "strengths": ["balanced", "fast", "400k context"],
-      "weaknesses": ["smaller than full GPT-5"],
-      "use_when": "second opinion, sanity-check, or when OpenAI-flavored output is preferred"
+      "strengths": ["code", "drafts", "multilingual"],
+      "use_when": "code-cheap, drafting, translation — distinct from Kimi orchestrator"
     },
-    "gemini-flash": {
-      "id": "openrouter/google/gemini-3-flash-preview",
+    "qwen-fast": {
+      "id": "opencode-go/qwen3.5-plus",
       "context": 1000000,
       "input_per_mtok": 0.30,
-      "output_per_mtok": 2.50,
-      "strengths": ["very-long-context", "fast", "multimodal", "vision"],
-      "weaknesses": ["uneven instruction-following on complex prompts"],
-      "use_when": "long-context with images/PDFs; fast bulk reads; vision tasks V4 Pro can't do"
+      "output_per_mtok": 1.00,
+      "strengths": ["cheapest-general", "fast"],
+      "use_when": "when qwen3.6 is overkill"
+    },
+    "glm-5": {
+      "id": "opencode-go/glm-5",
+      "context": 200000,
+      "input_per_mtok": 0.60,
+      "output_per_mtok": 2.40,
+      "strengths": ["code-reasoning", "balanced"],
+      "use_when": "code-frontier escalation only"
+    },
+    "minimax": {
+      "id": "opencode-go/minimax-m2.7",
+      "context": 200000,
+      "input_per_mtok": 0.40,
+      "output_per_mtok": 1.60,
+      "strengths": ["fast-general"],
+      "use_when": "alternate cheap worker if qwen/flash struggle"
     },
 
     "nano-banana-pro": {
       "id": "google/gemini-3-pro-image-preview",
       "type": "image",
       "cost_per_image": 0.08,
-      "strengths": ["best-quality", "2K/4K", "text-in-images", "multi-subject", "infographics"],
-      "use_when": "professional/print quality, text-heavy images, infographics, multi-element compositions"
+      "use_when": "professional images via OpenRouter (legacy file)"
     },
     "flux-pro": {
       "id": "black-forest-labs/flux.2-pro",
       "type": "image",
       "cost_per_image": 0.03,
-      "strengths": ["artistic", "creative", "sharp-textures", "style-reproduction"],
-      "use_when": "artistic/stylized images, character consistency, creative work"
+      "use_when": "artistic images"
     },
     "flux-klein": {
       "id": "black-forest-labs/flux.2-klein-4b",
       "type": "image",
       "cost_per_image": 0.014,
-      "strengths": ["cheapest", "fast", "bulk"],
-      "use_when": "bulk generation, thumbnails, quick drafts, cost-sensitive"
-    },
-    "seedream": {
-      "id": "bytedance-seed/seedream-4.5",
-      "type": "image",
-      "cost_per_image": 0.04,
-      "strengths": ["photo-realistic", "editing-consistency", "portrait-refinement"],
-      "use_when": "photo-realistic edits, portraits, consistent lighting/color"
-    },
-    "riverflow-pro": {
-      "id": "sourceful/riverflow-v2-pro",
-      "type": "image",
-      "cost_per_image": 0.15,
-      "strengths": ["perfect-text-rendering", "custom-fonts", "4K"],
-      "use_when": "text-heavy images (posters, slides, signage), custom font rendering"
-    },
-    "tts": {
-      "id": "openai/gpt-4o-mini-tts-2025-12-15",
-      "type": "speech",
-      "voices": ["alloy", "echo", "fable", "onyx", "nova", "shimmer"],
-      "default_voice": "nova",
-      "use_when": "read text aloud, generate audio messages, accessibility"
+      "use_when": "cheap bulk images"
     },
     "veo-3.1": {
       "id": "google/veo-3.1",
       "type": "video",
       "duration": "4-8s",
-      "use_when": "high quality video with native audio — CONFIRM WITH USER (expensive)"
-    },
-    "sora-2-pro": {
-      "id": "openai/sora-2-pro",
-      "type": "video",
-      "duration": "varies",
-      "use_when": "physics-accurate motion, multi-shot consistency — CONFIRM WITH USER"
-    },
-    "kling-v3": {
-      "id": "kwaivgi/kling-v3.0-pro",
-      "type": "video",
-      "duration": "3-15s",
-      "use_when": "longer clips, first/last frame control — CONFIRM WITH USER"
+      "use_when": "video via OpenRouter — confirm cost with user"
     }
   }
 }

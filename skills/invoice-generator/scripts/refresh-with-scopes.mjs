@@ -1,14 +1,7 @@
-import https from 'https';
-import { readFileSync, writeFileSync } from 'fs';
-import { resolve } from 'path';
-import { homedir } from 'os';
+import { loadXeroClientConfig, loadXeroTokens } from '../../xero/lib/xero-credentials.mjs';
 
-const tokensPath = '/workspace/extra/credentials/xero-tokens.json';
-const tokens = JSON.parse(readFileSync(tokensPath, 'utf8'));
-
-const refreshToken = tokens.refresh_token;
-const clientId = 'REDACTED_XERO_CLIENT_ID';
-const clientSecret = 'REDACTED_XERO_CLIENT_SECRET';
+const tokens = loadXeroTokens();
+loadXeroClientConfig();
 
 // The scopes we need - including accounting.attachments
 const scopes = [

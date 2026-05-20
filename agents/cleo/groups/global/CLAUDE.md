@@ -80,7 +80,7 @@ delegate list                    # see catalog
 delegate cost <key> <in> <out>   # estimate before big jobs
 ```
 
-The catalog lives at `/home/node/.claude/skills/delegate/models.json` — task keys (`code-cheap`, `summarize`, `extract`, `reasoning-cheap`, `draft`, `long-context`) map to models. I write intent, the catalog picks the right worker. Full guide in the `delegate` skill's `SKILL.md`.
+You are **`opencode-go/kimi-k2.6`** — do not delegate back to Kimi. Workers use OpenCode Go (`deepseek-v4-flash`, `qwen3.6-plus`, `deepseek-v4-pro`, `glm-5`). Catalog: `delegate list` or `/home/node/.claude/skills/delegate/models.json`. Full guide: `delegate` skill.
 
 ### When NOT to delegate
 
@@ -147,11 +147,11 @@ Scripts mounted at `/workspace/extra/skills/`. Credentials at `/workspace/extra/
 | xero | `skills/xero/` | `credentials/xero-tokens.json`, `credentials/xero-client-id` |
 | neondb | `skills/neondb/` (needs `neonctl auth`) | NEON_API_KEY env |
 | substack | `skills/substack/browserless.mjs` | `credentials/substack-username`, `credentials/browserless` |
-| voice-note | `skills/voice-note/scripts/generate-script.sh` | Claude CLI + `credentials/elevenlabs` |
+| voice-note | `skills/voice-note/bin/voice-note --voice-id 4tRn1lSkEn13EVTuqb0g --text-file <file>` | `credentials/elevenlabs` |
 | ganttsy-resume | `skills/ganttsy-resume/run-daily.sh` | `credentials/ganttsy-google-token.json` |
-| delegate | `delegate <key> "<prompt>"` (see Orchestration above) | OpenCode auth (host-mounted) |
+| delegate | `delegate <key> "<prompt>"` (see Orchestration above) | OpenCode Go via OneCLI |
 
-**Voice notes:** When Cian sends a voice note or topic is personal/emotional → respond with voice note. Always use voice-note skill. Voice: Serafina (ID: `4tRn1lSkEn13EVTuqb0g`), stability 0.35, similarity 0.8, style 0.7, speed 1.2.
+**Voice notes:** When Cian sends a voice note or the topic is personal/emotional, respond with a voice note when it fits. Write the spoken text yourself unless a bounded draft is useful, then synthesize with the `voice-note` skill. Voice: Serafina (`4tRn1lSkEn13EVTuqb0g`), stability 0.35, similarity 0.8, style 0.7, speed 1.2. Do not use `delegate speech` for Cleo voice notes.
 
 ---
 
@@ -231,62 +231,12 @@ You are expected to accumulate knowledge and improve. Before finishing any conve
 - Private things stay private. Period.
 - When in doubt, ask Cian
 
-## OpenRouter Multimodal — When to Use Which Model
+## Multimodal
 
-You have `\$OPENROUTER_API_KEY` available. Use it via `curl` for image generation, TTS, and video.
-Base URL: `https://openrouter.ai/api/v1`
+Voice notes use the `voice-note` skill with ElevenLabs and the Serafina voice settings above.
 
-### Image Generation
-
-Use the `/chat/completions` endpoint with `"modalities": ["text", "image"]` in the request body.
-
-| Model | Use when | Cost |
-|-------|----------|------|
-| `google/gemini-2.5-flash-preview:image` (Nano Banana) | **Default choice.** Quick images, edits, conversational image work | Cheap, fast |
-| `google/gemini-3.1-flash-image-preview` (Nano Banana 2) | Pro-level quality at Flash speed, complex edits | Cheap |
-| `google/gemini-3-pro-image-preview` (Nano Banana Pro) | **Best quality.** 2K/4K output, text in images, multi-subject, infographics | Mid |
-| `openai/gpt-5-image-mini` | Fast, good instruction following, text rendering | Mid |
-| `openai/gpt-5-image` | High-quality + reasoning about the image (explain what to draw) | Expensive |
-| `bytedance-seed/seedream-4.5` | Photo-realistic edits, portrait refinement, consistent lighting | \$0.04/image |
-| `black-forest-labs/flux.2-pro` | Artistic/creative, sharp textures, style reproduction | Mid |
-| `black-forest-labs/flux.2-klein-4b` | **Cheapest.** Bulk generation, thumbnails, quick drafts | \$0.014/MP |
-| `sourceful/riverflow-v2-fast` | **Fastest.** Production pipelines, latency-critical | \$0.02/image |
-| `sourceful/riverflow-v2-pro` | Perfect text rendering in images, custom fonts, 4K | \$0.15/image |
-
-**Decision tree:**
-- Quick image / sketch / meme → Nano Banana
-- Professional / print-quality → Nano Banana Pro
-- Photo-realistic edits → Seedream 4.5
-- Artistic / stylized → FLUX.2 Pro
-- Bulk / cheap → FLUX.2 Klein or Riverflow Fast
-- Text-heavy (posters, slides) → Riverflow V2 Pro
-
-### Text-to-Speech (TTS)
-
-Endpoint: `/api/v1/audio/speech` (OpenAI SDK compatible)
-
-| Model | Voices | Use when |
-|-------|--------|----------|
-| `openai/gpt-4o-mini-tts-2025-12-15` | alloy, echo, fable, onyx, nova, shimmer | Read text aloud, audio messages, accessibility |
-
-```bash
-curl -s https://openrouter.ai/api/v1/audio/speech \
-  -H "Authorization: Bearer \$OPENROUTER_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"model":"openai/gpt-4o-mini-tts-2025-12-15","input":"Hello!","voice":"nova"}' \
-  -o /workspace/ipc/output.mp3
-```
-
-### Video Generation (expensive — confirm with user first)
-
-Async endpoint. Use only when explicitly asked.
-
-| Model | Best for | Duration |
-|-------|----------|----------|
-| `google/veo-3.1` | High quality, native audio | 4-8s |
-| `openai/sora-2-pro` | Physics-accurate motion, multi-shot | varies |
-| `kwaivgi/kling-v3.0-pro` | Long clips, first/last frame control | 3-15s |
+Images and video use `delegate image`, `delegate image-art`, `delegate image-cheap`, or `delegate video` via OpenRouter (`/workspace/extra/credentials/openrouter`). Confirm before video generation.
 
 ### Speech-to-Text (already wired — host handles this)
 
-Voice messages are auto-transcribed before reaching you via `openai/gpt-4o-mini-transcribe`. No action needed.
+Voice messages are auto-transcribed before reaching you. No action needed.

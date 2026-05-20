@@ -3,33 +3,47 @@
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
+const { pathToFileURL } = require('url');
 
-const CLIENT_ID = 'REDACTED_XERO_CLIENT_ID';
-const CLIENT_SECRET = 'REDACTED_XERO_CLIENT_SECRET';
 const REDIRECT_URI = 'http://localhost:8080/callback';
-const TOKEN_FILE = '/workspace/extra/credentials/xero-tokens.json';
-
 const SCOPES = 'openid profile email accounting.read accounting.reports.read';
 
-const AUTH_URL = `https://login.xero.com/identity/connect/authorize?` +
-  `response_type=code&` +
-  `client_id=${CLIENT_ID}&` +
-  `redirect_uri=${encodeURIComponent(REDIRECT_URI)}&` +
-  `scope=${encodeURIComponent(SCOPES)}&` +
-  `state=test123`;
+let CLIENT_ID;
+let CLIENT_SECRET;
+let TOKEN_FILE;
+let writeXeroTokens;
+let loadXeroTokens;
+let AUTH_URL;
+
+async function initCredentials() {
+  const mod = await import(pathToFileURL(path.join(__dirname, '../lib/xero-credentials.mjs')).href);
+  const cfg = mod.loadXeroClientConfig();
+  CLIENT_ID = cfg.client_id;
+  CLIENT_SECRET = cfg.client_secret;
+  TOKEN_FILE = mod.resolveCredPath(mod.XERO_TOKENS_FILE);
+  writeXeroTokens = mod.writeXeroTokens;
+  loadXeroTokens = mod.loadXeroTokens;
+  AUTH_URL =
+    `https://login.xero.com/identity/connect/authorize?` +
+    `response_type=code&` +
+    `client_id=${CLIENT_ID}&` +
+    `redirect_uri=${encodeURIComponent(REDIRECT_URI)}&` +
+    `scope=${encodeURIComponent(SCOPES)}&` +
+    `state=test123`;
+}
 
 function saveTokens(tokens) {
-  const dir = path.dirname(TOKEN_FILE);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(TOKEN_FILE, JSON.stringify(tokens, null, 2));
-  console.log('\n✅ Tokens saved to', TOKEN_FILE);
+  const savedPath = writeXeroTokens(tokens);
+  console.log('\n✅ Tokens saved to', savedPath);
 }
 
 function loadTokens() {
-  if (fs.existsSync(TOKEN_FILE)) {
-    return JSON.parse(fs.readFileSync(TOKEN_FILE, 'utf8'));
+  if (!fs.existsSync(TOKEN_FILE)) return null;
+  try {
+    return loadXeroTokens();
+  } catch {
+    return null;
   }
-  return null;
 }
 
 function makeRequest(method, path, accessToken, body = null, extraHeaders = {}) {
@@ -166,10 +180,11 @@ async function testApiEndpoints(accessToken, tenantId) {
 }
 
 async function main() {
+  await initCredentials();
+
   console.log('🔑 Xero OAuth2 API Test Script\n');
   console.log('='.repeat(50));
-  
-  // Check for existing tokens
+
   let tokens = loadTokens();
   let tenantId = null;
   

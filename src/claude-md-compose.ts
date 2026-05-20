@@ -26,6 +26,7 @@ import type { AgentGroup } from './types.js';
 // Symlink targets are container paths — dangling on host (hence the readlink
 // dance instead of existsSync), valid inside the container via RO mounts.
 const SHARED_CLAUDE_MD_CONTAINER_PATH = '/app/CLAUDE.md';
+const GLOBAL_CLAUDE_MD_CONTAINER_PATH = '/workspace/global/CLAUDE.md';
 const SHARED_SKILLS_CONTAINER_BASE = '/app/skills';
 const SHARED_MCP_TOOLS_CONTAINER_BASE = '/app/src/mcp-tools';
 
@@ -48,6 +49,13 @@ export function composeGroupClaudeMd(group: AgentGroup): void {
 
   const sharedLink = path.join(groupDir, '.claude-shared.md');
   syncSymlink(sharedLink, SHARED_CLAUDE_MD_CONTAINER_PATH);
+  const globalLink = path.join(groupDir, '.claude-global.md');
+  const globalClaudeMd = path.join(GROUPS_DIR, 'global', 'CLAUDE.md');
+  if (fs.existsSync(globalClaudeMd)) {
+    syncSymlink(globalLink, GLOBAL_CLAUDE_MD_CONTAINER_PATH);
+  } else {
+    removeIfExists(globalLink);
+  }
 
   const fragmentsDir = path.join(groupDir, '.claude-fragments');
   if (!fs.existsSync(fragmentsDir)) {
@@ -121,8 +129,12 @@ export function composeGroupClaudeMd(group: AgentGroup): void {
     }
   }
 
-  // Composed entry — imports only.
+  // Composed entry — imports only. Shared global memory/persona is optional
+  // but durable when present (for multi-channel agents such as Cleo/Silas).
   const imports = ['@./.claude-shared.md'];
+  if (fs.existsSync(globalClaudeMd)) {
+    imports.push('@./.claude-global.md');
+  }
   for (const name of [...desired.keys()].sort()) {
     imports.push(`@./.claude-fragments/${name}`);
   }
@@ -146,8 +158,8 @@ export function composeGroupClaudeMd(group: AgentGroup): void {
  *     memory; after the first spawn regenerates `CLAUDE.md`, this branch
  *     is skipped because `CLAUDE.local.md` now exists)
  *
- * Globally:
- *   - delete `groups/global/` (content already in `container/CLAUDE.md`)
+ * Preserves `groups/global/` when present. Some installs use it as durable
+ * shared memory/persona across all channel-specific groups.
  */
 export function migrateGroupsToClaudeLocal(): void {
   if (!fs.existsSync(GROUPS_DIR)) return;
@@ -160,27 +172,12 @@ export function migrateGroupsToClaudeLocal(): void {
 
     const groupDir = path.join(GROUPS_DIR, entry.name);
 
-    const oldGlobalLink = path.join(groupDir, '.claude-global.md');
-    try {
-      fs.lstatSync(oldGlobalLink);
-      fs.unlinkSync(oldGlobalLink);
-      actions.push(`${entry.name}/.claude-global.md removed`);
-    } catch {
-      /* already gone */
-    }
-
     const claudeMd = path.join(groupDir, 'CLAUDE.md');
     const claudeLocal = path.join(groupDir, 'CLAUDE.local.md');
     if (fs.existsSync(claudeMd) && !fs.existsSync(claudeLocal)) {
       fs.renameSync(claudeMd, claudeLocal);
       actions.push(`${entry.name}/CLAUDE.md → CLAUDE.local.md`);
     }
-  }
-
-  const globalDir = path.join(GROUPS_DIR, 'global');
-  if (fs.existsSync(globalDir)) {
-    fs.rmSync(globalDir, { recursive: true, force: true });
-    actions.push('groups/global/ removed');
   }
 
   if (actions.length > 0) {
@@ -202,6 +199,14 @@ function syncSymlink(linkPath: string, target: string): void {
     /* missing */
   }
   fs.symlinkSync(target, linkPath);
+}
+
+function removeIfExists(filePath: string): void {
+  try {
+    fs.unlinkSync(filePath);
+  } catch {
+    /* missing */
+  }
 }
 
 function writeAtomic(filePath: string, content: string): void {

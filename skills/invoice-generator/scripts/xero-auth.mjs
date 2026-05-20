@@ -1,11 +1,8 @@
 import { createServer } from 'http';
-import { readFileSync, writeFileSync } from 'fs';
-import { resolve } from 'path';
-import { homedir } from 'os';
 import https from 'https';
+import { loadXeroClientConfig, writeXeroTokens } from '../../xero/lib/xero-credentials.mjs';
 
-const clientId = 'REDACTED_XERO_CLIENT_ID';
-const clientSecret = 'REDACTED_XERO_CLIENT_SECRET';
+const { client_id: clientId, client_secret: clientSecret } = loadXeroClientConfig();
 
 // Full scopes including accounting.attachments
 const scope = [
@@ -62,13 +59,10 @@ const server = createServer((req, res) => {
         res2.on('end', () => {
           try {
             const tokens = JSON.parse(data);
-            
-            // Save tokens
-            const tokensPath = resolve(homedir(), '.config/nanoclaw/credentials/services/xero-tokens.json');
             tokens.expires_at = Math.floor(Date.now() / 1000) + tokens.expires_in;
-            writeFileSync(tokensPath, JSON.stringify(tokens, null, 2));
-            
-            console.log('✅ Tokens saved!');
+            const tokensPath = writeXeroTokens(tokens);
+
+            console.log('✅ Tokens saved to', tokensPath);
             console.log('Scope:', tokens.scope);
             console.log('\n🎉 You can now upload attachments!');
             

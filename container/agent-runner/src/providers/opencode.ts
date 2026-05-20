@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from 'child_process';
+import fs from 'fs';
 
 import { createOpencodeClient, type OpencodeClient } from '@opencode-ai/sdk';
 
@@ -88,6 +89,7 @@ function buildOpenCodeConfig(options: ProviderOptions): Record<string, unknown> 
   const model = process.env.OPENCODE_MODEL;
   const smallModel = process.env.OPENCODE_SMALL_MODEL;
   const proxyUrl = process.env.ANTHROPIC_BASE_URL;
+  const proxyApiKey = process.env.OPENCODE_API_KEY ?? process.env.ANTHROPIC_API_KEY ?? provider;
 
   const providerModelId = model ? model.replace(new RegExp(`^${provider}/`), '') : undefined;
   const providerSmallModelId = smallModel ? smallModel.replace(new RegExp(`^${provider}/`), '') : undefined;
@@ -100,7 +102,7 @@ function buildOpenCodeConfig(options: ProviderOptions): Record<string, unknown> 
       ? {}
       : {
           [provider]: {
-            options: { apiKey: 'placeholder', baseURL: proxyUrl },
+            options: { apiKey: proxyApiKey, baseURL: proxyUrl },
             ...(modelsToRegister.length > 0
               ? {
                   models: Object.fromEntries(
@@ -113,15 +115,14 @@ function buildOpenCodeConfig(options: ProviderOptions): Record<string, unknown> 
 
   const mcp = mcpServersToOpenCodeConfig(options.mcpServers);
 
-  // Load shared base + per-group fragments + per-group memory through OpenCode's
-  // native instructions pipeline (session/instruction.ts). Absolute paths with
-  // globs are supported. Files are read raw — `@./...` includes are NOT expanded
-  // by OpenCode, so point at the concrete files, not at composed CLAUDE.md.
-  const instructions = [
-    '/app/CLAUDE.md',
-    '/workspace/agent/.claude-fragments/*.md',
-    '/workspace/agent/CLAUDE.local.md',
-  ];
+  // Load shared base + optional global persona/memory + fragments + per-group
+  // memory through OpenCode's native instructions pipeline. Files are read raw;
+  // `@./...` includes are NOT expanded by OpenCode, so point at concrete files.
+  const instructions = ['/app/CLAUDE.md'];
+  if (fs.existsSync('/workspace/global/CLAUDE.md')) {
+    instructions.push('/workspace/global/CLAUDE.md');
+  }
+  instructions.push('/workspace/agent/.claude-fragments/*.md', '/workspace/agent/CLAUDE.local.md');
 
   return {
     ...(model ? { model } : {}),

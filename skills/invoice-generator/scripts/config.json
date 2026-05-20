@@ -143,8 +143,7 @@
     "credentials_file": "~/.openclaw/credentials/toggl"
   },
   "xero": {
-    "client_id": "REDACTED_XERO_CLIENT_ID",
-    "client_secret": "REDACTED_XERO_CLIENT_SECRET",
-    "tokens_file": "~/.openclaw/credentials/xero-tokens.json"
+    "client_file": "xero-oauth-client.json",
+    "tokens_file": "xero-tokens.json"
   }
 }

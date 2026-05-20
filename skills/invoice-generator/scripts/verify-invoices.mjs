@@ -3,13 +3,17 @@ import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import { homedir } from 'os';
 
-const xero = new XeroClient({
-  clientId: 'REDACTED_XERO_CLIENT_ID',
-  clientSecret: 'REDACTED_XERO_CLIENT_SECRET'
-});
+import {
+  loadXeroClientConfig,
+  loadXeroTokens,
+  assertXeroTokenFresh,
+} from '../../xero/lib/xero-credentials.mjs';
 
-const tokensPath = '/workspace/extra/credentials/xero-tokens.json';
-const tokens = JSON.parse(readFileSync(tokensPath, 'utf8'));
+const { client_id, client_secret } = loadXeroClientConfig();
+const tokens = loadXeroTokens();
+assertXeroTokenFresh(tokens);
+
+const xero = new XeroClient({ clientId: client_id, clientSecret: client_secret });
 
 await xero.setTokenSet(tokens);
 await xero.updateTenants();

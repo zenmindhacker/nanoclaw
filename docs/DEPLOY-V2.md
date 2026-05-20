@@ -106,19 +106,35 @@ onecli secrets list
 # Should show "Anthropic" secret
 ```
 
-### OpenRouter (for delegate skill and transcription)
+### OpenRouter (image/video only — legacy file, not OneCLI)
+
+**Text delegation** uses OpenCode Go (`delegate summarize`, etc.) — no OpenRouter needed.
+
+**Images / video** use the agent-editable legacy file (not OneCLI):
 
 ```bash
-onecli secrets create --name OpenRouter --type generic \
-  --value <OPENROUTER_API_KEY> \
-  --host-pattern openrouter.ai \
-  --header-name Authorization --value-format "Bearer {value}"
+# On each host user (Cleo + Silas)
+mkdir -p ~/.config/nanoclaw/credentials/services
+printf '%s' '<OPENROUTER_API_KEY>' > ~/.config/nanoclaw/credentials/services/openrouter
+chmod 600 ~/.config/nanoclaw/credentials/services/openrouter
 ```
 
-Remove from `.env`:
+Mounted in containers as `/workspace/extra/credentials/openrouter`. Agents can update this file for new keys they receive in chat.
+
+Do **not** put OpenRouter in OneCLI for text — the orchestrator is already `opencode-go/kimi-k2.6`.
+
+### ElevenLabs (voice notes)
+
+Persona voice notes use the `voice-note` skill and an ElevenLabs key:
+
 ```bash
-# Remove: OPENROUTER_API_KEY=...
+# On each host user (Cleo + Silas)
+mkdir -p ~/.config/nanoclaw/credentials/services
+printf '%s' '<ELEVENLABS_API_KEY>' > ~/.config/nanoclaw/credentials/services/elevenlabs
+chmod 600 ~/.config/nanoclaw/credentials/services/elevenlabs
 ```
+
+Voice IDs and tuning live in each agent's global `CLAUDE.md`.
 
 ### OpenCode Go (for the OpenCode provider)
 
@@ -164,17 +180,16 @@ For agent groups you want to keep on Claude, set `provider` to `claude` in `cont
 
 ## 5. Rebuild the Docker image
 
-**Run once on Cleo's server** — both agents share the same image.
+Both users share the same Docker daemon, but **each NanoClaw install gets its own image tag** (`nanoclaw-agent-v2-<install-slug>:latest` from `setup/lib/install-slug.sh`). Run `./container/build.sh` **on each systemd user** (`cian` and `christina`) after pulling code.
+
+Do **not** set `CONTAINER_IMAGE=nanoclaw-agent:latest` in `.env` — that tag is a legacy v1 name and may point at an old image without Bun/OpenCode (containers exit immediately with code 127).
 
 ```bash
-ssh cian@cleo-lc.cognitivetech.net
+# On each user account
 cd ~/nanoclaw
-
-# Prune builder cache first (prevents stale OpenCode layer)
-docker builder prune -f
-
-# Build — includes opencode-ai@1.4.17 now
+docker builder prune -f   # optional; prevents stale layers
 ./container/build.sh
+# → nanoclaw-agent-v2-<slug>:latest
 ```
 
 ---
@@ -306,6 +321,27 @@ tail -20 ~/nanoclaw/logs/nanoclaw.error.log
 ```
 
 Send a test message from Slack to confirm the agent responds.
+
+---
+
+## Shared host gotchas (Cleo + Silas on one machine)
+
+### OneCLI CA file in `/tmp`
+
+The OneCLI SDK writes `onecli-proxy-ca.pem` under `os.tmpdir()` (usually `/tmp`). On Linux, sticky `/tmp` prevents user B from overwriting a file user A created — Silas (`christina`) fails with `EACCES` if Cleo (`cian`) wrote the cert first.
+
+**Fix:** per-user temp dir in each `.env`:
+
+```bash
+TMPDIR=/home/cian/.onecli-tmp        # Cleo
+TMPDIR=/home/christina/.onecli-tmp   # Silas
+```
+
+Create the directory as that user (`mkdir -p ~/.onecli-tmp && chmod 700 ~/.onecli-tmp`), then restart `nanoclaw`.
+
+### OpenCode Go auth (same for both agents)
+
+Register the OpenCode Go API key in OneCLI with host pattern `opencode.ai` and header **`Authorization: Bearer {key}`** (not `x-api-key` alone — `/models` may work but chat returns 401). Assign secrets to each OneCLI agent (`onecli agents set-secret-mode --mode all` or selective). See section 3.
 
 ---
 

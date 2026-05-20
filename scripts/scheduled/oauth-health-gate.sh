@@ -6,10 +6,24 @@ set -uo pipefail
 expired=""
 errors=""
 ok_count=0
+cred_dir="/workspace/extra/credentials"
+registry="$cred_dir/oauth-registry.json"
 
-for f in /workspace/extra/credentials/*-token.json; do
-  [ -f "$f" ] || continue
+if [ -f "$registry" ]; then
+  token_files=$(jq -r '.tokens[]?.token_file // empty' "$registry" 2>/dev/null)
+else
+  token_files=$(find "$cred_dir" -maxdepth 1 -name '*-token.json' -o -name '*-tokens.json' 2>/dev/null | sed "s#^$cred_dir/##")
+fi
+
+for token_file in $token_files; do
+  f="$cred_dir/$token_file"
   name=$(basename "$f" .json)
+
+  if [ ! -f "$f" ]; then
+    errors="$errors $name(missing_file)"
+    continue
+  fi
+
   expires_at=$(jq -r ".expires_at // empty" "$f" 2>/dev/null)
   has_refresh=$(jq -r ".refresh_token // empty" "$f" 2>/dev/null)
 

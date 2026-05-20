@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
 # delegate — unified interface for text delegation (via opencode) and
-# multimodal generation (image/speech/video via curl to OpenRouter).
+# multimodal generation (image/video via curl to OpenRouter).
 #
 # Usage:
 #   delegate <task-or-model> "<prompt>"               # e.g. delegate kimi "summarize this"
 #   delegate image "a zen garden at sunset"           # image gen (default: Nano Banana)
 #   delegate image-pro "detailed infographic of..."   # high-quality image
-#   delegate speech "Hello world" --voice nova        # TTS
 #   delegate video "a cat jumping over a fence"       # video gen (confirms cost)
 #   delegate --json <key> "<prompt>"                  # raw JSON output (text tasks only)
 #   delegate --cwd <dir> <key> "<prompt>"             # set working dir (text tasks only)
@@ -18,24 +17,42 @@
 # Lookup order: tasks.<key> → models.<key>. Update the catalog without touching this script.
 set -euo pipefail
 
-SKILL_DIR="${SKILL_DIR:-/opt/delegate}"
-CATALOG="$SKILL_DIR/models.json"
 OR_BASE="https://openrouter.ai/api/v1"
 IPC_DIR="/workspace/ipc"
+OPENROUTER_FILE="/workspace/extra/credentials/openrouter"
+
+# Catalog: skill symlink at spawn, or image-baked /opt/delegate
+if [[ -z "${SKILL_DIR:-}" ]]; then
+  for d in /home/node/.claude/skills/delegate /opt/delegate; do
+    if [[ -f "$d/models.json" ]]; then
+      SKILL_DIR="$d"
+      break
+    fi
+  done
+fi
+SKILL_DIR="${SKILL_DIR:-/opt/delegate}"
+CATALOG="$SKILL_DIR/models.json"
 
 if [[ ! -f "$CATALOG" ]]; then
   echo "delegate: catalog missing at $CATALOG" >&2
   exit 1
 fi
-if [[ -z "${OPENROUTER_API_KEY:-}" ]]; then
-  echo "delegate: OPENROUTER_API_KEY not set" >&2
-  exit 1
-fi
+
+openrouter_key() {
+  if [[ -f "$OPENROUTER_FILE" ]]; then
+    tr -d '\n\r' < "$OPENROUTER_FILE"
+    return 0
+  fi
+  if [[ -n "${OPENROUTER_API_KEY:-}" ]]; then
+    printf '%s' "$OPENROUTER_API_KEY"
+    return 0
+  fi
+  return 1
+}
 
 JSON=0
 CWD=""
 SYS=""
-VOICE=""
 declare -a FILES=()
 declare -a EXTRA=()
 
@@ -46,13 +63,15 @@ while [[ $# -gt 0 ]]; do
     --cwd) CWD="$2"; shift 2 ;;
     --system) SYS="$2"; shift 2 ;;
     --file) FILES+=("$2"); shift 2 ;;
-    --voice) VOICE="$2"; shift 2 ;;
     --task|--model) shift ;;
     list)
       python3 - "$CATALOG" <<'PYEOF'
 import json, sys
 d = json.load(open(sys.argv[1]))
-print("\n=== TEXT TASKS ===")
+orch = d.get("_meta", {}).get("orchestrator", "")
+if orch:
+    print(f"\nOrchestrator (do not delegate to): {orch}")
+print("\n=== TEXT TASKS (OpenCode Go workers) ===")
 for k, v in d.get("tasks", {}).items():
     m = d["models"].get(v["model"], {})
     mtype = m.get("type", "text")
@@ -62,7 +81,7 @@ print("\n=== MULTIMODAL TASKS ===")
 for k, v in d.get("tasks", {}).items():
     m = d["models"].get(v["model"], {})
     mtype = m.get("type", "text")
-    if mtype in ("image", "speech", "video"):
+    if mtype in ("image", "video"):
         print(f"  {k:<20} → {v['model']:<18} [{mtype}] ({v['rationale']})")
 print("\n=== TEXT MODELS ===")
 for k, v in d.get("models", {}).items():
@@ -72,11 +91,10 @@ print("\n=== IMAGE MODELS ===")
 for k, v in d.get("models", {}).items():
     if v.get("type") == "image":
         print(f"  {k:<18} {v['id']:<38} ~${v.get('cost_per_image', '?')}/img")
-print("\n=== SPEECH/VIDEO MODELS ===")
+print("\n=== VIDEO MODELS ===")
 for k, v in d.get("models", {}).items():
-    if v.get("type") in ("speech", "video"):
-        extra = f"voices={v['voices']}" if "voices" in v else f"duration={v.get('duration','?')}"
-        print(f"  {k:<18} {v['id']:<38} {extra}")
+    if v.get("type") == "video":
+        print(f"  {k:<18} {v['id']:<38} duration={v.get('duration','?')}")
 PYEOF
       exit 0
       ;;
@@ -126,8 +144,6 @@ if not m:
 mtype = m.get("type", "text")
 mid = m["id"]
 extra = ""
-if mtype == "speech":
-    extra = m.get("default_voice", "nova")
 print(f"{mtype}|{mid}|{extra}")
 PYEOF
 )
@@ -136,8 +152,12 @@ MODEL_TYPE=$(echo "$RESOLVED" | cut -d'|' -f1)
 MODEL_ID=$(echo "$RESOLVED" | cut -d'|' -f2)
 MODEL_EXTRA=$(echo "$RESOLVED" | cut -d'|' -f3)
 
-# ── MULTIMODAL: image generation ──────────────────────────────────────
+# ── MULTIMODAL: image generation (legacy OpenRouter file) ─────────────
 if [[ "$MODEL_TYPE" == "image" ]]; then
+  if ! OPENROUTER_API_KEY="$(openrouter_key)"; then
+    echo "delegate: OpenRouter key missing — save to $OPENROUTER_FILE (agent-editable)" >&2
+    exit 1
+  fi
   mkdir -p "$IPC_DIR/images"
   OUTFILE="$IPC_DIR/images/$(date +%s)-generated.png"
 
@@ -194,37 +214,12 @@ PYEOF
   exit $?
 fi
 
-# ── MULTIMODAL: text-to-speech ────────────────────────────────────────
-if [[ "$MODEL_TYPE" == "speech" ]]; then
-  mkdir -p "$IPC_DIR"
-  OUTFILE="$IPC_DIR/$(date +%s)-speech.mp3"
-  USE_VOICE="${VOICE:-$MODEL_EXTRA}"
-
-  curl -s "$OR_BASE/audio/speech" \
-    -H "Authorization: Bearer $OPENROUTER_API_KEY" \
-    -H "Content-Type: application/json" \
-    -d "$(python3 -c "
-import json, sys
-print(json.dumps({
-    'model': '$MODEL_ID',
-    'input': sys.argv[1],
-    'voice': '$USE_VOICE',
-    'response_format': 'mp3'
-}))
-" "$PROMPT")" \
-    -o "$OUTFILE"
-
-  if [[ -s "$OUTFILE" ]]; then
-    echo "$OUTFILE"
-  else
-    echo "ERROR: TTS returned empty response" >&2
+# ── MULTIMODAL: video generation (legacy OpenRouter file) ───────────
+if [[ "$MODEL_TYPE" == "video" ]]; then
+  if ! OPENROUTER_API_KEY="$(openrouter_key)"; then
+    echo "delegate: OpenRouter key missing for video — save to $OPENROUTER_FILE" >&2
     exit 1
   fi
-  exit 0
-fi
-
-# ── MULTIMODAL: video generation ──────────────────────────────────────
-if [[ "$MODEL_TYPE" == "video" ]]; then
   echo "delegate: video generation via $MODEL_ID"
   echo "  prompt: $PROMPT"
   echo "  NOTE: This is async and expensive. The video URL will be returned when ready."
@@ -253,7 +248,13 @@ print(f'Poll status: GET {\"$OR_BASE\"}/video/generations/{gen_id}')
   exit $?
 fi
 
-# ── TEXT: delegation via opencode ─────────────────────────────────────
+# ── TEXT: delegation via OpenCode Go (OneCLI-proxied) ─────────────────
+if [[ "$MODEL_ID" == *kimi* ]]; then
+  echo "delegate: refusing Kimi — you are already the Kimi orchestrator (opencode-go/kimi-k2.6)." >&2
+  echo "  Use: delegate summarize / delegate draft / delegate code-cheap / delegate deepseek-flash" >&2
+  exit 2
+fi
+
 if ! command -v opencode &>/dev/null; then
   echo "delegate: opencode CLI not installed — needed for text tasks" >&2
   exit 127

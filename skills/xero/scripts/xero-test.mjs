@@ -12,20 +12,19 @@
  */
 
 import { XeroClient } from 'xero-node';
-import { readFileSync, writeFileSync, existsSync } from 'fs';
-import { dirname, join } from 'path';
-import { fileURLToPath } from 'url';
-import { createRequire } from 'module';
+import { existsSync } from 'fs';
+import {
+  loadXeroClientConfig,
+  loadXeroTokens,
+  resolveCredPath,
+  writeXeroTokens,
+  XERO_TOKENS_FILE,
+  assertXeroTokenFresh,
+} from '../lib/xero-credentials.mjs';
 
-const require = createRequire(import.meta.url);
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
-// Configuration
-const CLIENT_ID = 'REDACTED_XERO_CLIENT_ID';
-const CLIENT_SECRET = 'REDACTED_XERO_CLIENT_SECRET';
 const REDIRECT_URI = 'http://localhost:8080/callback';
-const CREDENTIALS_DIR = join(__dirname, '..', 'credentials');
-const TOKEN_FILE = join(CREDENTIALS_DIR, 'xero-tokens.json');
+const TOKEN_FILE = resolveCredPath(XERO_TOKENS_FILE);
+const { client_id: CLIENT_ID, client_secret: CLIENT_SECRET } = loadXeroClientConfig();
 
 const SCOPES = [
   'openid',
@@ -48,18 +47,20 @@ const xero = new XeroClient({
 
 function saveTokens(tokens) {
   try {
-    writeFileSync(TOKEN_FILE, JSON.stringify(tokens, null, 2));
-    console.log('\n✅ Tokens saved to', TOKEN_FILE);
+    const path = writeXeroTokens(tokens);
+    console.log('\n✅ Tokens saved to', path);
   } catch (err) {
     console.error('Error saving tokens:', err.message);
   }
 }
 
 function loadTokens() {
-  if (existsSync(TOKEN_FILE)) {
-    return JSON.parse(readFileSync(TOKEN_FILE, 'utf8'));
+  if (!existsSync(TOKEN_FILE)) return null;
+  try {
+    return loadXeroTokens();
+  } catch {
+    return null;
   }
-  return null;
 }
 
 async function testApiEndpoints() {
@@ -153,26 +154,11 @@ async function main() {
     }
   } else {
     console.log('\n📋 Using existing tokens from', TOKEN_FILE);
+    assertXeroTokenFresh(tokens);
   }
 
-  // Set tokens on Xero client
+  await xero.setTokenSet(tokens);
   await xero.updateTenants();
-
-  // Check if token needs refresh
-  const isTokenExpired = xero.isTokenExpired();
-  if (isTokenExpired && tokens.refresh_token) {
-    console.log('\n🔄 Token expired, refreshing...');
-    try {
-      const newTokens = await xero.refreshToken();
-      tokens = newTokens;
-      saveTokens(tokens);
-      await xero.updateTenants();
-    } catch (err) {
-      console.error('❌ Token refresh failed:', err.message);
-      console.log('Run script again to start fresh OAuth flow');
-      process.exit(1);
-    }
-  }
 
   // Test API endpoints
   await testApiEndpoints();

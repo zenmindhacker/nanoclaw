@@ -5,25 +5,25 @@
  */
 
 import { XeroClient } from 'xero-node';
-import { readFileSync, existsSync } from 'fs';
-import { join, dirname } from 'path';
+import {
+  loadXeroClientConfig,
+  loadXeroTokens,
+  resolveCredPath,
+  XERO_TOKENS_FILE,
+  assertXeroTokenFresh,
+} from '../../lib/xero-credentials.js';
 
-const CLIENT_ID = process.env.XERO_CLIENT_ID || 'REDACTED_XERO_CLIENT_ID';
-const CLIENT_SECRET = process.env.XERO_CLIENT_SECRET || 'REDACTED_XERO_CLIENT_SECRET';
-const TOKEN_PATH = '/workspace/extra/credentials/xero-tokens.json';
+const TOKEN_PATH = resolveCredPath(XERO_TOKENS_FILE);
 
 let xero: XeroClient;
 let tenantId: string;
 
 async function init() {
-  xero = new XeroClient({ clientId: CLIENT_ID, clientSecret: CLIENT_SECRET });
-  
-  if (!existsSync(TOKEN_PATH)) {
-    console.log('❌ No tokens found. Run: xero-workflows auth');
-    process.exit(1);
-  }
-  
-  const tokens = JSON.parse(readFileSync(TOKEN_PATH, 'utf8'));
+  const { client_id, client_secret } = loadXeroClientConfig();
+  xero = new XeroClient({ clientId: client_id, clientSecret: client_secret });
+
+  const tokens = loadXeroTokens();
+  assertXeroTokenFresh(tokens);
   await xero.setTokenSet(tokens);
   await xero.updateTenants();
   

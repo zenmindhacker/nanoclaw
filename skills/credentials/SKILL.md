@@ -1,106 +1,174 @@
 ---
 name: credentials
-description: Manage API keys and credentials. Use when you need to add, update, remove, or check credentials. Also reference when a service API returns 401/403 or a key is missing.
+description: Manage and debug credentials in v2. Covers OneCLI-injected API keys, host-managed OAuth token files, and agent-editable legacy credential files. Use when a service returns 401/403, a key is missing, or you need to store a new non-OAuth secret.
 ---
 
-# Credential Management
+# Credential Management (v2)
 
-You have full control over your credentials. API keys and tokens are stored as files on your persistent credential mount and injected as environment variables into every container you run in.
+NanoClaw uses **three credential lanes**. Pick the right one before adding or changing anything.
 
-## Quick Reference
+## The Three Lanes
 
-| Action | How |
-|--------|-----|
-| Check what's available | `env \| grep -E 'API_KEY\|TOKEN\|SECRET' \| sed 's/=.*/=***/'` |
-| Check credential files | `cat /workspace/extra/credentials/credentials.json 2>/dev/null \| python3 -m json.tool` |
-| Add/update a key | Write to `credentials.json` (see below) |
-| Remove a key | Remove entry from `credentials.json` |
-| Check file-based tokens | `ls /workspace/extra/credentials/` |
+| Lane | Where it lives | Who manages it | Used for |
+|------|----------------|----------------|----------|
+| **OneCLI** | Host vault; injected at HTTP request time via proxy | Admin / operator (`onecli` CLI or web UI) | API keys for proxied outbound HTTP from containers (`opencode.ai`, `api.anthropic.com`, etc.) |
+| **Host OAuth files** | `~/.config/nanoclaw/credentials/services/` on host | Host refresher + operator re-auth | Google, Xero, and other OAuth refresh-token flows |
+| **Agent-editable files** | `/workspace/extra/credentials/` in container | **You** (the agent) | Keys and tokens you discover or the user gives you that are **not** host-managed |
 
-## How Credentials Work
+**Do not** put OAuth refresh tokens or host-managed secrets into agent-editable files unless the operator explicitly asks you to mirror something for a one-off script.
 
-Two sources, merged at container startup:
+---
 
-1. **Host-level** (`.env` + manifest) — set by the admin. You can see these as env vars but can't change them.
-2. **Agent-managed** (`credentials.json`) — you control this. Add, update, or remove keys anytime. Changes take effect on your next container (next message you process).
+## OneCLI (proxied API keys)
 
-Agent-managed credentials **override** host-level ones, so you can fix a broken key immediately.
+Containers route API traffic through the OneCLI gateway. You **never** see raw vault values in env vars or chat.
 
-## Adding or Updating a Credential
+### When to use OneCLI
 
-Read the current registry, update it, write it back:
+- OpenCode Go (`opencode.ai`) — orchestrator and `opencode run` / delegate text workers
+- Anthropic API (if configured)
+- Any service the operator registered with a `hostPattern` in OneCLI
+
+### When OneCLI is missing
+
+If a call fails because a secret is not configured in OneCLI, tell the operator:
+
+1. Open the OneCLI UI (usually `http://127.0.0.1:10254` on the host, or the link OneCLI returned in the error).
+2. Create a **generic** or typed secret with the correct host pattern and header (e.g. `Authorization: Bearer {value}` for OpenCode Go).
+3. Assign the secret to your agent (`onecli agents set-secrets` or **mode all**).
+
+Do **not** ask the user to paste API keys into chat for OneCLI-managed hosts — use the vault UI.
+
+### Check (operator-side)
+
+You cannot list OneCLI secrets from inside the container. If unsure, ask the operator to run on the host:
 
 ```bash
-# Read current credentials (or start fresh)
-CRED_FILE="/workspace/extra/credentials/credentials.json"
-if [ -f "$CRED_FILE" ]; then
-  CREDS=$(cat "$CRED_FILE")
-else
-  CREDS='{}'
-fi
-
-# Add/update using node (handles JSON safely)
-node -e "
-  const creds = JSON.parse(process.argv[1]);
-  creds['EXAMPLE_API_KEY'] = 'sk-new-key-value';
-  const fs = require('fs');
-  fs.writeFileSync('$CRED_FILE', JSON.stringify(creds, null, 2));
-  console.log('Updated. Keys:', Object.keys(creds).join(', '));
-" "$CREDS"
+onecli secrets list
+onecli agents secrets --id <agent-id>
 ```
 
-Replace `EXAMPLE_API_KEY` and the value with the actual key name and value.
+---
 
-## Removing a Credential
+## Host OAuth (Google, Xero, …)
+
+Long-lived OAuth lives in **token JSON files** on the host, refreshed automatically by the NanoClaw host process.
+
+| File (examples) | Purpose |
+|-------------------|---------|
+| `google-gmail-token.json` | Gmail + related Google scopes |
+| `ganttsy-google-token.json` | Ganttsy Google |
+| `shadow-google-token.json` | Shadow calendar |
+| `xero-tokens.json` | Xero accounting |
+| `oauth-registry.json` | Index of token files + refresh endpoints (host only) |
+
+Mounted read-only at `/workspace/extra/credentials/<filename>`.
+
+### Agent rules
+
+- **Read** these files when a skill expects them (invoice-generator, calendar, etc.).
+- **Do not overwrite** host OAuth token files unless the operator explicitly directs a re-auth flow.
+- If refresh fails or tokens are expired, tell the operator to re-auth on the host (OAuth callback server or provider-specific script). Do not guess refresh tokens.
+
+---
+
+## Agent-editable legacy files
+
+Use `/workspace/extra/credentials/` for secrets **you** own: new API keys the user gives you, per-integration tokens, or multimodal keys not in OneCLI.
+
+### Layout
+
+- **Flat file per secret** (common): `/workspace/extra/credentials/openrouter` — raw key, no extension (used for OpenRouter image/video only)
+- **JSON registry** (optional): `/workspace/extra/credentials/credentials.json` — `{ "ENV_VAR_NAME": "value" }` for skills that read named env-style keys from files
+- **Named token files**: e.g. `my-service-token.json`
+
+Changes persist on the host mount. They take effect on the **next container spawn** (next message).
+
+### Add or update a flat secret file
+
+```bash
+CRED_DIR="/workspace/extra/credentials"
+mkdir -p "$CRED_DIR"
+# Example: save a new API key (never echo the full value back to the user)
+printf '%s' 'PASTE_KEY_HERE' > "$CRED_DIR/my-service-api-key"
+chmod 600 "$CRED_DIR/my-service-api-key" 2>/dev/null || true
+echo "Saved my-service-api-key (masked)"
+```
+
+### Add or update credentials.json
 
 ```bash
 CRED_FILE="/workspace/extra/credentials/credentials.json"
 node -e "
   const fs = require('fs');
-  const creds = JSON.parse(fs.readFileSync('$CRED_FILE', 'utf-8'));
-  delete creds['EXAMPLE_API_KEY'];
-  fs.writeFileSync('$CRED_FILE', JSON.stringify(creds, null, 2));
-  console.log('Removed. Remaining keys:', Object.keys(creds).join(', '));
-"
+  const path = '$CRED_FILE';
+  const creds = fs.existsSync(path) ? JSON.parse(fs.readFileSync(path, 'utf8')) : {};
+  creds['EXAMPLE_API_KEY'] = process.argv[1];
+  fs.mkdirSync(require('path').dirname(path), { recursive: true });
+  fs.writeFileSync(path, JSON.stringify(creds, null, 2));
+  console.log('Updated keys:', Object.keys(creds).join(', '));
+" 'YOUR_KEY_VALUE'
 ```
 
-## Listing All Credentials
-
-Show both sources — env vars (host-managed) and file-based (agent-managed):
+### Remove a secret
 
 ```bash
-echo "=== Environment Variables (host-managed) ==="
-env | grep -E '_KEY=|_TOKEN=|_SECRET=|_PASSWORD=' | sed 's/=.*/=***/' | sort
+rm -f /workspace/extra/credentials/my-service-api-key
+# or delete a key from credentials.json with node (same pattern as add)
+```
+
+### List what you can see (masked)
+
+```bash
+echo "=== Host-mounted credential files ==="
+ls -la /workspace/extra/credentials/ 2>/dev/null || echo "(none)"
 
 echo ""
-echo "=== Agent-Managed (credentials.json) ==="
+echo "=== credentials.json keys ==="
 CRED_FILE="/workspace/extra/credentials/credentials.json"
 if [ -f "$CRED_FILE" ]; then
   node -e "
-    const creds = JSON.parse(require('fs').readFileSync('$CRED_FILE', 'utf-8'));
-    for (const [k, v] of Object.entries(creds)) {
-      console.log(k + '=' + v.slice(0, 4) + '***');
-    }
+    const creds = JSON.parse(require('fs').readFileSync('$CRED_FILE', 'utf8'));
+    for (const k of Object.keys(creds)) console.log(k + '=' + String(creds[k]).slice(0,4) + '***');
   "
 else
-  echo "(none yet)"
+  echo "(none)"
 fi
 
 echo ""
-echo "=== File-Based Tokens ==="
-ls /workspace/extra/credentials/ 2>/dev/null | grep -v credentials.json || echo "(none)"
+echo "=== Env vars (often empty in v2 — do not rely on raw API keys here) ==="
+env | grep -E '_KEY=|_TOKEN=|_SECRET=' | sed 's/=.*/=***/' | sort || true
 ```
 
-## When a Credential is Missing
+---
 
-1. **Check env first** — it may be named differently than expected
-2. **Check credentials.json** — maybe it was set but under a different name
-3. **If truly missing**, tell the user: "I need [SERVICE_NAME] credentials. You can give me the API key and I'll store it securely, or add it to `.env` on the host."
-4. When the user provides a key in chat, **immediately store it** in `credentials.json` using the steps above. Confirm it's saved and tell them it'll be active on your next message.
+## OpenCode Go vs OpenRouter
 
-## Important
+| Use case | Lane |
+|----------|------|
+| **Orchestrator** (you) | OpenCode Go via OneCLI — `OPENCODE_MODEL=opencode-go/kimi-k2.6` |
+| **Delegate text workers** | OpenCode Go via `delegate` + `opencode run` (same subscription) |
+| **Voice notes** | ElevenLabs key in `/workspace/extra/credentials/elevenlabs` for the `voice-note` skill |
+| **Images / video** | Legacy file `/workspace/extra/credentials/openrouter` (OpenRouter multimodal APIs only) |
 
-- **Never echo raw credential values** in responses to the user. Use masked output (`sk-xxx***`).
-- Credentials persist across restarts — `credentials.json` lives on the host filesystem.
-- Changes take effect on the **next container spawn** (next message), not the current one.
-- The `credentials.json` format is a flat JSON object: `{ "ENV_VAR_NAME": "value", ... }`
+Do **not** use OpenRouter for routine text delegation when OpenCode Go is configured — that duplicates the orchestrator model and wastes quota.
+
+---
+
+## When something is missing
+
+1. **Proxied HTTP (401 from opencode.ai, etc.)** → OneCLI secret not assigned; operator fixes vault.
+2. **Google/Xero skill errors** → host OAuth file expired; operator re-auths on host.
+3. **Voice note errors** → check `/workspace/extra/credentials/elevenlabs`; if missing, ask operator to add the file on the host mount or give you the key to save there.
+4. **Image/video errors** → check `/workspace/extra/credentials/openrouter`.
+5. **New third-party API** → save under `/workspace/extra/credentials/` (agent-editable) unless operator prefers OneCLI for that host.
+
+When the user provides a key in chat for a **non-OneCLI** service, save it immediately to the appropriate file under `/workspace/extra/credentials/`, confirm with a masked message, and note it applies on the next message.
+
+---
+
+## Security
+
+- Never echo raw secrets in responses.
+- Never put host OAuth or OneCLI vault values in `credentials.json` unless mirroring is explicitly requested.
+- Prefer OneCLI for any API key that matches a registered `hostPattern` on the host.

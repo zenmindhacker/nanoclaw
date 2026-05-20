@@ -1,128 +1,81 @@
 ---
 name: delegate
-description: Delegate work to cheaper / specialized worker models via OpenCode. Use whenever a task is mechanical, bulk, or doesn't need frontier judgment — keep your Anthropic quota for orchestration. Triggers on phrases like "let me think", "delegate this", "run that on a cheaper model", or any time you'd otherwise burn Opus tokens on routine work.
+description: Delegate bounded text work to OpenCode Go worker models. You are the Kimi orchestrator — delegate text to cheaper workers (DeepSeek, Qwen, GLM), not back to Kimi. Triggers on delegate, cheaper model, hand off, summarize with worker, draft with worker.
 ---
 
-# Delegate
+# Delegate (OpenCode Go)
 
-You are the orchestrator. The point of this skill is to keep that role intact: you decide, you parse, you respond — but the **work** (code generation, summarization, extraction, drafting, translation, long-context reading) gets handed off to a worker model that's cheaper, faster, or both.
+You run as **`opencode-go/kimi-k2.6`** — the smart orchestrator. Your job is to **plan, route, and respond**. Bounded work goes to **different** OpenCode Go models via `delegate`, so you save latency and subscription quota for judgment and conversation.
+
+> **You are Kimi. Do not delegate to Kimi.**
 
 ## Mental model
 
-> "I am the planner. They are the workers."
+| Role | Model lane | Tool |
+|------|------------|------|
+| **You (orchestrator)** | `opencode-go/kimi-k2.6` | Main session — tools, memory, user chat |
+| **Workers (text)** | `opencode-go/deepseek-v4-flash`, `qwen3.6-plus`, `deepseek-v4-pro`, `glm-5`, … | `delegate <task> "..."` |
+| **Image / video** | OpenRouter (legacy file only) | `delegate image "..."`, `delegate video "..."` |
 
-Cheap models are extremely capable for bounded tasks. Don't burn Opus tokens on:
-- Generating boilerplate code
-- Summarizing a long transcript
-- Translating text
-- Extracting JSON from messy input
-- Drafting a routine reply for me to review
-- Refactoring a function
-- Reading a long doc to find one fact
+Keeping Kimi as orchestrator is intentional: a strong orchestrator delegates more aggressively and keeps total cost down.
 
-Do reach for Opus (yourself) for:
-- Multi-step planning across a conversation
-- Reading user mood and adjusting tone
-- Tool selection / orchestration
-- Anything the user is watching live
+## When to delegate (text)
 
-## How to use
-
-```bash
-delegate <key> "<prompt>"           # key = task name OR model name
-delegate list                       # show catalog
-delegate cost <key> <in> <out>      # estimate cost (token counts)
-```
-
-The `<key>` resolves through the catalog (`models.json`):
-1. If it's in `tasks`, use the task's mapped model.
-2. Otherwise look it up in `models` directly.
-
-That means you can write `delegate code-cheap "..."` (intent-driven, recommended) or `delegate qwen-coder "..."` (explicit). Catalog can be updated without touching this skill.
-
-## Quick examples
-
-```bash
-# Summarize a 60-page transcript — long context, cheap, throwaway
-delegate summarize "<paste transcript text>" --file /workspace/extra/github/cognitivetech/coaching/kevin/transcripts/2026-04-29.md
-
-# Extract action items as JSON — Haiku is reliable on structured output
-delegate extract "From this transcript, return a JSON array of action items: {title, owner, priority}.
-
-Transcript: ..." --json
-
-# Draft a Slack reply — GLM is cheap and balanced
-delegate draft "Cian asked if I can pick up the kids tomorrow. He's busy. Draft a warm, concise yes."
-
-# Refactor a TypeScript function — qwen-coder, not Opus
-delegate code-cheap "Refactor this to use map() instead of forEach. Return only the new function body:
-
-function double(arr) { ... }"
-
-# Hard reasoning the cheap models can't handle — only THEN reach for Sonnet/Opus
-delegate code-frontier "Trace through why this React effect runs twice and propose a fix..."
-```
-
-## Catalog (snapshot — see `models.json` for live data)
-
-Tasks (preferred — picks best worker for the job):
-
-| Task key | Model | When |
-|----------|-------|------|
-| `code-cheap` | qwen-coder | Refactors, boilerplate, single-file edits |
-| `code-quick` | haiku | Single-file no-reasoning |
-| `code-frontier` | claude-sonnet | Multi-file reasoning, when qwen failed |
-| `summarize` | kimi | Long docs/transcripts |
-| `summarize-fast` | haiku | Short text |
-| `long-context` | minimax | 1M+ tokens, multi-doc |
-| `reasoning-cheap` | deepseek-r1 | Math / planning, with chain-of-thought |
-| `reasoning-deep` | claude-opus | ONLY if all else fails |
-| `draft` | glm | Default for prose drafts |
-| `translate` | qwen | Multilingual |
-| `extract` | haiku | Structured JSON output |
-
-Run `delegate list` to see the live catalog with prices.
-
-## Cost discipline
-
-You are on a Max/Pro subscription. Every Opus token has opportunity cost. Defaults to internalize:
-
-1. **First instinct**: can a cheap worker do this? If yes → delegate.
-2. **One-shot work**: never use Opus for one-shot transforms (translate, summarize, extract). Always delegate.
-3. **Drafts**: draft on a cheap model, polish with your own judgment if needed.
-4. **Code edits**: try `code-cheap` first; only escalate to `code-frontier` if the result looks wrong.
-5. **Estimate before delegating big jobs**: `delegate cost summarize 60000 1000` shows what a 60k-input run will cost.
+- Summaries, extracts, translations, drafts you'll review
+- Bounded code edits and refactors
+- Long-document reads for one fact or a short summary
+- Bulk mechanical transforms
 
 ## When NOT to delegate
 
-- The user is mid-conversation and waiting on you — don't add latency for trivial tasks.
-- The task is judgment-heavy (Slack tone, deciding what to do next, picking which transcripts matter).
-- Sub-second response needed — opencode + remote model adds 2–8s latency.
-- The task IS the conversation (you're the one talking to me).
+- Live conversation with the user (presence + latency)
+- Tool orchestration and multi-step planning in-thread
+- Judgment where your voice and memory are the product
+- Tasks under ~30s of your own attention
 
-## Authentication
-
-Delegation requires OpenCode to have credentials for at least one provider. The first time:
+## Usage
 
 ```bash
-# On the host, NOT in a container:
-opencode auth login
+delegate <task-or-model> "<prompt>"
+delegate list
+delegate cost <task> <input_tokens> <output_tokens>
+
+# Multimodal image/video only (requires /workspace/extra/credentials/openrouter)
+delegate image "minimal zen garden at sunset"
 ```
 
-Then pick provider(s). The auth file lands at `~/.local/share/opencode/auth.json` and is mounted read-only into every container at the same path. To add a provider later, re-run `opencode auth login` on the host — the next container spawn picks it up.
+## Task catalog (preferred)
 
-Recommended providers:
-- **OpenRouter** — single key, access to Kimi/Qwen/GLM/Minimax/DeepSeek/Anthropic/OpenAI/Google. Easiest.
-- **Anthropic** — direct, if you want Sonnet/Haiku/Opus billed separately from Max quota.
-- **Moonshot, Alibaba, ZhipuAI direct** — cheapest per provider, but you manage N keys.
+| Task | Worker | Notes |
+|------|--------|-------|
+| `summarize` | deepseek-v4-pro | Long docs — **not** Kimi |
+| `summarize-fast` | deepseek-v4-flash | Short text |
+| `code-cheap` | qwen3.6-plus | Refactors, boilerplate |
+| `code-quick` | deepseek-v4-flash | Tiny edits |
+| `code-frontier` | glm-5 | Only if cheaper workers failed |
+| `draft` | qwen3.6-plus | Prose you'll polish |
+| `extract` | deepseek-v4-flash | JSON / structured output |
+| `translate` | qwen3.6-plus | Multilingual |
 
-If `opencode run` errors with "no credentials", run `opencode auth login` on the host and try again.
+Run `delegate list` for the live catalog.
+
+## Examples
+
+```bash
+delegate summarize-fast "Summarize in 3 bullets: ..."
+delegate extract "Return JSON array of action items: ..." --json
+delegate code-cheap "Refactor to async/await; return only the function body: ..."
+delegate draft "Warm short reply declining a meeting: ..."
+```
+
+## Auth
+
+- **Text workers**: OpenCode Go via OneCLI (`opencode.ai`). No raw API key in the container.
+- **Image/video**: Legacy file `/workspace/extra/credentials/openrouter` (you may create/update per `/credentials` skill). Not OneCLI unless operator adds `openrouter.ai` there separately.
+
+Voice notes are not owned by this skill. Use the `voice-note` skill with the
+ElevenLabs voice ID and settings from `/workspace/global/CLAUDE.md`.
 
 ## Updating the catalog
 
-Prices drift. Refresh quarterly:
-
-1. Visit https://models.dev (or each provider's pricing page).
-2. Edit the catalog on the host: `~/nanoclaw/container/skills/delegate/models.json`. Containers pick up the change on next spawn (the file gets auto-copied into the container at startup).
-3. Bump `_meta.lastReviewed`.
-4. Add new models / tasks as needed — no code change required, the wrapper reads the catalog every call.
+Edit `models.json` next to this skill (host: `container/skills/delegate/models.json`). New containers pick it up on spawn.

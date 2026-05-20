@@ -1,23 +1,24 @@
-import { readFileSync, writeFileSync } from 'fs';
-import { resolve } from 'path';
-import { homedir } from 'os';
+/**
+ * Operator-only: manual token refresh on the host (prefer host OAuth refresher in production).
+ */
 import https from 'https';
+import {
+  loadXeroClientConfig,
+  loadXeroTokens,
+  writeXeroTokens,
+} from '../../xero/lib/xero-credentials.mjs';
 
-const tokensPath = '/workspace/extra/credentials/xero-tokens.json';
-const tokens = JSON.parse(readFileSync(tokensPath, 'utf8'));
-
+const tokens = loadXeroTokens();
 const refreshToken = tokens.refresh_token;
-const clientId = 'REDACTED_XERO_CLIENT_ID';
-const clientSecret = 'REDACTED_XERO_CLIENT_SECRET';
+const { client_id: clientId, client_secret: clientSecret } = loadXeroClientConfig();
 
-console.log('Current refresh token:', refreshToken);
+console.log('Refreshing Xero access token (operator script)...');
 
-// Manually refresh using OAuth2 endpoint
 const postData = new URLSearchParams({
   grant_type: 'refresh_token',
   refresh_token: refreshToken,
   client_id: clientId,
-  client_secret: clientSecret
+  client_secret: clientSecret,
 }).toString();
 
 const options = {
@@ -26,14 +27,14 @@ const options = {
   method: 'POST',
   headers: {
     'Content-Type': 'application/x-www-form-urlencoded',
-    'Accept': 'application/json'
-  }
+    Accept: 'application/json',
+  },
 };
 
 const result = await new Promise((resolve, reject) => {
   const req = https.request(options, (res) => {
     let data = '';
-    res.on('data', chunk => data += chunk);
+    res.on('data', (chunk) => (data += chunk));
     res.on('end', () => {
       if (res.statusCode >= 200 && res.statusCode < 300) {
         resolve(JSON.parse(data));
@@ -47,19 +48,15 @@ const result = await new Promise((resolve, reject) => {
   req.end();
 });
 
-console.log('New tokens acquired:', Object.keys(result));
-
-// Keep the refresh token if not returned
 if (!result.refresh_token) {
   result.refresh_token = refreshToken;
 }
 
-// Save new tokens
 const newTokens = {
   ...tokens,
   ...result,
-  expires_at: Math.floor(Date.now() / 1000) + result.expires_in
+  expires_at: Math.floor(Date.now() / 1000) + result.expires_in,
 };
 
-writeFileSync(tokensPath, JSON.stringify(newTokens, null, 2));
-console.log('Tokens saved!');
+const path = writeXeroTokens(newTokens);
+console.log('Tokens saved to', path);
