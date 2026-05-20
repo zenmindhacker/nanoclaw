@@ -10,7 +10,7 @@ pnpm exec tsx scripts/audit-scheduled-tasks.ts
 
 | Agent | Active v2 group folder | Session tasks in DB | Documented but not seeded |
 |-------|------------------------|---------------------|---------------------------|
-| Cleo | `dm-with-cian` only | **0** | `slack_scheduled` table in `agents/cleo/groups/slack_scheduled/CLAUDE.md` (5 tasks) — **no v2 agent group / wiring** in production DB |
+| Cleo | `dm-with-cian`; recovered task groups via `scripts/import-v1-scheduled-tasks.ts` | Import from legacy `store/messages.db` | Re-run the import after restoring from old v1 state |
 | Silas | `dm-with-christina` | **0** → seed `cycle-daily-briefing` | Was in legacy `christina_dm`; migrated to `dm-with-christina` |
 
 ## Silas — cycle daily briefing
@@ -28,19 +28,25 @@ Seed after deploy:
 pnpm exec tsx scripts/seed-scheduled-tasks.ts
 ```
 
-## Cleo — slack_scheduled (pending wiring)
+## Cleo — recovered from v1 scheduled tasks
 
-Documented schedules (local time — server `TIMEZONE` applies to cron interpretation):
+Legacy active tasks are recovered from `store/messages.db`:
 
-| Task | Documented schedule |
-|------|---------------------|
-| im-sync | 7:30 AM daily |
-| im-digest | 8:00 AM daily |
-| im-audit | 9:00 AM Sundays |
-| ganttsy-resume-daily | 6:00 AM daily |
-| shadow-transcript-sync | 10:40 AM + 12:10 PM daily |
+```bash
+pnpm exec tsx scripts/import-v1-scheduled-tasks.ts .
+```
 
-**Action:** Wire `slack_scheduled` messaging group to a Cleo agent group via `/manage-channels` or `ncl`, then add cron rows to `scripts/scheduled-tasks.manifest.json` and run `seed-scheduled-tasks.ts`.
+This creates missing v2 agent groups, messaging groups, wirings, and session-local `kind='task'` rows for active v1 tasks. It recomputes the next future cron run instead of importing stale `next_run` timestamps, so recovery does not stampede old tasks immediately.
+
+Recovered task families include:
+
+- `transcript-sync`
+- `nvs-email-processor`
+- `oauth-token-refresh`
+- `catch-up-auditor`
+- `pending-actions-reminder`
+- `transcript-unmatched-reminder`
+- Sysops thread tasks (`task-1776189304150-2vcn87`, `task-1776189458812-e2qae3`, `task-1776189463143-bq5zvi`)
 
 ## v1 note
 
