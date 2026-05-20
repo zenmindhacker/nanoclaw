@@ -1,6 +1,13 @@
 {
   "tasks": [
     {
+      "id": "oauth-health-check",
+      "agentFolder": "slack_scheduled",
+      "recurrence": "0 */1 * * *",
+      "prompt": "OAuth health check (read-only). The host process owns token refresh — do not edit files under /workspace/extra/credentials/.\n\n1. Run `ncl oauth-health` and review all tokens.\n2. If scriptOutput shows expired/errors, or any token has status expired/expiring/error, or expiresInMin <= 10:\n   - Post a concise summary to #sysops (slack:C07F195GB96).\n   - Run `ncl oauth-refresh-now` and include results in your sysops message.\n   - If refresh still fails, tell Cian which token needs manual re-auth and the token_file from the registry.\n3. If all tokens are healthy, exit silently — do not post to #sysops.",
+      "script": "bash /workspace/agent/oauth-health-gate.sh"
+    },
+    {
       "id": "cycle-daily-briefing",
       "agentFolder": "dm-with-christina",
       "recurrence": "0 11 * * *",

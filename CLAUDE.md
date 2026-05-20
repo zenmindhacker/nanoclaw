@@ -309,9 +309,10 @@ All token files use consistent fields:
 `~/.config/nanoclaw/credentials/services/oauth-registry.json` maps each token file to its provider, client credential file, refresh endpoint, and metadata. The host refresher reads this on each cycle.
 
 ### Refresh Architecture
-- **Host refresher** (`src/oauth-refresher.ts`): Runs every 30 min in the main process. Proactively refreshes tokens expiring within 35 min (buffer exceeds check interval so tokens can't expire between cycles).
-- **Container consumers**: Read tokens from `/workspace/extra/credentials/` (read-only mount). May have fallback refresh logic.
-- **No scheduled duplicate**: Do not run the legacy `oauth-token-refresh` scheduled task in v2; the host refresher is the owner.
+- **Host refresher** (`src/oauth-refresher.ts`): Runs every 30 min in the main process. Proactively refreshes tokens expiring within 35 min (buffer exceeds check interval so tokens can't expire between cycles). Failures alert `#sysops` via `OAUTH_ALERT_SLACK_CHANNEL` (default `slack:C07F195GB96`).
+- **Container consumers**: Read tokens from `/workspace/extra/credentials/` (read-only mount). Do not write host OAuth token files from containers.
+- **Cleo repair path**: `ncl oauth-health`, `ncl oauth-refresh-now`, `ncl oauth-refresh-one --id <registry-id>` (host executes; agents with CLI access). Optional read-only scheduled `oauth-health-check` wakes Cleo when the pre-script gate finds problems.
+- **No legacy writer task**: Do not recover v1 `oauth-token-refresh` (it duplicated refresh). Use `oauth-health-check` from `scripts/scheduled-tasks.manifest.json` instead.
 
 ### Adding a New OAuth Token
 1. Run the provider's auth flow to get initial tokens

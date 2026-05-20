@@ -17,6 +17,7 @@ import { startActiveDeliveryPoll, startSweepDeliveryPoll, setDeliveryAdapter, st
 import { startHostSweep, stopHostSweep } from './host-sweep.js';
 import { routeInbound } from './router.js';
 import { log } from './log.js';
+import { deliverOAuthAlert } from './oauth-alerts.js';
 import { startOAuthRefresher, stopOAuthRefresher } from './oauth-refresher.js';
 
 // Response + shutdown registries live in response-registry.ts to break the
@@ -175,8 +176,12 @@ async function main(): Promise<void> {
   startHostSweep();
   log.info('Host sweep started');
 
-  // 7. Start host-owned OAuth token refresh for read-only container credentials.
-  startOAuthRefresher();
+  // 7. Start host-owned OAuth token refresh; failures alert #sysops via delivery adapter.
+  startOAuthRefresher({
+    onAlert: (message) => {
+      void deliverOAuthAlert(message);
+    },
+  });
 
   // 8. Start the `ncl` CLI socket server (data/ncl.sock).
   await startCliServer();

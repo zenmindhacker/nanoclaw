@@ -47,7 +47,7 @@ Recovered task families include:
 - `transcript-unmatched-reminder`
 - Sysops thread tasks (`task-1776189304150-2vcn87`, `task-1776189458812-e2qae3`, `task-1776189463143-bq5zvi`)
 
-Do **not** recover legacy `oauth-token-refresh`: OAuth refresh is host-owned by `src/oauth-refresher.ts`.
+Do **not** recover legacy `oauth-token-refresh` (duplicate refresh writer). Host owns refresh via `src/oauth-refresher.ts`; seed read-only `oauth-health-check` from `scripts/scheduled-tasks.manifest.json` for Cleo `#sysops` reporting and `ncl oauth-*` repair.
 
 ## v1 note
 

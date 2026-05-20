@@ -67,8 +67,9 @@ Mounted read-only at `/workspace/extra/credentials/<filename>`.
 ### Agent rules
 
 - **Read** these files when a skill expects them (invoice-generator, calendar, etc.).
-- **Do not overwrite** host OAuth token files unless the operator explicitly directs a re-auth flow.
-- If refresh fails or tokens are expired, tell the operator to re-auth on the host (OAuth callback server or provider-specific script). Do not guess refresh tokens.
+- **Do not overwrite** host OAuth token files — the host refresher is the only writer.
+- **Inspect / retry on host:** `ncl oauth-health`, `ncl oauth-refresh-now`, `ncl oauth-refresh-one --id <registry-id>` (requires CLI access; host mutates files).
+- If refresh still fails (`invalid_grant`, missing refresh token), post to `#sysops` and tell the operator to re-auth on the host. Do not guess refresh tokens.
 
 ---
 

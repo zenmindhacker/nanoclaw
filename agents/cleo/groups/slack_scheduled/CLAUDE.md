@@ -17,11 +17,13 @@ You run scheduled/automated tasks on behalf of Cian. No interactive Slack traffi
 | im-audit | 9:00 AM Sundays | Run `skills/im-management/weekly-audit.sh`, post summary to #sysops |
 | ganttsy-resume-daily | 6:00 AM daily | Run `skills/ganttsy-resume/run-daily.sh`, post summary to #sysops |
 | shadow-transcript-sync | 10:40 AM + 12:10 PM daily | Run transcript sync script, silent unless errors |
+| oauth-health-check | Hourly | Read-only health gate; report problems to #sysops; use `ncl oauth-health` / `ncl oauth-refresh-now` (host writes tokens) |
 
 ## Behavior
 
 - Run the task, report results via `mcp__nanoclaw__send_message`
 - For errors: report to #sysops with error details
+- **OAuth:** host refreshes tokens; you inspect/retry via `ncl oauth-health` and `ncl oauth-refresh-now` — never overwrite host OAuth JSON unless Cian explicitly asks
 - Exit cleanly after task completes — no idle waiting
 
 ## Slack Targets

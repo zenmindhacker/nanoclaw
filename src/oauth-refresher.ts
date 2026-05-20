@@ -74,6 +74,18 @@ export interface TokenHealth {
   error?: string;
 }
 
+export interface RefreshResult {
+  id: string;
+  account: string;
+  status: 'refreshed' | 'skipped' | 'failed';
+  message?: string;
+}
+
+export interface RefreshOptions {
+  /** When true, refresh tokens even if still inside the proactive buffer window. */
+  force?: boolean;
+}
+
 let refreshInterval: NodeJS.Timeout | null = null;
 let alertCallback: ((message: string) => void) | null = null;
 
@@ -230,62 +242,101 @@ async function refreshToken(
   return updated;
 }
 
-async function checkAndRefreshAll(): Promise<void> {
+async function refreshRegistryEntry(
+  entry: OAuthRegistryEntry,
+  opts: RefreshOptions = {},
+): Promise<RefreshResult> {
+  const nowSec = Math.floor(Date.now() / 1000);
+  const token = loadTokenFile(entry.token_file);
+  if (!token) {
+    log.warn('OAuth token file not found; skipping', { id: entry.id, tokenFile: entry.token_file });
+    return { id: entry.id, account: entry.account, status: 'failed', message: 'Token file not found' };
+  }
+  if (!token.refresh_token) {
+    log.warn('OAuth token has no refresh_token; skipping', { id: entry.id, tokenFile: entry.token_file });
+    const message = `OAuth token *${entry.id}* (${entry.account}) has no refresh token and needs re-auth.`;
+    emitAlert(message);
+    return { id: entry.id, account: entry.account, status: 'failed', message };
+  }
+
+  const remainingSec = getExpiresAtSec(token) - nowSec;
+  if (!opts.force && remainingSec >= REFRESH_BUFFER_SEC) {
+    log.debug('OAuth token still valid', { id: entry.id, remainingMin: Math.round(remainingSec / 60) });
+    return {
+      id: entry.id,
+      account: entry.account,
+      status: 'skipped',
+      message: `Still valid for ${Math.round(remainingSec / 60)}m`,
+    };
+  }
+
+  const creds = loadClientCredentials(entry.client_file);
+  if (!creds) {
+    log.error('OAuth client credentials not found', { id: entry.id, clientFile: entry.client_file });
+    const message = `OAuth client credentials missing for *${entry.id}* (${entry.account}).`;
+    emitAlert(message);
+    return { id: entry.id, account: entry.account, status: 'failed', message };
+  }
+
+  log.info('OAuth token expiring soon; refreshing', { id: entry.id, account: entry.account, remainingSec });
+  try {
+    const updated = await refreshToken(entry, token, creds);
+    if (!updated) {
+      const message = `OAuth refresh failed for *${entry.id}* (${entry.account}). Token may need manual re-auth; check ${entry.token_file}.`;
+      emitAlert(message);
+      return { id: entry.id, account: entry.account, status: 'failed', message };
+    }
+
+    saveTokenFile(entry.token_file, updated);
+    log.info('OAuth token refreshed', {
+      id: entry.id,
+      account: entry.account,
+      expiresInMin: Math.round((getExpiresAtSec(updated) - nowSec) / 60),
+    });
+    return {
+      id: entry.id,
+      account: entry.account,
+      status: 'refreshed',
+      message: `Expires in ${Math.round((getExpiresAtSec(updated) - nowSec) / 60)}m`,
+    };
+  } catch (err) {
+    log.error('OAuth token refresh error', { id: entry.id, err });
+    const message = `OAuth refresh error for *${entry.id}* (${entry.account}): ${err instanceof Error ? err.message : String(err)}`;
+    emitAlert(message);
+    return { id: entry.id, account: entry.account, status: 'failed', message };
+  }
+}
+
+async function checkAndRefreshAll(opts: RefreshOptions = {}): Promise<RefreshResult[]> {
   const registry = loadRegistry();
   if (!registry) {
     log.debug('OAuth registry not found; skipping refresh cycle');
-    return;
+    return [];
   }
 
-  const nowSec = Math.floor(Date.now() / 1000);
+  const results: RefreshResult[] = [];
   for (const entry of registry.tokens) {
-    const token = loadTokenFile(entry.token_file);
-    if (!token) {
-      log.warn('OAuth token file not found; skipping', { id: entry.id, tokenFile: entry.token_file });
-      continue;
-    }
-    if (!token.refresh_token) {
-      log.warn('OAuth token has no refresh_token; skipping', { id: entry.id, tokenFile: entry.token_file });
-      emitAlert(`OAuth token *${entry.id}* (${entry.account}) has no refresh token and needs re-auth.`);
-      continue;
-    }
-
-    const remainingSec = getExpiresAtSec(token) - nowSec;
-    if (remainingSec >= REFRESH_BUFFER_SEC) {
-      log.debug('OAuth token still valid', { id: entry.id, remainingMin: Math.round(remainingSec / 60) });
-      continue;
-    }
-
-    const creds = loadClientCredentials(entry.client_file);
-    if (!creds) {
-      log.error('OAuth client credentials not found', { id: entry.id, clientFile: entry.client_file });
-      emitAlert(`OAuth client credentials missing for *${entry.id}* (${entry.account}).`);
-      continue;
-    }
-
-    log.info('OAuth token expiring soon; refreshing', { id: entry.id, account: entry.account, remainingSec });
-    try {
-      const updated = await refreshToken(entry, token, creds);
-      if (!updated) {
-        emitAlert(
-          `OAuth refresh failed for *${entry.id}* (${entry.account}). Token may need manual re-auth; check ${entry.token_file}.`,
-        );
-        continue;
-      }
-
-      saveTokenFile(entry.token_file, updated);
-      log.info('OAuth token refreshed', {
-        id: entry.id,
-        account: entry.account,
-        expiresInMin: Math.round((getExpiresAtSec(updated) - nowSec) / 60),
-      });
-    } catch (err) {
-      log.error('OAuth token refresh error', { id: entry.id, err });
-      emitAlert(
-        `OAuth refresh error for *${entry.id}* (${entry.account}): ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
+    results.push(await refreshRegistryEntry(entry, opts));
   }
+  return results;
+}
+
+/** Force-refresh all registry tokens that are due or expired. */
+export async function refreshAllNow(): Promise<RefreshResult[]> {
+  return checkAndRefreshAll({ force: true });
+}
+
+/** Force-refresh a single registry token by id. */
+export async function refreshTokenById(id: string): Promise<RefreshResult> {
+  const registry = loadRegistry();
+  if (!registry) {
+    throw new Error('OAuth registry not found');
+  }
+  const entry = registry.tokens.find((t) => t.id === id);
+  if (!entry) {
+    throw new Error(`OAuth token id not found: ${id}`);
+  }
+  return refreshRegistryEntry(entry, { force: true });
 }
 
 export function getTokenHealth(): TokenHealth[] {
@@ -336,6 +387,11 @@ export function startOAuthRefresher(opts?: { onAlert?: (message: string) => void
       log.error('OAuth refresh error', { err });
     });
   }, CHECK_INTERVAL_MS);
+}
+
+/** Run one proactive refresh cycle (respects buffer window). */
+export async function runRefreshCycle(): Promise<RefreshResult[]> {
+  return checkAndRefreshAll();
 }
 
 export function stopOAuthRefresher(): void {

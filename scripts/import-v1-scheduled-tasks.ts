@@ -51,8 +51,8 @@ interface V1Task {
 }
 
 const SKIP_TASK_IDS = new Set([
-  // Host-side src/oauth-refresher.ts now owns refresh + error logging. Keeping
-  // the legacy scheduled health check would run a second refresh path.
+  // Host src/oauth-refresher.ts owns refresh. Legacy task wrote tokens from container.
+  // Use oauth-health-check in scripts/scheduled-tasks.manifest.json instead.
   'oauth-token-refresh',
 ]);
 
