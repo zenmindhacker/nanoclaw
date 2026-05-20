@@ -3,16 +3,15 @@
  * and confirms with LLM when a trigger is found.
  */
 
-import { writeFileSync } from 'fs';
-import { execSync } from 'child_process';
-import { CONFIDENTIALITY_TRIGGERS } from './config.js';
+import { CONFIDENTIALITY_TRIGGERS, LLM_CONFIDENTIALITY_MODEL, LLM_CONFIDENTIALITY_MAX_TOKENS } from './config.js';
+import { completeLlmChat } from './opencode-go.js';
 import { logWarn } from './logger.js';
 
 export function hasConfidentialityTrigger(text: string): boolean {
   return CONFIDENTIALITY_TRIGGERS.test(text);
 }
 
-export function confirmConfidentialWithLLM(transcript: string, title: string): boolean {
+export async function confirmConfidentialWithLLM(transcript: string, title: string): Promise<boolean> {
   const sample = transcript.slice(0, 2000);
   const prompt = `Analyze this transcript excerpt. Did someone explicitly request confidentiality or ask not to record/share this conversation?
 
@@ -22,16 +21,18 @@ ${sample}
 
 Respond with ONLY one word: CONFIDENTIAL or OK`;
 
-  const tmpFile = '/tmp/.confidential-check-prompt.txt';
-
   try {
-    writeFileSync(tmpFile, prompt);
-    const cmd = `claude --print "$(cat '${tmpFile}')" 2>&1`;
-    const result = execSync(cmd, { encoding: 'utf-8', timeout: 60000, shell: '/bin/bash' }).trim();
+    const result = await completeLlmChat(prompt, {
+      model: LLM_CONFIDENTIALITY_MODEL,
+      maxTokens: LLM_CONFIDENTIALITY_MAX_TOKENS,
+      temperature: 0,
+    });
+    if (!result) return false;
     const lastLine = result.split('\n').pop() || '';
     return lastLine.toUpperCase().includes('CONFIDENTIAL');
-  } catch (error: any) {
-    logWarn(`[confidential] LLM check failed, defaulting to OK: ${error.message}`);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    logWarn(`[confidential] LLM check failed, defaulting to OK: ${message}`);
     return false;
   }
 }

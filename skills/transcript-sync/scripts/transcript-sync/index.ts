@@ -31,6 +31,7 @@ export * from './calendar.js';
 export * from './matcher.js';
 export * from './classification.js';
 export * from './confidentiality.js';
+export * from './opencode-go.js';
 export * from './dedup.js';
 export * from './pending-actions.js';
 export * from './sources/shadow.js';

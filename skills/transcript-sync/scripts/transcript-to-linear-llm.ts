@@ -1,8 +1,9 @@
 #!/usr/bin/env node
-import { readFileSync, existsSync, writeFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { join, basename } from 'path';
 import { execSync } from 'child_process';
-import { tmpdir } from 'os';
+import { LLM_ACTIONS_MODEL, LLM_ACTIONS_MAX_TOKENS } from './transcript-sync/config.js';
+import { completeLlmChat, extractAssistantContent } from './transcript-sync/opencode-go.js';
 
 const SKILLS_ROOT = process.env.SKILLS_ROOT || '/workspace/extra/skills';
 const ROUTER = join(SKILLS_ROOT, 'linear/scripts/linear-router.sh');
@@ -176,8 +177,7 @@ async function extractActionsWithLLM(transcript: string, org: string): Promise<A
   const projectConfig = PROJECT_ROUTING[org] || PROJECT_ROUTING['ctci'];
   const projectsStr = projectConfig.projects.map(p => `"${p}"`).join(', ');
   
-  // Opus via claude --task has 200k context, so we can send full transcripts
-  // Limit to 150k chars (~37k tokens) to leave room for prompt + response
+  // DeepSeek Pro via OpenCode Go — 1M context; cap input for response headroom
   const sample = transcript.slice(0, 150000);
 
   const prompt = `Extract action items from this meeting transcript. Focus on commitments, tasks, and follow-ups.
@@ -215,32 +215,24 @@ Return ONLY valid JSON, no markdown wrapping:
 If no action items found, return: {"actions":[]}`;
 
   try {
-    // Write prompt to temp file to avoid shell escaping issues with large transcripts
-    const promptFile = join(tmpdir(), `transcript-prompt-${Date.now()}.txt`);
-    writeFileSync(promptFile, prompt);
+    const raw = await completeLlmChat(prompt, {
+      model: LLM_ACTIONS_MODEL,
+      maxTokens: LLM_ACTIONS_MAX_TOKENS,
+      temperature: 0.2,
+    });
 
-    // Use claude -p (Opus via Claude Max subscription — no extra cost)
-    const content = execSync(
-      `cat "${promptFile}" | claude -p --output-format text --model opus --no-session-persistence`,
-      { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'], timeout: 180000 },
-    );
-
-    // Clean up temp file
-    try { execSync(`rm "${promptFile}"`, { stdio: 'ignore' }); } catch {}
-
-    if (!content) {
-      log('No content from claude -p');
+    if (!raw) {
+      log('No content from OpenCode Go');
       return [];
     }
 
-    // Extract JSON from response
+    const content = extractAssistantContent(raw);
     const jsonMatch = content.match(/\{[\s\S]*"actions"[\s\S]*\}/);
     if (!jsonMatch) {
-      log('No JSON found in claude response');
+      log('No JSON found in LLM response');
       return [];
     }
 
-    // Sanitize control characters inside JSON strings
     const sanitized = jsonMatch[0]
       .replace(/[\x00-\x1F\x7F]/g, (char) => {
         if (char === '\n') return '\\n';

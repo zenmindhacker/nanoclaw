@@ -235,7 +235,7 @@ async function processMeeting(
   // Confidentiality check
   if (hasConfidentialityTrigger(transcriptText)) {
     logInfo(`[confidential] Trigger found in ${meeting.source}=${meeting.id}, checking with LLM...`);
-    if (confirmConfidentialWithLLM(transcriptText, title)) {
+    if (await confirmConfidentialWithLLM(transcriptText, title)) {
       logInfo(`[confidential] ${meeting.source}=${meeting.id} confirmed confidential, skipping`);
       if (meeting.source === 'shadow') {
         state.skippedConvs = state.skippedConvs || [];

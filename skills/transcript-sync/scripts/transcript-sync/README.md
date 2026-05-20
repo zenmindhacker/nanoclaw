@@ -5,19 +5,13 @@
 ## Architecture
 
 ### Scheduling
-- **Manager**: OpenClaw cron (pure openclaw approach)
-- **Job ID**: `e6945d83-1028-40da-b390-9c5b42730312`
-- **Schedule**: Every 10 minutes
+- **Manager**: NanoClaw scheduled task on `slack_scheduled` (v2)
+- **Pre-script**: `scripts/scheduled/transcript-sync-gate.sh`
 - **Command**: `tsx transcript-sync.ts --limit 50 --calendar-fallback ...`
 
-View status:
+Trigger manually (inside container or with matching env):
 ```bash
-openclaw cron list
-```
-
-Trigger manually:
-```bash
-openclaw cron run e6945d83-1028-40da-b390-9c5b42730312
+cd skills/transcript-sync/scripts && tsx transcript-sync.ts --limit 50
 ```
 
 ### Processing Flow
@@ -25,7 +19,7 @@ openclaw cron run e6945d83-1028-40da-b390-9c5b42730312
 2. **Deduplicate** by gcal_event_id and time windows
 3. **Classify** meetings by attendees/content
 4. **Route** to appropriate repos
-5. **Spawn coaching analysis** for coaching transcripts (via openclaw cron one-shot jobs)
+5. **Queue coaching analysis** for coaching transcripts (logged for manual or main-group trigger in v2)
 6. **Validate** previous runs for incomplete analysis
 7. **Update state** watermarks
 
@@ -51,36 +45,17 @@ On each run, `validateCoachingAnalysis()` checks that transcripts marked as proc
 
 Missing files trigger automatic re-analysis.
 
-### Agent Spawning (Hybrid Model Approach)
-Coaching analysis uses **two-tier model strategy** for cost optimization:
+### LLM models (OpenCode Go)
+| Task | Default model | Env override |
+|------|---------------|--------------|
+| Calendar matcher (Stage 3) | `opencode-go/deepseek-v4-flash` | `TRANSCRIPT_SYNC_LLM_MODEL`, `OPENCODE_SMALL_MODEL` |
+| Confidentiality check | `opencode-go/deepseek-v4-flash` | `TRANSCRIPT_CONFIDENTIALITY_LLM_MODEL` |
+| Linear action extraction | `opencode-go/deepseek-v4-pro` | `TRANSCRIPT_ACTIONS_LLM_MODEL`, `OPENCODE_LONG_MODEL` |
 
-**Tier 1: Orchestrator (MiniMax M2.5)**
-- Runs via `openclaw cron add --at now --agent main --model minimax`
-- Reads transcripts and skill docs
-- Plans the analysis structure
-- Validates outputs
-- Updates processed-transcripts.json
-- **Cost**: ~$0.045 per 50k tokens
+All use `https://opencode.ai/zen/go/v1/chat/completions` with OneCLI-injected credentials in production.
 
-**Tier 2: Writer (Opus 4-6)**
-- Spawned by orchestrator via `claude --task "..." --agent writer`
-- Creates all markdown files (session-insights, methodology, etc.)
-- High-quality analysis and writing
-- **Cost**: Only charged for actual content creation
-
-**Total savings**: ~97% compared to running full session in Opus
-
-Command:
-```bash
-openclaw cron add \
-  --name coaching-analysis-... \
-  --at now \
-  --agent main \
-  --model openrouter/minimax/minimax-m2.5 \
-  --timeout-seconds 600 \
-  --delete-after-run \
-  --message '...'
-```
+### Coaching analysis
+Auto-spawn is disabled in the NanoClaw container. Incomplete coaching transcripts are logged; run analysis via the main Cleo group or manually.
 
 ### Deduplication
 - Cross-source: Same gcal_event_id from different sources

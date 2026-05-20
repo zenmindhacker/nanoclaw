@@ -10,16 +10,19 @@
  *          either a match index or an org classification.
  */
 
-import { existsSync, readFileSync } from 'fs';
 import {
   CALENDAR_WINDOW_MINUTES,
-  OPENROUTER_KEY_PATH,
-  OPENCODE_GO_BASE_URL,
   LLM_CLASSIFIER_MODEL,
   LLM_CLASSIFIER_MAX_TOKENS,
   LLM_TRANSCRIPT_EXCERPT_CHARS,
   LLM_CLASSIFIER_CONFIDENCE_THRESHOLD,
 } from './config.js';
+import {
+  completeLlmChat,
+  extractAssistantContent,
+  getOpenRouterKey,
+  isOpenCodeGoModel,
+} from './opencode-go.js';
 import { logInfo, logWarn, logError, logDebug } from './logger.js';
 import type { CalendarEvent, MatchResult } from './types.js';
 
@@ -101,29 +104,6 @@ const VALID_ORGS = [
   'personal', 'kevin', 'christina', 'mondo-zen', 'testboard',
 ];
 
-function getOpenRouterKey(): string | null {
-  if (!existsSync(OPENROUTER_KEY_PATH)) return null;
-  try {
-    return readFileSync(OPENROUTER_KEY_PATH, 'utf-8').trim();
-  } catch {
-    return null;
-  }
-}
-
-function getOpenCodeApiKey(): string {
-  // In production this value is a placeholder: OneCLI injects the real
-  // OpenCode Go credential for opencode.ai through the configured proxy.
-  return process.env.OPENCODE_API_KEY || process.env.ANTHROPIC_API_KEY || process.env.OPENCODE_PROVIDER || 'opencode-go';
-}
-
-function isOpenCodeGoModel(model: string): boolean {
-  return model.startsWith('opencode-go/');
-}
-
-function openCodeGoModelId(model: string): string {
-  return model.replace(/^opencode-go\//, '');
-}
-
 function buildLLMPrompt(
   transcriptExcerpt: string,
   transcriptTitle: string,
@@ -188,19 +168,16 @@ interface LLMResponse {
 
 async function callLLM(prompt: string): Promise<LLMResponse | null> {
   try {
-    const response = isOpenCodeGoModel(LLM_CLASSIFIER_MODEL)
-      ? await callOpenCodeGo(prompt)
-      : await callOpenRouter(prompt);
-    if (!response) return null;
-
-    if (!response.ok) {
-      const body = await response.text();
-      logError(`[matcher] LLM API error ${response.status}: ${body.slice(0, 200)}`);
+    if (!isOpenCodeGoModel(LLM_CLASSIFIER_MODEL) && !getOpenRouterKey()) {
+      logWarn('[matcher] OpenRouter key not found, LLM classification unavailable');
       return null;
     }
 
-    const data = await response.json() as any;
-    const content = data.choices?.[0]?.message?.content?.trim();
+    const content = await completeLlmChat(prompt, {
+      model: LLM_CLASSIFIER_MODEL,
+      maxTokens: LLM_CLASSIFIER_MAX_TOKENS,
+      temperature: 0,
+    });
     if (!content) {
       logWarn('[matcher] LLM returned empty content');
       return null;
@@ -208,13 +185,7 @@ async function callLLM(prompt: string): Promise<LLMResponse | null> {
 
     logDebug(`[matcher] LLM raw response: ${content}`);
 
-    // Parse JSON from response — handle markdown code fences
-    let jsonStr = content;
-    const fenceMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (fenceMatch) {
-      jsonStr = fenceMatch[1].trim();
-    }
-
+    const jsonStr = extractAssistantContent(content);
     const parsed = JSON.parse(jsonStr) as LLMResponse;
 
     // Validate
@@ -236,45 +207,6 @@ async function callLLM(prompt: string): Promise<LLMResponse | null> {
     logError(`[matcher] LLM call failed: ${err.message}`);
     return null;
   }
-}
-
-async function callOpenCodeGo(prompt: string): Promise<Response> {
-  return fetch(`${OPENCODE_GO_BASE_URL}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${getOpenCodeApiKey()}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: openCodeGoModelId(LLM_CLASSIFIER_MODEL),
-      max_tokens: LLM_CLASSIFIER_MAX_TOKENS,
-      temperature: 0,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  });
-}
-
-async function callOpenRouter(prompt: string): Promise<Response | null> {
-  const apiKey = getOpenRouterKey();
-  if (!apiKey) {
-    logWarn('[matcher] OpenRouter key not found, LLM classification unavailable');
-    return null;
-  }
-
-  return fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://nanoclaw.com',
-    },
-    body: JSON.stringify({
-      model: LLM_CLASSIFIER_MODEL,
-      max_tokens: LLM_CLASSIFIER_MAX_TOKENS,
-      temperature: 0,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  });
 }
 
 /**

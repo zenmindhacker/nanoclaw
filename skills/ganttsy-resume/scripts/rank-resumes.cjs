@@ -10,12 +10,18 @@ const stateDir = process.env.STATE_DIR || path.join(workDir, '.state');
 const targetDir = process.env.TARGET_DIR || path.join(githubRoot, 'ganttsy/ganttsy-strategy/team/designer-resumes');
 const jobPostingPath = process.env.JOB_POSTING || path.join(targetDir, 'JOB-POSTING-Product-Designer.md');
 const evalGridPath = process.env.EVAL_GRID || path.join(targetDir, 'EVALUATION-GRID.md');
-let apiKey = process.env.OPENROUTER_API_KEY;
-if (!apiKey) {
-  const credPath = '/workspace/extra/credentials/openrouter';
-  if (fs.existsSync(credPath)) {
-    apiKey = fs.readFileSync(credPath, 'utf8').trim();
-  }
+const OPENCODE_GO_BASE_URL =
+  process.env.GANTTSY_RESUME_OPENCODE_GO_BASE_URL ||
+  process.env.TRANSCRIPT_SYNC_OPENCODE_GO_BASE_URL ||
+  'https://opencode.ai/zen/go/v1';
+const RESUME_LLM_MODEL = process.env.GANTTSY_RESUME_LLM_MODEL || 'opencode-go/qwen3.6-plus';
+
+function getOpenCodeApiKey() {
+  return process.env.OPENCODE_API_KEY || process.env.ANTHROPIC_API_KEY || process.env.OPENCODE_PROVIDER || 'opencode-go';
+}
+
+function openCodeGoModelId(model) {
+  return model.replace(/^opencode-go\//, '');
 }
 
 if (!fs.existsSync(jobPostingPath)) {
@@ -24,10 +30,6 @@ if (!fs.existsSync(jobPostingPath)) {
 }
 if (!fs.existsSync(candidatesDir)) {
   console.error(`Candidates dir not found: ${candidatesDir}`);
-  process.exit(1);
-}
-if (!apiKey) {
-  console.error('OPENROUTER_API_KEY is required (set env var or create /workspace/extra/credentials/openrouter)');
   process.exit(1);
 }
 fs.mkdirSync(stateDir, { recursive: true });
@@ -114,18 +116,19 @@ async function scoreCandidate(candidate) {
   const prompt = `You are an expert product design hiring evaluator.\n\nEvaluate the candidate against the job posting. Focus on evidence of relevant product design work, UX/UI craft, research, systems thinking, collaboration, and impact.\n\nReturn ONLY valid JSON with this schema (all scores 1-5):\n{\n  "skills": {\n    "UX/UI Craft": { "score": number, "reasoning": "string" },\n    "Design Systems": { "score": number, "reasoning": "string" },\n    "User Research": { "score": number, "reasoning": "string" },\n    "Prototyping": { "score": number, "reasoning": "string" },\n    "AI/ML Products": { "score": number, "reasoning": "string" },\n    "Collaboration": { "score": number, "reasoning": "string" }\n  },\n  "portfolio_quality": { "score": number, "reasoning": "string" },\n  "rate_fit": { "score": number, "reasoning": "string" },\n  "overall_reasoning": "string",\n  "strengths": ["string"],\n  "gaps": ["string"],\n  "notes": "string"\n}\n\nJob posting:\n${jobText}\n\nCandidate resume (markdown):\n${candidate.text.slice(12000)}\n\nCandidate metadata (if available):\n${JSON.stringify(candidate.meta)}`;
 
   const body = {
-    model: 'google/gemini-2.5-flash-lite',
+    model: openCodeGoModelId(RESUME_LLM_MODEL),
     messages: [
       { role: 'system', content: 'You are a precise evaluator who follows the JSON-only response requirement.' },
       { role: 'user', content: prompt }
     ],
-    temperature: 0.2
+    temperature: 0.2,
+    max_tokens: 4096
   };
 
-  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+  const res = await fetch(`${OPENCODE_GO_BASE_URL}/chat/completions`, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${apiKey}`,
+      'Authorization': `Bearer ${getOpenCodeApiKey()}`,
       'Content-Type': 'application/json'
     },
     body: JSON.stringify(body)
@@ -133,7 +136,7 @@ async function scoreCandidate(candidate) {
 
   if (!res.ok) {
     const errText = await res.text();
-    throw new Error(`OpenRouter error (${res.status}): ${errText}`);
+    throw new Error(`OpenCode Go error (${res.status}): ${errText}`);
   }
 
   const data = await res.json();

@@ -47,7 +47,7 @@ export const GANTTSY_WORKSPACE_FOLDER = '1gRFJ45HMM0ebyjqFxmAdlXa-oHklYT0G';
 export const GANTTSY_GOOGLE_TOKEN = `${CREDENTIALS_ROOT}/ganttsy-google-token.json`;
 export const GANTTSY_GOOGLE_OAUTH_CLIENT = `${CREDENTIALS_ROOT}/ganttsy-google-oauth-client.json`;
 
-// OpenRouter (for legacy/fallback LLM action extraction)
+// OpenRouter (legacy fallback when model env is not opencode-go/*)
 export const OPENROUTER_KEY_PATH = `${CREDENTIALS_ROOT}/openrouter`;
 export const OPENCODE_GO_BASE_URL = process.env.TRANSCRIPT_SYNC_OPENCODE_GO_BASE_URL || 'https://opencode.ai/zen/go/v1';
 
@@ -109,6 +109,16 @@ export const LLM_CLASSIFIER_MODEL =
 export const LLM_CLASSIFIER_MAX_TOKENS = 200;
 export const LLM_TRANSCRIPT_EXCERPT_CHARS = 3000;
 export const LLM_CLASSIFIER_CONFIDENCE_THRESHOLD = 0.6;
+
+// Linear action extraction (long transcripts, rich JSON)
+export const LLM_ACTIONS_MODEL =
+  process.env.TRANSCRIPT_ACTIONS_LLM_MODEL || process.env.OPENCODE_LONG_MODEL || 'opencode-go/deepseek-v4-pro';
+export const LLM_ACTIONS_MAX_TOKENS = 8192;
+
+// Confidentiality confirmation (binary classify)
+export const LLM_CONFIDENTIALITY_MODEL =
+  process.env.TRANSCRIPT_CONFIDENTIALITY_LLM_MODEL || process.env.OPENCODE_SMALL_MODEL || 'opencode-go/deepseek-v4-flash';
+export const LLM_CONFIDENTIALITY_MAX_TOKENS = 16;
 
 // IPC for loud failures
 export const IPC_DIR = '/workspace/ipc';
