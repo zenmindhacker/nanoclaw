@@ -8,7 +8,7 @@ Cleo and Silas share one canonical repo (`nanoclaw`). Runtime state stays on eac
 |------|------|-------------------------|
 | Per-agent shared persona | `agents/{cleo\|silas}/groups/global/CLAUDE.md` | `/workspace/global` (read-only) |
 | Active channel / DM group | `agents/{agent}/groups/<folder>/` | `/workspace/agent` |
-| Channel-specific notes (survive compose) | `.../<folder>/CLAUDE.local.md` | merged into composed `CLAUDE.md` |
+| Channel-specific notes (survive compose) | `.../<folder>/CLAUDE.local.md` | merged into composed `CLAUDE.md` (Cleo/Silas: `git add -f` — tracked in this monorepo) |
 | Composed agent instructions | `.../<folder>/CLAUDE.md` | regenerated each spawn — **do not edit for durable content** |
 | Reusable host skills | `skills/<name>/` | `/workspace/extra/skills` (via mount allowlist) |
 | Container runtime skills | `container/skills/<name>/` | `/app/skills` + symlinks |
