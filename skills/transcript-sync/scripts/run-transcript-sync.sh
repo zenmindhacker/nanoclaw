@@ -71,7 +71,31 @@ if [[ ! -f "$GITHUB_TOKEN_FILE" ]]; then
   echo "WARNING: No GitHub token at $GITHUB_TOKEN_FILE — skipping git push" >&2
   exit 0
 fi
-TOKEN=$(cat "$GITHUB_TOKEN_FILE")
+export GITHUB_TOKEN_FILE
+
+ASKPASS_SCRIPT=$(mktemp)
+cat > "$ASKPASS_SCRIPT" <<'EOF'
+#!/usr/bin/env bash
+case "$1" in
+  *Username*) printf '%s\n' 'x-access-token' ;;
+  *Password*) tr -d '\r\n' < "$GITHUB_TOKEN_FILE" ;;
+  *) printf '\n' ;;
+esac
+EOF
+chmod 700 "$ASKPASS_SCRIPT"
+trap 'rm -f "$ASKPASS_SCRIPT"' EXIT
+export GIT_ASKPASS="$ASKPASS_SCRIPT"
+export GIT_TERMINAL_PROMPT=0
+
+clean_github_remote_url() {
+  python3 - "$1" <<'PY'
+import re
+import sys
+
+url = sys.argv[1]
+print(re.sub(r'^https://[^/@]+(?::[^/@]*)?@github\.com/', 'https://github.com/', url))
+PY
+}
 
 # Group written files by git repo and commit only those specific files
 declare -A REPO_FILES
@@ -92,12 +116,18 @@ for repo_dir in "${!REPO_FILES[@]}"; do
   cd "$repo_dir"
   label=$(basename "$repo_dir")
 
+  REMOTE_URL=$(git remote get-url origin 2>/dev/null) || REMOTE_URL=""
+  if [[ -n "$REMOTE_URL" ]]; then
+    CLEAN_REMOTE_URL=$(clean_github_remote_url "$REMOTE_URL")
+    if [[ "$CLEAN_REMOTE_URL" != "$REMOTE_URL" ]]; then
+      git remote set-url origin "$CLEAN_REMOTE_URL"
+    fi
+  fi
+
   # Pull latest before committing to avoid divergence
-  REMOTE_URL_PULL=$(git remote get-url origin 2>/dev/null) || true
-  if [[ -n "$REMOTE_URL_PULL" ]] && [[ -f "$GITHUB_TOKEN_FILE" ]]; then
-    TOKEN_PULL=$(cat "$GITHUB_TOKEN_FILE")
-    AUTHED_URL_PULL=$(echo "$REMOTE_URL_PULL" | sed "s|https://|https://x-access-token:${TOKEN_PULL}@|")
-    git pull --rebase "$AUTHED_URL_PULL" 2>&1 | tail -1 >&2 || echo "Warning: git pull failed for $label, proceeding anyway" >&2
+  BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo HEAD)
+  if [[ "$BRANCH" != "HEAD" ]]; then
+    git pull --rebase origin "$BRANCH" 2>&1 | tail -1 >&2 || echo "Warning: git pull failed for $label, proceeding anyway" >&2
   fi
 
   # Stage only the specific files transcript-sync wrote
@@ -112,9 +142,11 @@ for repo_dir in "${!REPO_FILES[@]}"; do
 
   git commit -m "Update transcripts [automated]" || continue
 
-  REMOTE_URL=$(git remote get-url origin 2>/dev/null) || continue
-  AUTHED_URL=$(echo "$REMOTE_URL" | sed "s|https://|https://x-access-token:${TOKEN}@|")
-  git push "$AUTHED_URL" && echo "Pushed: $label" >&2 || echo "Push failed for: $label" >&2
+  if [[ "$BRANCH" != "HEAD" ]]; then
+    git push origin "$BRANCH" && echo "Pushed: $label" >&2 || echo "Push failed for: $label" >&2
+  else
+    git push origin HEAD && echo "Pushed: $label" >&2 || echo "Push failed for: $label" >&2
+  fi
 done
 
 echo "Done." >&2

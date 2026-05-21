@@ -15,6 +15,7 @@ import {
   CONTAINER_INSTALL_LABEL,
   DATA_DIR,
   GROUPS_DIR,
+  LOGS_DIR,
   NANOCLAW_DEFAULT_PROVIDER,
   ONECLI_API_KEY,
   ONECLI_URL,
@@ -52,6 +53,41 @@ const onecli = new OneCLI({ url: ONECLI_URL, apiKey: ONECLI_API_KEY });
 
 /** Active containers tracked by session ID. */
 const activeContainers = new Map<string, { process: ChildProcess; containerName: string }>();
+
+function safeLogName(value: string): string {
+  return value.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'unknown';
+}
+
+function createContainerLog(
+  agentGroup: AgentGroup,
+  session: Session,
+  containerName: string,
+): {
+  path: string;
+  stream: fs.WriteStream;
+} {
+  const containerLogsDir = path.join(LOGS_DIR, 'containers');
+  fs.mkdirSync(containerLogsDir, { recursive: true });
+
+  const ts = new Date().toISOString().replace(/[:.]/g, '-');
+  const file = `${ts}_${safeLogName(agentGroup.folder)}_${safeLogName(session.id)}.log`;
+  const logPath = path.join(containerLogsDir, file);
+  const stream = fs.createWriteStream(logPath, { flags: 'a' });
+
+  stream.write(
+    [
+      `timestamp=${new Date().toISOString()}`,
+      `agentGroupId=${agentGroup.id}`,
+      `agentGroupName=${agentGroup.name}`,
+      `agentGroupFolder=${agentGroup.folder}`,
+      `sessionId=${session.id}`,
+      `containerName=${containerName}`,
+      '',
+    ].join('\n'),
+  );
+
+  return { path: logPath, stream };
+}
 
 /**
  * In-flight wake promises, keyed by session id. Deduplicates concurrent
@@ -147,7 +183,14 @@ async function spawnContainer(session: Session): Promise<void> {
     agentIdentifier,
   );
 
-  log.info('Spawning container', { sessionId: session.id, agentGroup: agentGroup.name, containerName });
+  const containerLog = createContainerLog(agentGroup, session, containerName);
+
+  log.info('Spawning container', {
+    sessionId: session.id,
+    agentGroup: agentGroup.name,
+    containerName,
+    logFile: containerLog.path,
+  });
 
   // Clear any orphan heartbeat from a previous container instance — the
   // sweep's ceiling check treats a missing file as "fresh spawn, give grace"
@@ -160,15 +203,18 @@ async function spawnContainer(session: Session): Promise<void> {
   activeContainers.set(session.id, { process: container, containerName });
   markContainerRunning(session.id);
 
-  // Log stderr
+  // Persist both streams centrally. Stderr is also mirrored into the main log
+  // at debug level for live troubleshooting without losing stdout details.
   container.stderr?.on('data', (data) => {
+    containerLog.stream.write(`[stderr] ${data.toString()}`);
     for (const line of data.toString().trim().split('\n')) {
       if (line) log.debug(line, { container: agentGroup.folder });
     }
   });
 
-  // stdout is unused in v2 (all IO is via session DB)
-  container.stdout?.on('data', () => {});
+  container.stdout?.on('data', (data) => {
+    containerLog.stream.write(`[stdout] ${data.toString()}`);
+  });
 
   // No host-side idle timeout. Stale/stuck detection is driven by the host
   // sweep reading heartbeat mtime + processing_ack claim age + container_state
@@ -179,14 +225,16 @@ async function spawnContainer(session: Session): Promise<void> {
     activeContainers.delete(session.id);
     markContainerStopped(session.id);
     stopTypingRefresh(session.id);
-    log.info('Container exited', { sessionId: session.id, code, containerName });
+    containerLog.stream.end(`\nexitCode=${code}\nendedAt=${new Date().toISOString()}\n`);
+    log.info('Container exited', { sessionId: session.id, code, containerName, logFile: containerLog.path });
   });
 
   container.on('error', (err) => {
     activeContainers.delete(session.id);
     markContainerStopped(session.id);
     stopTypingRefresh(session.id);
-    log.error('Container spawn error', { sessionId: session.id, err });
+    containerLog.stream.end(`\nspawnError=${err.message}\nendedAt=${new Date().toISOString()}\n`);
+    log.error('Container spawn error', { sessionId: session.id, err, logFile: containerLog.path });
   });
 }
 

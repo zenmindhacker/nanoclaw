@@ -326,7 +326,7 @@ All bind-mounted paths must be under the workspace directory. Check:
 - Has the empty `.env` shadow file been created?
 
 ### Agent containers can't reach Anthropic API
-Verify proxy env vars are forwarded to agent containers. Check container logs for `HTTP_PROXY=http://host.docker.internal:3128`.
+Verify proxy env vars are forwarded to agent containers. Check `logs/containers/*.log` and host `logFile` fields for the relevant container run.
 
 ### WhatsApp error 405
 The version fetch is returning a stale version. Make sure the proxy-aware `fetchWaVersionViaProxy` patch is applied — it fetches `sw.js` through `HttpsProxyAgent` and parses `client_revision`.

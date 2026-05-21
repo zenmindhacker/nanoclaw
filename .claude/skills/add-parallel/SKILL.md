@@ -267,7 +267,7 @@ Look for: `Parallel AI MCP servers configured`
 **Container hangs or times out:**
 - Check that `type: 'http'` is specified in MCP server config
 - Verify API key is correct in .env
-- Check container logs: `cat groups/main/logs/container-*.log | tail -50`
+- Check container logs: `ls -t logs/containers/*.log | head -1 | xargs tail -50`
 
 **MCP servers not loading:**
 - Ensure PARALLEL_API_KEY is in .env

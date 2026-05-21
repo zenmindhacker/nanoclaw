@@ -32,7 +32,7 @@ src/container-runner.ts               container/agent-runner/
 |-----|----------|---------|
 | **Main app logs** | `logs/nanoclaw.log` | Host-side WhatsApp, routing, container spawning |
 | **Main app errors** | `logs/nanoclaw.error.log` | Host-side errors |
-| **Container run logs** | `groups/{folder}/logs/container-*.log` | Per-run: input, mounts, stderr, stdout |
+| **Container run logs** | `logs/containers/*.log` | Per-run container stderr/stdout |
 | **Claude sessions** | `~/.claude/projects/` | Claude Code session history |
 
 ## Enabling Debug Logging
@@ -102,7 +102,7 @@ grep "Channel adapter started" logs/nanoclaw.log | tail -10
 
 ### 2. "Claude Code process exited with code 1"
 
-**Check the container log file** in `groups/{folder}/logs/container-*.log`
+**Check the container log file** in `logs/containers/*.log`. The host also includes `logFile` on container spawn/exit/error entries in `logs/nanoclaw.log` and `logs/nanoclaw.error.log`.
 
 Common causes:
 
@@ -384,7 +384,7 @@ echo -e "\n6. Groups directory?"
 ls -la groups/ 2>/dev/null || echo "MISSING - run setup"
 
 echo -e "\n7. Recent container logs?"
-ls -t groups/*/logs/container-*.log 2>/dev/null | head -3 || echo "No container logs yet"
+ls -t logs/containers/*.log 2>/dev/null | head -3 || echo "No container logs yet"
 
 echo -e "\n8. Session continuity working?"
 SESSIONS=$(grep "Session initialized" logs/nanoclaw.log 2>/dev/null | tail -5 | awk '{print $NF}' | sort -u | wc -l)

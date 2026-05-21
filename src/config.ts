@@ -34,6 +34,9 @@ export const GROUPS_DIR = process.env.GROUPS_DIR
 export const DATA_DIR = process.env.DATA_DIR
   ? path.resolve(PROJECT_ROOT, process.env.DATA_DIR)
   : path.resolve(PROJECT_ROOT, 'data');
+export const LOGS_DIR = process.env.LOGS_DIR
+  ? path.resolve(PROJECT_ROOT, process.env.LOGS_DIR)
+  : path.resolve(PROJECT_ROOT, 'logs');
 
 // Per-checkout image tag so two installs on the same host don't share
 // `nanoclaw-agent:latest` and clobber each other on rebuild.

@@ -315,8 +315,8 @@ nanoclaw/
 │
 ├── logs/                          # Runtime logs (gitignored)
 │   ├── nanoclaw.log               # Host stdout
-│   └── nanoclaw.error.log         # Host stderr
-│   # Note: Per-container logs are in groups/{folder}/logs/container-*.log
+│   ├── nanoclaw.error.log         # Host stderr
+│   └── containers/                # Per-run container stderr/stdout logs
 │
 └── launchd/
     └── com.nanoclaw.plist         # macOS service configuration

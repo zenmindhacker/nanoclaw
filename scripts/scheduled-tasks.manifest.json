@@ -4,7 +4,7 @@
       "id": "oauth-health-check",
       "agentFolder": "slack_scheduled",
       "recurrence": "0 */1 * * *",
-      "prompt": "OAuth health check (read-only). The host process owns token refresh — do not edit files under /workspace/extra/credentials/.\n\n1. Run `ncl oauth-health` and review all tokens.\n2. If scriptOutput shows expired/errors, or any token has status expired/expiring/error, or expiresInMin <= 10:\n   - Post a concise summary to #sysops (slack:C07F195GB96).\n   - Run `ncl oauth-refresh-now` and include results in your sysops message.\n   - If refresh still fails, tell Cian which token needs manual re-auth and the token_file from the registry.\n3. If all tokens are healthy, exit silently — do not post to #sysops.",
+      "prompt": "OAuth health check (read-only). The host process owns token refresh every 30 minutes — do not edit files under /workspace/extra/credentials/.\n\n1. Run `ncl oauth-health` and review all tokens.\n2. Post to #sysops (slack:C07F195GB96) only when scriptOutput shows expired/errors, any token has status expired or error, or `ncl oauth-refresh-now` returns failed for any token. Do not alert for status expiring or expiresInMin alone — Xero tokens are short-lived and the host refreshes them proactively.\n3. If you post, run `ncl oauth-refresh-now` first and include results. If refresh still fails, name the token id and token_file for manual re-auth.\n4. If all tokens are ok or only expiring, exit silently.",
       "script": "bash /workspace/agent/oauth-health-gate.sh"
     },
     {
