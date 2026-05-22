@@ -158,6 +158,15 @@ async function main(): Promise<void> {
         log.warn('No adapter for channel type', { channelType });
         return;
       }
+      // Debug: log every delivery to sysops with caller stack to trace 401 source
+      if (platformId.includes('C07F195GB96')) {
+        let textSnippet = '';
+        try {
+          textSnippet = (JSON.parse(content).text ?? '').slice(0, 120);
+        } catch { /* ignore */ }
+        const stack = new Error().stack?.split('\n').slice(2, 6).map((l) => l.trim()).join(' | ') ?? '';
+        log.info('Sysops delivery', { platformId, kind, textSnippet, stack });
+      }
       return adapter.deliver(platformId, threadId, { kind, content: JSON.parse(content), files });
     },
     async setTyping(channelType: string, platformId: string, threadId: string | null): Promise<void> {

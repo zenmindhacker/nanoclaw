@@ -26,6 +26,8 @@ export async function deliverOAuthAlert(message: string): Promise<void> {
   }
 
   const { channelType, platformId } = parseSlackTarget(OAUTH_ALERT_SLACK_CHANNEL);
+  const stack = new Error().stack?.split('\n').slice(2, 5).map((l) => l.trim()).join(' | ') ?? '';
+  log.info('deliverOAuthAlert called', { messageSnippet: message.slice(0, 80), stack });
   try {
     await adapter.deliver(channelType, platformId, null, 'chat-sdk', JSON.stringify({ text: `🔐 OAuth: ${message}` }));
     log.info('OAuth alert delivered', { channelType, platformId });
