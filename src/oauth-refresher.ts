@@ -15,8 +15,11 @@ const CRED_DIR = path.join(os.homedir(), '.config', 'nanoclaw', 'credentials', '
 const REGISTRY_PATH = path.join(CRED_DIR, 'oauth-registry.json');
 
 // Must exceed CHECK_INTERVAL so short-lived tokens cannot expire between cycles.
-const REFRESH_BUFFER_SEC = 35 * 60;
-const CHECK_INTERVAL_MS = 30 * 60 * 1000;
+// Xero tokens have a 30-minute TTL; 15-minute checks with a 25-minute buffer
+// ensures xero is always refreshed ~15 minutes before expiry rather than
+// racing to refresh at exactly the expiry boundary.
+const REFRESH_BUFFER_SEC = 25 * 60;
+const CHECK_INTERVAL_MS = 15 * 60 * 1000;
 
 type AuthMethod = 'post_body' | 'basic_auth';
 type Provider = 'google' | 'xero' | string;
