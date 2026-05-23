@@ -10,6 +10,7 @@ import fs from 'fs';
 import path from 'path';
 
 import Database from 'better-sqlite3';
+import { CronExpressionParser } from 'cron-parser';
 
 import { DATA_DIR } from '../src/config.js';
 import { initDb, closeDb } from '../src/db/connection.js';
@@ -27,21 +28,7 @@ interface ManifestTask {
 }
 
 function nextCronRunUtc(cron: string): string {
-  // Daily at HH:MM UTC — manifest uses "0 11 * * *" style (minute hour dom month dow)
-  const parts = cron.trim().split(/\s+/);
-  if (parts.length < 5) return new Date().toISOString();
-  const minute = parseInt(parts[0], 10);
-  const hour = parseInt(parts[1], 10);
-  if (Number.isNaN(minute) || Number.isNaN(hour)) return new Date().toISOString();
-
-  const now = new Date();
-  const next = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), hour, minute, 0),
-  );
-  if (next <= now) {
-    next.setUTCDate(next.getUTCDate() + 1);
-  }
-  return next.toISOString();
+  return CronExpressionParser.parse(cron, { tz: 'UTC' }).next().toISOString();
 }
 
 function findSessionForAgent(agentGroupId: string): string | null {

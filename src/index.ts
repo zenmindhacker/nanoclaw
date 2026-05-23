@@ -163,8 +163,15 @@ async function main(): Promise<void> {
         let textSnippet = '';
         try {
           textSnippet = (JSON.parse(content).text ?? '').slice(0, 120);
-        } catch { /* ignore */ }
-        const stack = new Error().stack?.split('\n').slice(2, 6).map((l) => l.trim()).join(' | ') ?? '';
+        } catch {
+          /* ignore */
+        }
+        const stack =
+          new Error().stack
+            ?.split('\n')
+            .slice(2, 6)
+            .map((l) => l.trim())
+            .join(' | ') ?? '';
         log.info('Sysops delivery', { platformId, kind, textSnippet, stack });
       }
       return adapter.deliver(platformId, threadId, { kind, content: JSON.parse(content), files });

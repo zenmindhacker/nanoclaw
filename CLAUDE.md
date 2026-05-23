@@ -23,6 +23,12 @@ The host is a single Node process that orchestrates per-session agent containers
 
 **Everything is a message.** There is no IPC, no file watcher, no stdin piping between host and container. The two session DBs are the sole IO surface.
 
+## Find the NanoClaw Way First
+
+Before changing state, adding operational behavior, or repairing production data, look for the established NanoClaw path first. Check relevant skills in `.claude/skills/`, docs, `ncl` commands, scripts, MCP tools, and module APIs before inventing a one-off approach.
+
+Prefer the highest-level maintained interface that exists: skills for installed capabilities, `ncl` for admin operations, scheduling MCP/tools or `src/modules/scheduling/*` for tasks, migration/import scripts for data moves, and DB helpers for direct DB writes. Treat raw SQLite edits, ad-hoc shell patches, and hand-built rows as last resorts; if you use one, explain why no higher-level path fits and record enough detail to replace it with the proper path later.
+
 ## Entity Model
 
 ```
