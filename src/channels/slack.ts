@@ -12,7 +12,10 @@ import { createChatSdkBridge } from './chat-sdk-bridge.js';
 import { registerChannelAdapter } from './channel-registry.js';
 
 let slackHttpTraceInstalled = false;
-const SLACK_STATUS_REFRESH_MS = 90_000;
+/** How long each assistant status pulse stays visible before we clear it. */
+const SLACK_STATUS_VISIBLE_MS = 5_000;
+/** Minimum gap between status pulses while the agent is still working. */
+const SLACK_STATUS_REFRESH_MS = 45_000;
 
 function decodeSlackThreadId(threadId: string): { channel: string; threadTs: string } | null {
   if (!threadId.startsWith('slack:')) return null;
@@ -114,29 +117,65 @@ registerChannelAdapter('slack', {
     });
 
     const lastStatusByThread = new Map<string, number>();
+    const statusClearTimers = new Map<string, NodeJS.Timeout>();
+
+    async function clearAssistantStatus(tid: string): Promise<void> {
+      const timer = statusClearTimers.get(tid);
+      if (timer) {
+        clearTimeout(timer);
+        statusClearTimers.delete(tid);
+      }
+      const decoded = decodeSlackThreadId(tid);
+      if (!decoded) return;
+      try {
+        await slackAdapter.setAssistantStatus(decoded.channel, decoded.threadTs, '');
+        log.debug('Slack assistant status cleared', { threadId: tid });
+      } catch (err) {
+        log.debug('Slack assistant status clear failed', { threadId: tid, err });
+      }
+    }
+
     const setTyping = bridge.setTyping?.bind(bridge);
     bridge.setTyping = async (platformId, threadId) => {
       const tid = threadId ?? platformId;
+      const decoded = decodeSlackThreadId(tid);
+      if (!decoded) {
+        await setTyping?.(platformId, threadId);
+        return;
+      }
+
       const now = Date.now();
       const lastStatusAt = lastStatusByThread.get(tid) ?? 0;
       if (now - lastStatusAt < SLACK_STATUS_REFRESH_MS) return;
       lastStatusByThread.set(tid, now);
-      await setTyping?.(platformId, threadId);
+
+      await clearAssistantStatus(tid);
+      try {
+        await slackAdapter.setAssistantStatus(decoded.channel, decoded.threadTs, 'Typing...');
+        log.debug('Slack assistant status set', { threadId: tid });
+      } catch (err) {
+        log.warn('Slack assistant status set failed', { threadId: tid, err });
+        return;
+      }
+
+      // Slack keeps the assistant composer disabled while status is active.
+      // Pulse: show status briefly, then clear so the user can send follow-ups
+      // while the agent is still working. Refresh repeats while the host typing
+      // loop runs (see SLACK_STATUS_REFRESH_MS).
+      statusClearTimers.set(
+        tid,
+        setTimeout(() => {
+          void clearAssistantStatus(tid);
+        }, SLACK_STATUS_VISIBLE_MS),
+      );
     };
 
     const deliver = bridge.deliver.bind(bridge);
     bridge.deliver = async (platformId, threadId, message) => {
       const result = await deliver(platformId, threadId, message);
       const tid = threadId ?? platformId;
-      const decoded = decodeSlackThreadId(tid);
-      if (decoded) {
-        try {
-          await slackAdapter.setAssistantStatus(decoded.channel, decoded.threadTs, '');
-          lastStatusByThread.delete(tid);
-        } catch (err) {
-          log.debug('Slack assistant status clear failed', { threadId: tid, err });
-        }
-      }
+      lastStatusByThread.delete(tid);
+      await clearAssistantStatus(tid);
       return result;
     };
 
