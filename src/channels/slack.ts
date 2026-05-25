@@ -12,6 +12,18 @@ import { createChatSdkBridge } from './chat-sdk-bridge.js';
 import { registerChannelAdapter } from './channel-registry.js';
 
 let slackHttpTraceInstalled = false;
+const SLACK_STATUS_REFRESH_MS = 90_000;
+
+function decodeSlackThreadId(threadId: string): { channel: string; threadTs: string } | null {
+  if (!threadId.startsWith('slack:')) return null;
+  const rest = threadId.slice('slack:'.length);
+  const sep = rest.indexOf(':');
+  if (sep === -1) return null;
+  const channel = rest.slice(0, sep);
+  const threadTs = rest.slice(sep + 1);
+  if (!channel || !threadTs) return null;
+  return { channel, threadTs };
+}
 
 function traceSlackWebApiCall(source: string, url: string, body?: unknown): void {
   if (!url.includes('slack.com/api/chat.postMessage') && !url.includes('slack.com/api/chat.scheduleMessage')) {
@@ -100,6 +112,34 @@ registerChannelAdapter('slack', {
       supportsThreads: true,
       transcribeAudioAttachments: true,
     });
+
+    const lastStatusByThread = new Map<string, number>();
+    const setTyping = bridge.setTyping?.bind(bridge);
+    bridge.setTyping = async (platformId, threadId) => {
+      const tid = threadId ?? platformId;
+      const now = Date.now();
+      const lastStatusAt = lastStatusByThread.get(tid) ?? 0;
+      if (now - lastStatusAt < SLACK_STATUS_REFRESH_MS) return;
+      lastStatusByThread.set(tid, now);
+      await setTyping?.(platformId, threadId);
+    };
+
+    const deliver = bridge.deliver.bind(bridge);
+    bridge.deliver = async (platformId, threadId, message) => {
+      const result = await deliver(platformId, threadId, message);
+      const tid = threadId ?? platformId;
+      const decoded = decodeSlackThreadId(tid);
+      if (decoded) {
+        try {
+          await slackAdapter.setAssistantStatus(decoded.channel, decoded.threadTs, '');
+          lastStatusByThread.delete(tid);
+        } catch (err) {
+          log.debug('Slack assistant status clear failed', { threadId: tid, err });
+        }
+      }
+      return result;
+    };
+
     bridge.resolveChannelName = async (platformId: string) => {
       try {
         const info = await slackAdapter.fetchThread(platformId);
