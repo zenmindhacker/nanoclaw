@@ -6,14 +6,14 @@ The rows were pending in Cleo's v2 session `inbound.db` files. Times are UTC.
 
 ## Current Status
 
-Updated 2026-05-23 after re-enabling `oauth-health-check` through NanoClaw's scheduling module API (`insertTask()`), not direct SQLite row insertion.
+Updated 2026-05-23 after identifying the ghost 401 / Xero alerts as the old local v1 NanoClaw service. Re-enabled only the remote Cleo `oauth-health-check` and `catch-up-auditor` tasks through NanoClaw's scheduling module API.
 
 | Name | Status | Current live task id | Next run | Notes |
 |---|---|---|---|---|
-| oauth-health-check | active | `oauth-health-check` | `2026-05-23T17:00:00.000Z`, then hourly | Read-only gate script; wakes the agent only for expired/error OAuth state. |
+| oauth-health-check | active | `oauth-health-check` | `2026-05-23T21:00:00.000Z`, then hourly | Read-only gate script; wakes the agent only for expired/error OAuth state. |
 | transcript-sync | inactive | none | n/a | Disabled during ghost 401 isolation test. |
 | nvs-email-processor | inactive | none | n/a | Disabled during ghost 401 isolation test. |
-| catch-up-auditor | inactive | none | n/a | Disabled during ghost 401 isolation test. |
+| catch-up-auditor | active | `catch-up-auditor` | `2026-05-23T21:00:00.000Z`, then hourly during `7-21` UTC | Checks for missed daily scheduled tasks and wakes only when catch-up is needed. |
 | transcript-unmatched-reminder | inactive | none | n/a | Disabled during ghost 401 isolation test. |
 | pending-actions-reminder | inactive | none | n/a | Disabled during ghost 401 isolation test. |
 | transcript sync pipeline (thread copy) | inactive | none | n/a | Disabled during ghost 401 isolation test. |
