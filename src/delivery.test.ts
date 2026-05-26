@@ -70,6 +70,25 @@ function insertOutbound(agentGroupId: string, sessionId: string, msgId: string):
   db.close();
 }
 
+function seedSlackDm(): void {
+  createAgentGroup({
+    id: 'ag-slack',
+    name: 'Slack Agent',
+    folder: 'slack-agent',
+    agent_provider: null,
+    created_at: now(),
+  });
+  createMessagingGroup({
+    id: 'mg-slack',
+    channel_type: 'slack',
+    platform_id: 'slack:D123',
+    name: 'Slack DM',
+    is_group: 0,
+    unknown_sender_policy: 'public',
+    created_at: now(),
+  });
+}
+
 beforeEach(() => {
   if (fs.existsSync(TEST_DIR)) fs.rmSync(TEST_DIR, { recursive: true });
   fs.mkdirSync(TEST_DIR, { recursive: true });
@@ -152,6 +171,43 @@ describe('deliverSessionMessages — concurrent invocations', () => {
     await deliverSessionMessages(session);
 
     expect(callCount).toBe(1);
+  });
+});
+
+describe('deliverSessionMessages — Slack DM threading', () => {
+  it('fills an unthreaded origin-DM outbound with the latest inbound Slack thread', async () => {
+    seedSlackDm();
+    const { session } = resolveSession('ag-slack', 'mg-slack', null, 'shared');
+
+    const inDb = openInboundDb('ag-slack', session.id);
+    inDb
+      .prepare(
+        `INSERT INTO messages_in (id, timestamp, kind, platform_id, channel_type, thread_id, content)
+         VALUES (?, datetime('now'), 'chat-sdk', 'slack:D123', 'slack', ?, ?)`,
+      )
+      .run('in-1', 'slack:D123:111.222', JSON.stringify({ text: 'hello' }));
+    inDb.close();
+
+    const outDb = new Database(outboundDbPath('ag-slack', session.id));
+    outDb
+      .prepare(
+        `INSERT INTO messages_out (id, timestamp, kind, platform_id, channel_type, thread_id, content)
+         VALUES (?, datetime('now'), 'chat', 'slack:D123', 'slack', NULL, ?)`,
+      )
+      .run('out-1', JSON.stringify({ text: 'reply' }));
+    outDb.close();
+
+    const threadIds: Array<string | null> = [];
+    setDeliveryAdapter({
+      async deliver(_channelType, _platformId, threadId) {
+        threadIds.push(threadId);
+        return 'plat-msg';
+      },
+    });
+
+    await deliverSessionMessages(session);
+
+    expect(threadIds).toEqual(['slack:D123:111.222']);
   });
 });
 

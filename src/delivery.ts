@@ -73,6 +73,46 @@ let deliveryAdapter: ChannelDeliveryAdapter | null = null;
 let activePolling = false;
 let sweepPolling = false;
 
+function resolveSlackDmThreadFallback(
+  msg: {
+    id: string;
+    platform_id: string | null;
+    channel_type: string | null;
+    thread_id: string | null;
+  },
+  session: Session,
+  inDb: Database.Database,
+): string | null {
+  if (msg.thread_id || msg.channel_type !== 'slack' || !msg.platform_id) {
+    return msg.thread_id;
+  }
+
+  const mg = getMessagingGroupByPlatform(msg.channel_type, msg.platform_id);
+  if (!mg || mg.is_group !== 0 || session.messaging_group_id !== mg.id) {
+    return msg.thread_id;
+  }
+
+  const row = inDb
+    .prepare(
+      `SELECT thread_id
+       FROM messages_in
+       WHERE channel_type = ? AND platform_id = ? AND thread_id IS NOT NULL
+       ORDER BY seq DESC
+       LIMIT 1`,
+    )
+    .get(msg.channel_type, msg.platform_id) as { thread_id: string | null } | undefined;
+
+  if (row?.thread_id) {
+    log.debug('Filled missing Slack DM thread_id from latest inbound', {
+      messageId: msg.id,
+      threadId: row.thread_id,
+    });
+    return row.thread_id;
+  }
+
+  return msg.thread_id;
+}
+
 /**
  * Callbacks fired when the delivery adapter is first set (and again if it's
  * replaced). Lets modules that need the adapter at boot (e.g. approvals →
@@ -322,6 +362,8 @@ async function deliverMessage(
     }
   }
 
+  const deliveryThreadId = resolveSlackDmThreadFallback(msg, session, inDb);
+
   // Track pending questions for ask_user_question flow.
   // Guarded: without the interactive module, `pending_questions` doesn't
   // exist and we skip persistence — the card still delivers to the user,
@@ -340,7 +382,7 @@ async function deliverMessage(
         message_out_id: msg.id,
         platform_id: msg.platform_id,
         channel_type: msg.channel_type,
-        thread_id: msg.thread_id,
+        thread_id: deliveryThreadId,
         title,
         options: normalizeOptions(rawOptions as never),
         created_at: new Date().toISOString(),
@@ -388,7 +430,7 @@ async function deliverMessage(
   const platformMsgId = await deliveryAdapter.deliver(
     msg.channel_type,
     msg.platform_id,
-    msg.thread_id,
+    deliveryThreadId,
     msg.kind,
     msg.content,
     files,
