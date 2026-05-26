@@ -472,6 +472,30 @@ async function deliverToAgent(
   if (wake) {
     // Typing indicator + wake are only for the engaged branch; accumulated
     // messages sit silently until a real trigger fires.
+    const channelAdapter = getChannelAdapter(event.channelType);
+    if (channelAdapter?.startSessionActivity) {
+      let meta: Record<string, unknown> = {};
+      try {
+        meta = JSON.parse(event.message.content) as Record<string, unknown>;
+      } catch {
+        /* keep empty meta */
+      }
+      if (event.message.isGroup !== undefined) {
+        meta.isGroup = event.message.isGroup;
+      }
+      void channelAdapter
+        .startSessionActivity(
+          {
+            sessionId: session.id,
+            agentGroupId: session.agent_group_id,
+            channelType: event.channelType,
+            platformId: event.platformId,
+            threadId: event.threadId,
+          },
+          meta,
+        )
+        .catch((err) => log.debug('startSessionActivity failed', { sessionId: session.id, err }));
+    }
     startTypingRefresh(session.id, session.agent_group_id, event.channelType, event.platformId, event.threadId);
     const freshSession = getSession(session.id);
     if (freshSession) {
@@ -479,7 +503,10 @@ async function deliverToAgent(
       // wakeContainer never throws — it returns false on transient spawn
       // failure (host-sweep retries). Stop the typing indicator we just
       // started so it doesn't leak; the inbound row stays pending.
-      if (!woke) stopTypingRefresh(freshSession.id);
+      if (!woke) {
+        stopTypingRefresh(freshSession.id);
+        void getChannelAdapter(event.channelType)?.cancelSessionActivity?.(freshSession.id);
+      }
     }
   }
 }

@@ -5,6 +5,8 @@
  * Two patterns: native adapters (implement directly) or Chat SDK bridge (wrap a Chat SDK adapter).
  */
 
+import type { SessionActivityCompleteResult, SessionActivityContext } from './session-activity.js';
+
 /** Passed to the adapter at setup time. */
 export interface ChannelSetup {
   /** Called when an inbound message arrives from the platform. */
@@ -147,6 +149,21 @@ export interface ChannelAdapter {
    * treats absence as a no-op.
    */
   subscribe?(platformId: string, threadId: string): Promise<void>;
+
+  /**
+   * Start platform-native session activity (e.g. Slack assistant stream).
+   * Called when the router wakes the agent for a new inbound turn.
+   */
+  startSessionActivity?(ctx: SessionActivityContext, meta: Record<string, unknown>): Promise<void>;
+
+  /**
+   * Finish active session activity with the final user-facing outbound payload.
+   * Returns null when no stream is active or the payload must use deliver().
+   */
+  completeSessionActivity?(sessionId: string, message: OutboundMessage): Promise<SessionActivityCompleteResult>;
+
+  /** Tear down session activity without delivering (container exit, failed wake). */
+  cancelSessionActivity?(sessionId: string): Promise<void>;
 
   /**
    * Open (or fetch) a DM with this user, returning the platform_id of the

@@ -27,8 +27,10 @@ import { updateContainerConfigScalars, updateContainerConfigJson } from './db/co
 import { CONTAINER_RUNTIME_BIN, hostGatewayArgs, readonlyMountArgs, stopContainer } from './container-runtime.js';
 import { composeGroupClaudeMd } from './claude-md-compose.js';
 import { getAgentGroup } from './db/agent-groups.js';
+import { getMessagingGroup } from './db/messaging-groups.js';
 import { getDb, hasTable } from './db/connection.js';
 import { initGroupFilesystem } from './group-init.js';
+import { getChannelAdapter } from './channels/channel-registry.js';
 import { stopTypingRefresh } from './modules/typing/index.js';
 import { log } from './log.js';
 import { getDefaultMounts, validateAdditionalMounts } from './modules/mount-security/index.js';
@@ -53,6 +55,13 @@ const onecli = new OneCLI({ url: ONECLI_URL, apiKey: ONECLI_API_KEY });
 
 /** Active containers tracked by session ID. */
 const activeContainers = new Map<string, { process: ChildProcess; containerName: string }>();
+
+function cancelSessionActivityForSession(session: Session): void {
+  if (!session.messaging_group_id) return;
+  const mg = getMessagingGroup(session.messaging_group_id);
+  if (!mg) return;
+  void getChannelAdapter(mg.channel_type)?.cancelSessionActivity?.(session.id);
+}
 
 function safeLogName(value: string): string {
   return value.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'unknown';
@@ -225,6 +234,7 @@ async function spawnContainer(session: Session): Promise<void> {
     activeContainers.delete(session.id);
     markContainerStopped(session.id);
     stopTypingRefresh(session.id);
+    cancelSessionActivityForSession(session);
     containerLog.stream.end(`\nexitCode=${code}\nendedAt=${new Date().toISOString()}\n`);
     log.info('Container exited', { sessionId: session.id, code, containerName, logFile: containerLog.path });
   });
@@ -233,6 +243,7 @@ async function spawnContainer(session: Session): Promise<void> {
     activeContainers.delete(session.id);
     markContainerStopped(session.id);
     stopTypingRefresh(session.id);
+    cancelSessionActivityForSession(session);
     containerLog.stream.end(`\nspawnError=${err.message}\nendedAt=${new Date().toISOString()}\n`);
     log.error('Container spawn error', { sessionId: session.id, err, logFile: containerLog.path });
   });

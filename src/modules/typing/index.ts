@@ -73,6 +73,9 @@ export function setTypingAdapter(a: TypingAdapter): void {
 }
 
 async function triggerTyping(channelType: string, platformId: string, threadId: string | null): Promise<void> {
+  // Slack assistant DMs use native chat streaming for liveness; setStatus refresh
+  // locks the composer. Session activity handles Slack DM UX instead.
+  if (channelType === 'slack') return;
   try {
     await adapter?.setTyping?.(channelType, platformId, threadId);
   } catch {

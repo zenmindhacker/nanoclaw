@@ -77,6 +77,11 @@ export interface ChatSdkBridgeConfig {
   maxTextLength?: number;
   /** Transcribe audio attachments before the message reaches the agent. */
   transcribeAudioAttachments?: boolean;
+  /**
+   * Optional hook to add platform-specific fields to inbound serialized content
+   * before raw is dropped. Used by Slack to persist stream recipient metadata.
+   */
+  enrichInboundContent?: (serialized: Record<string, unknown>, raw: Record<string, unknown> | undefined) => void;
 }
 
 /**
@@ -195,6 +200,11 @@ export function createChatSdkBridge(config: ChatSdkBridgeConfig): ChannelAdapter
       serialized.senderId = author.userId;
       serialized.sender = name;
       serialized.senderName = name;
+    }
+
+    if (config.enrichInboundContent && message.raw) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      config.enrichInboundContent(serialized, message.raw as Record<string, any>);
     }
 
     // Drop raw to save DB space (can be very large)

@@ -180,6 +180,26 @@ async function main(): Promise<void> {
       const adapter = getChannelAdapter(channelType);
       await adapter?.setTyping?.(platformId, threadId);
     },
+    async completeSessionActivity(
+      sessionId: string,
+      channelType: string,
+      kind: string,
+      content: string,
+      files?: import('./channels/adapter.js').OutboundFile[],
+    ): Promise<string | undefined | null> {
+      const adapter = getChannelAdapter(channelType);
+      if (!adapter?.completeSessionActivity) return null;
+      if (kind !== 'chat') return null;
+      return adapter.completeSessionActivity(sessionId, {
+        kind,
+        content: JSON.parse(content),
+        files,
+      });
+    },
+    async cancelSessionActivity(sessionId: string, channelType: string): Promise<void> {
+      const adapter = getChannelAdapter(channelType);
+      await adapter?.cancelSessionActivity?.(sessionId);
+    },
   };
   setDeliveryAdapter(deliveryAdapter);
 

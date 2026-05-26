@@ -10,23 +10,9 @@ import { readEnvFile } from '../env.js';
 import { log } from '../log.js';
 import { createChatSdkBridge } from './chat-sdk-bridge.js';
 import { registerChannelAdapter } from './channel-registry.js';
+import { attachSlackSessionActivity } from './slack-stream.js';
 
 let slackHttpTraceInstalled = false;
-/** How long each assistant status pulse stays visible before we clear it. */
-const SLACK_STATUS_VISIBLE_MS = 5_000;
-/** Minimum gap between status pulses while the agent is still working. */
-const SLACK_STATUS_REFRESH_MS = 45_000;
-
-function decodeSlackThreadId(threadId: string): { channel: string; threadTs: string } | null {
-  if (!threadId.startsWith('slack:')) return null;
-  const rest = threadId.slice('slack:'.length);
-  const sep = rest.indexOf(':');
-  if (sep === -1) return null;
-  const channel = rest.slice(0, sep);
-  const threadTs = rest.slice(sep + 1);
-  if (!channel || !threadTs) return null;
-  return { channel, threadTs };
-}
 
 function traceSlackWebApiCall(source: string, url: string, body?: unknown): void {
   if (!url.includes('slack.com/api/chat.postMessage') && !url.includes('slack.com/api/chat.scheduleMessage')) {
@@ -79,6 +65,25 @@ function installSlackHttpTrace(): void {
   }) as typeof https.request;
 }
 
+function enrichSlackInboundContent(
+  serialized: Record<string, unknown>,
+  raw: Record<string, unknown> | undefined,
+): void {
+  if (!raw) return;
+  const user = raw.user;
+  const team = raw.team ?? raw.team_id;
+  const threadTs = raw.thread_ts ?? raw.ts;
+  if (typeof user === 'string' && user) {
+    serialized.slackRecipientUserId = user;
+  }
+  if (typeof team === 'string' && team) {
+    serialized.slackRecipientTeamId = team;
+  }
+  if (typeof threadTs === 'string' && threadTs) {
+    serialized.slackStreamThreadTs = threadTs;
+  }
+}
+
 registerChannelAdapter('slack', {
   factory: () => {
     const env = readEnvFile(['SLACK_BOT_TOKEN', 'SLACK_SIGNING_SECRET']);
@@ -114,67 +119,16 @@ registerChannelAdapter('slack', {
       concurrency: 'concurrent',
       supportsThreads: true,
       transcribeAudioAttachments: true,
+      enrichInboundContent: enrichSlackInboundContent,
     });
 
-    const lastStatusByThread = new Map<string, number>();
-    const statusClearTimers = new Map<string, NodeJS.Timeout>();
-
-    async function clearAssistantStatus(tid: string): Promise<void> {
-      const timer = statusClearTimers.get(tid);
-      if (timer) {
-        clearTimeout(timer);
-        statusClearTimers.delete(tid);
-      }
-      const decoded = decodeSlackThreadId(tid);
-      if (!decoded) return;
-      try {
-        await slackAdapter.setAssistantStatus(decoded.channel, decoded.threadTs, '');
-        log.debug('Slack assistant status cleared', { threadId: tid });
-      } catch (err) {
-        log.debug('Slack assistant status clear failed', { threadId: tid, err });
-      }
-    }
-
-    const setTyping = bridge.setTyping?.bind(bridge);
-    bridge.setTyping = async (platformId, threadId) => {
-      const tid = threadId ?? platformId;
-      const decoded = decodeSlackThreadId(tid);
-      if (!decoded) {
-        await setTyping?.(platformId, threadId);
-        return;
-      }
-
-      const now = Date.now();
-      const lastStatusAt = lastStatusByThread.get(tid) ?? 0;
-      if (now - lastStatusAt < SLACK_STATUS_REFRESH_MS) return;
-      lastStatusByThread.set(tid, now);
-
-      await clearAssistantStatus(tid);
-      try {
-        await slackAdapter.setAssistantStatus(decoded.channel, decoded.threadTs, 'Typing...');
-        log.debug('Slack assistant status set', { threadId: tid });
-      } catch (err) {
-        log.warn('Slack assistant status set failed', { threadId: tid, err });
-        return;
-      }
-
-      // Slack keeps the assistant composer disabled while status is active.
-      // Pulse: show status briefly, then clear so the user can send follow-ups
-      // while the agent is still working. Refresh repeats while the host typing
-      // loop runs (see SLACK_STATUS_REFRESH_MS).
-      statusClearTimers.set(
-        tid,
-        setTimeout(() => {
-          void clearAssistantStatus(tid);
-        }, SLACK_STATUS_VISIBLE_MS),
-      );
-    };
+    const { cancelByThread, clearAssistantStatus } = attachSlackSessionActivity(bridge, slackAdapter);
 
     const deliver = bridge.deliver.bind(bridge);
     bridge.deliver = async (platformId, threadId, message) => {
-      const result = await deliver(platformId, threadId, message);
       const tid = threadId ?? platformId;
-      lastStatusByThread.delete(tid);
+      cancelByThread(tid);
+      const result = await deliver(platformId, threadId, message);
       await clearAssistantStatus(tid);
       return result;
     };

@@ -23,11 +23,7 @@ import {
 import { log } from './log.js';
 import { normalizeOptions } from './channels/ask-question.js';
 import { clearOutbox, openInboundDb, openOutboundDb, readOutboxFiles } from './session-manager.js';
-import {
-  pauseTypingRefreshAfterDelivery,
-  setTypingAdapter,
-  stopTypingRefresh,
-} from './modules/typing/index.js';
+import { pauseTypingRefreshAfterDelivery, setTypingAdapter, stopTypingRefresh } from './modules/typing/index.js';
 import type { OutboundFile } from './channels/adapter.js';
 import type { Session } from './types.js';
 
@@ -63,6 +59,14 @@ export interface ChannelDeliveryAdapter {
     files?: OutboundFile[],
   ): Promise<string | undefined>;
   setTyping?(channelType: string, platformId: string, threadId: string | null): Promise<void>;
+  completeSessionActivity?(
+    sessionId: string,
+    channelType: string,
+    kind: string,
+    content: string,
+    files?: OutboundFile[],
+  ): Promise<string | undefined | null>;
+  cancelSessionActivity?(sessionId: string, channelType: string): Promise<void>;
 }
 
 let deliveryAdapter: ChannelDeliveryAdapter | null = null;
@@ -204,8 +208,6 @@ async function drainSession(session: Session): Promise<void> {
         // agent-to-agent routing) — the user doesn't see those and
         // shouldn't get a gap in their typing indicator for them.
         if (msg.kind !== 'system' && msg.channel_type !== 'agent') {
-          // Slack assistant status locks the DM composer while active. Stop
-          // refreshing after delivery so we don't re-arm status mid-turn.
           if (msg.channel_type === 'slack') {
             stopTypingRefresh(session.id);
           } else {
@@ -362,6 +364,26 @@ async function deliverMessage(
     Array.isArray(content.files) && content.files.length > 0
       ? readOutboxFiles(session.agent_group_id, session.id, msg.id, content.files as string[])
       : undefined;
+
+  if (deliveryAdapter.completeSessionActivity && msg.channel_type) {
+    const streamedId = await deliveryAdapter.completeSessionActivity(
+      session.id,
+      msg.channel_type,
+      msg.kind,
+      msg.content,
+      files,
+    );
+    if (streamedId !== null) {
+      log.info('Message delivered via session activity', {
+        id: msg.id,
+        channelType: msg.channel_type,
+        platformId: msg.platform_id,
+        platformMsgId: streamedId,
+      });
+      clearOutbox(session.agent_group_id, session.id, msg.id);
+      return streamedId;
+    }
+  }
 
   const platformMsgId = await deliveryAdapter.deliver(
     msg.channel_type,
