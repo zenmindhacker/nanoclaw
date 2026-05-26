@@ -165,7 +165,14 @@ export function attachSlackSessionActivity(
       return;
     }
 
-    cancelSession(ctx.sessionId, 'restarted');
+    const existing = sessions.get(ctx.sessionId);
+    if (existing) {
+      log.debug('Slack stream already active; keeping existing stream for follow-up', {
+        sessionId: ctx.sessionId,
+        streamThreadId: existing.streamThreadId,
+      });
+      return;
+    }
 
     // Short loading bridge; first stream append clears assistant status in Slack.
     if (slackAdapter.setAssistantStatus) {
@@ -196,9 +203,14 @@ export function attachSlackSessionActivity(
       });
 
     sessions.set(ctx.sessionId, { feed, streamThreadId, streamPromise });
-    void streamPromise.then(() => {
-      log.debug('Slack stream finished', { sessionId: ctx.sessionId });
-    });
+    void streamPromise
+      .then(() => {
+        log.debug('Slack stream finished', { sessionId: ctx.sessionId });
+      })
+      .catch(() => {
+        // The owning lifecycle handles fallback/logging; avoid an unhandled
+        // rejection from this observer promise if Slack rejects the stream.
+      });
   };
 
   bridge.completeSessionActivity = async (

@@ -127,6 +127,50 @@ describe('attachSlackSessionActivity', () => {
     expect(stream).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps the existing stream when a follow-up arrives in the same session', async () => {
+    const stream = vi.fn().mockResolvedValue({ id: 'msg-ts-1' });
+    const setAssistantStatus = vi.fn().mockResolvedValue(undefined);
+    const slackAdapter = { stream, setAssistantStatus };
+
+    const bridge: ChannelAdapter = {
+      name: 'slack',
+      channelType: 'slack',
+      supportsThreads: true,
+      setup: async () => {},
+      teardown: async () => {},
+      isConnected: () => true,
+      deliver: async () => 'fallback',
+    };
+
+    attachSlackSessionActivity(bridge, slackAdapter as never);
+
+    const ctx = {
+      sessionId: 'sess-1',
+      agentGroupId: 'ag-1',
+      channelType: 'slack',
+      platformId: 'slack:D0',
+      threadId: 'slack:D0:1.0',
+    };
+    const meta = {
+      slackRecipientUserId: 'U1',
+      slackRecipientTeamId: 'T1',
+      isGroup: false,
+    };
+
+    await bridge.startSessionActivity!(ctx, meta);
+    await bridge.startSessionActivity!({ ...ctx, threadId: 'slack:D0:2.0' }, meta);
+
+    expect(stream).toHaveBeenCalledTimes(1);
+    expect(setAssistantStatus).toHaveBeenCalledTimes(1);
+
+    const result = await bridge.completeSessionActivity!('sess-1', {
+      kind: 'chat',
+      content: { text: 'Final answer' },
+    });
+
+    expect(result).toBe('msg-ts-1');
+  });
+
   it('skips stream for group channels', async () => {
     const stream = vi.fn();
     const bridge: ChannelAdapter = {
