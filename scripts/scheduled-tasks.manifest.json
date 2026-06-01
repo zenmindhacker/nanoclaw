@@ -11,8 +11,8 @@
       "id": "cycle-daily-briefing",
       "agentFolder": "dm-with-christina",
       "recurrence": "0 11 * * *",
-      "prompt": "Deliver Christina's daily cycle briefing. The pre-task script attached today's briefing in scriptOutput. Send it in this DM — keep the structure and tone warm and supportive. Do not re-run cycle_briefing.mjs unless scriptOutput is missing.",
-      "script": "cd /workspace/agent && node cycle_briefing.mjs --task-json $(date -u +%Y-%m-%d)"
+      "prompt": "Deliver Christina's daily cycle briefing to Christina. The pre-task script attached today's briefing in scriptOutput. Send it in Christina's DM — keep the structure and tone warm and supportive. Do not re-run cycle_briefing.mjs unless scriptOutput is missing.",
+      "script": "cd /workspace/agent && node cycle_briefing.mjs --task-json $(TZ=America/New_York date +%Y-%m-%d)"
     }
   ],
   "pendingCleo": [

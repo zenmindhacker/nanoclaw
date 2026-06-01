@@ -14,6 +14,7 @@
 import "dotenv/config";
 import FormData from "form-data";
 import crypto from "node:crypto";
+import fs from "node:fs";
 import AnyList from "anylist";
 
 // ============================================================================
@@ -29,6 +30,28 @@ const decodeUid = (jwt) => {
   const p = JSON.parse(Buffer.from(jwt.split(".")[1], "base64").toString());
   return p.sub || p.user_id;
 };
+
+function loadAnyListCredentials() {
+  const fromEnv = {
+    email: process.env.ANYLIST_EMAIL,
+    password: process.env.ANYLIST_PASSWORD,
+  };
+  if (fromEnv.email && fromEnv.password) return fromEnv;
+
+  const credentialPaths = [
+    "/workspace/extra/credentials/anylist.json",
+    "/workspace/extra/credentials/anylist-credentials.json",
+  ];
+  for (const credentialPath of credentialPaths) {
+    if (!fs.existsSync(credentialPath)) continue;
+    const raw = JSON.parse(fs.readFileSync(credentialPath, "utf8"));
+    const email = raw.email ?? raw.ANYLIST_EMAIL;
+    const password = raw.password ?? raw.ANYLIST_PASSWORD;
+    if (email && password) return { email, password };
+  }
+
+  return fromEnv;
+}
 
 /**
  * Split a free-text ingredient like "1 ½ pounds lean ground beef" into
@@ -256,10 +279,11 @@ function flattenInstructions(v) {
 
 export class AnyListClient {
   constructor({ email, password } = {}) {
-    this.email = email ?? process.env.ANYLIST_EMAIL;
-    this.password = password ?? process.env.ANYLIST_PASSWORD;
+    const credentials = loadAnyListCredentials();
+    this.email = email ?? credentials.email;
+    this.password = password ?? credentials.password;
     if (!this.email || !this.password)
-      throw new Error("ANYLIST_EMAIL and ANYLIST_PASSWORD must be set");
+      throw new Error("ANYLIST_EMAIL and ANYLIST_PASSWORD must be set or stored in /workspace/extra/credentials/anylist.json");
     this.any = new AnyList({ email: this.email, password: this.password });
     this.pb = this.any.protobuf;
     this.uid = null;

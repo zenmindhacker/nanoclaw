@@ -2,8 +2,8 @@
 // cli.mjs — thin command-line wrapper around anylist.mjs.
 // Usage: node cli.mjs <command> [args...]
 //
-// Silas calls this from the container. Credentials come from ../.env
-// (ANYLIST_EMAIL, ANYLIST_PASSWORD).
+// Silas calls this from the container. Credentials come from env vars or the
+// mounted credentials file loaded by AnyListClient.
 
 import { AnyListClient } from "./anylist.mjs";
 
