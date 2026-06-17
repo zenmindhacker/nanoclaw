@@ -37,6 +37,7 @@ Org aliases:
   ct | copperteams | copper
   cog | cognitive | cognitive-tech | ctci
   gan | ganttsy
+  tutor | tutoring | connected-tutors | connected-tutoring | con
 
 Examples:
   linear-router cog my
@@ -82,6 +83,15 @@ case "$org_lower" in
     repo="/Users/cian/Documents/GitHub/ganttsy"
     profile_project="Ganttsy MVP"
     profile_labels="CTO Track"
+    profile_priority="medium"
+    profile_state="todo"
+    ;;
+  tutor|tutoring|connected-tutors|connected-tutoring|con)
+    org_key="tutor"
+    api_env="LINEAR_API_KEY_TUTORING"
+    repo="/Users/cian/Documents/GitHub/meridian-institute/connected-tutoring"
+    profile_project="Administration"
+    profile_labels=""
     profile_priority="medium"
     profile_state="todo"
     ;;

@@ -125,6 +125,23 @@ mnemon recall "Meridian Institute Slack workspace"
 
 ---
 
+## Linear (Connected Tutors)
+
+Christina's task board for Connected Tutors lives in Linear (team **CON**).
+
+**Script:** `/workspace/extra/skills/linear/scripts/linear-router.sh tutor <command>`
+
+```bash
+# Examples
+linear-router tutor list
+linear-router tutor my
+linear-router tutor get CON-42
+```
+
+Run `linear-router tutor init` once if the cache is missing. Credential: `LINEAR_API_KEY_TUTORING` (injected via OneCLI).
+
+---
+
 ## Git Repos
 
 Shared repos are mounted at `/workspace/extra/repos/` (read-write for all groups).

@@ -77,4 +77,23 @@ Content catalog. Update on every ingest.
   }
 
   fs.mkdirSync(agentGlobalMnemonDir(), { recursive: true });
+
+  const mnemonPromptDir = path.join(agentGlobalMnemonDir(), 'prompt');
+  fs.mkdirSync(mnemonPromptDir, { recursive: true });
+  const guideFile = path.join(mnemonPromptDir, 'guide.md');
+  if (!fs.existsSync(guideFile)) {
+    fs.writeFileSync(
+      guideFile,
+      `# Mnemon guide
+
+You have access to a persistent knowledge graph via the \`mnemon\` CLI tool.
+- Before tasks that benefit from past context: run \`mnemon recall "<brief query>"\`.
+- After substantive decisions, preferences, or learned facts: run \`mnemon remember "<compact entry>"\`.
+- For entity relationships: \`mnemon link\`.
+- To inspect memory state: \`mnemon status\`.
+
+Keep entries short and factual. Do not duplicate long procedures from CLAUDE.local.md.
+`,
+    );
+  }
 }

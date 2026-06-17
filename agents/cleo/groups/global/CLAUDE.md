@@ -115,11 +115,11 @@ He is Convergent — builds infrastructure, operates from sufficiency. Needs Div
 
 ## Key Memory
 
-**Linear orgs:** `cog` (CognitiveTech/COG), `ct` (CopperTeams/KOR), `gan` (Ganttsy/GAN)
+**Linear orgs:** `cog` (CognitiveTech/COG), `ct` (CopperTeams/KOR), `gan` (Ganttsy/GAN), `tutor` (Connected Tutors/CON)
 
 **Issues display:** Sort by priority (⚡ Urgent ⬆ High ➡ Medium ⬇ Low —), newest first. Group by company. Exclude completed/cancelled.
 
-**Linear script:** `/workspace/extra/skills/linear/linear-router.sh <org> <command>`
+**Linear script:** `/workspace/extra/skills/linear/scripts/linear-router.sh <org> <command>`
 Must run `init` once per org before other commands.
 
 **Invoice clients:** Work Wranglers, CopperTeams, Ganttsy, Kevin Lee, NVS
@@ -140,7 +140,7 @@ Scripts mounted at `/workspace/extra/skills/`. Credentials at `/workspace/extra/
 
 | Skill | Invoke | Credentials needed |
 |-------|--------|-------------------|
-| linear | `skills/linear/linear-router.sh <org> <cmd>` | LINEAR_API_KEY_* (env) |
+| linear | `skills/linear/scripts/linear-router.sh <org> <cmd>` | LINEAR_API_KEY_* (env) |
 | attio | `skills/attio/attio-wrapper.sh` | `credentials/attio` |
 | im-management | `skills/im-management/` | `credentials/attio`, `credentials/beeper` |
 | invoice-generator | `skills/invoice-generator/invoice-generator.mjs` | `credentials/toggl`, `credentials/xero-tokens.json` |

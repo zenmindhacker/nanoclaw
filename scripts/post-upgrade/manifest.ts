@@ -12,7 +12,11 @@ const MANIFESTS: Record<AgentName, AgentManifest> = {
       },
       {
         id: 'linear.list',
-        cmd: 'bash /workspace/extra/skills/linear/linear-router.sh cog list --json',
+        cmd: 'bash /workspace/extra/skills/linear/scripts/linear-router.sh cog list --json',
+      },
+      {
+        id: 'linear.tutor',
+        cmd: 'bash /workspace/extra/skills/linear/scripts/linear-router.sh tutor list --json',
       },
     ],
     cleoOnly: true,
@@ -34,6 +38,10 @@ const MANIFESTS: Record<AgentName, AgentManifest> = {
         id: 'cycle-briefing',
         cmd: 'node /workspace/agent/cycle_briefing.mjs --task-json',
         cwd: '/workspace/agent',
+      },
+      {
+        id: 'linear.list',
+        cmd: 'bash /workspace/extra/skills/linear/scripts/linear-router.sh tutor list --json',
       },
     ],
     silasOnly: true,

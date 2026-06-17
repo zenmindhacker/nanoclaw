@@ -20,12 +20,14 @@ const ORG_CONFIGS: Record<string, { apiKeyEnv: string; teamKey: string; defaultP
   cog: { apiKeyEnv: 'LINEAR_API_KEY_COGNITIVE', teamKey: 'COG', defaultProject: 'OpenClaw' },
   ct:  { apiKeyEnv: 'LINEAR_API_KEY_CT',        teamKey: 'KOR', defaultProject: 'Kora Voice Integration' },
   gan: { apiKeyEnv: 'LINEAR_API_KEY_GANTTSY',   teamKey: 'GAN', defaultProject: 'Ganttsy MVP' },
+  tutor: { apiKeyEnv: 'LINEAR_API_KEY_TUTORING', teamKey: 'CON', defaultProject: 'Administration' },
 };
 
 const ORG_ALIASES: Record<string, string> = {
   cognitive: 'cog', cognitivetech: 'cog', 'cognitive-tech': 'cog',
   copperteams: 'ct', copper: 'ct',
   ganttsy: 'gan',
+  tutoring: 'tutor', 'connected-tutors': 'tutor', 'connected-tutoring': 'tutor', con: 'tutor',
 };
 
 // Linear API keys are injected via NC container environment

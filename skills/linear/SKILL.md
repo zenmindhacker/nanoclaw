@@ -2,7 +2,7 @@
 name: linear
 description: Query and manage Linear issues, projects, milestones, and team workflows across multiple orgs.
 homepage: https://linear.app
-metadata: {"clawdis":{"emoji":"📊","requires":{"env":["LINEAR_API_KEY_COGNITIVE"]}}}
+metadata: {"clawdis":{"emoji":"📊","requires":{"env":["LINEAR_API_KEY_COGNITIVE","LINEAR_API_KEY_TUTORING"]}}}
 ---
 
 # Linear
@@ -19,6 +19,7 @@ Multi-org Linear CLI backed by the GraphQL API with full type safety, local cach
 | `cog` | cognitive, cognitive-tech, ctci | COG | OpenClaw | `LINEAR_API_KEY_COGNITIVE` |
 | `ct` | copperteams, copper | KOR | Kora Voice Integration | `LINEAR_API_KEY_CT` |
 | `gan` | ganttsy | GAN | Ganttsy MVP | `LINEAR_API_KEY_GANTTSY` |
+| `tutor` | tutoring, connected-tutors, connected-tutoring, con | CON | Administration | `LINEAR_API_KEY_TUTORING` |
 
 Add new orgs in the `ORG_CONFIGS` map at the top of `linear.ts`.
 

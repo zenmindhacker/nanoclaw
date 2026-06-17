@@ -19,6 +19,7 @@ import path from 'path';
 
 import { GROUPS_DIR } from './config.js';
 import { ensureAgentGlobalScaffold, GLOBAL_CLAUDE_IMPORT, GLOBAL_CLAUDE_LOCAL_IMPORT } from './agent-global.js';
+import { getAllAgentGroups } from './db/agent-groups.js';
 import type { McpServerConfig } from './container-config.js';
 import { getContainerConfig } from './db/container-configs.js';
 import { log } from './log.js';
@@ -202,6 +203,22 @@ export function migrateGroupsToClaudeLocal(): void {
 
   if (actions.length > 0) {
     log.info('Migrated groups to CLAUDE.local.md model', { actions });
+  }
+
+  composeAllGroupsClaudeMd();
+}
+
+/** Regenerate composed CLAUDE.md + fragments for every agent group (host startup). */
+export function composeAllGroupsClaudeMd(): void {
+  if (!fs.existsSync(GROUPS_DIR)) return;
+  ensureAgentGlobalScaffold();
+  for (const group of getAllAgentGroups()) {
+    if (group.folder === 'global') continue;
+    try {
+      composeGroupClaudeMd(group);
+    } catch (err) {
+      log.warn('Failed to compose CLAUDE.md for group', { folder: group.folder, err });
+    }
   }
 }
 
