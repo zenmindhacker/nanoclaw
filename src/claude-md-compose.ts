@@ -18,11 +18,7 @@ import fs from 'fs';
 import path from 'path';
 
 import { GROUPS_DIR } from './config.js';
-import {
-  ensureAgentGlobalScaffold,
-  GLOBAL_CLAUDE_IMPORT,
-  GLOBAL_CLAUDE_LOCAL_IMPORT,
-} from './agent-global.js';
+import { ensureAgentGlobalScaffold, GLOBAL_CLAUDE_IMPORT, GLOBAL_CLAUDE_LOCAL_IMPORT } from './agent-global.js';
 import type { McpServerConfig } from './container-config.js';
 import { getContainerConfig } from './db/container-configs.js';
 import { log } from './log.js';

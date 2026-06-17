@@ -29,10 +29,7 @@ const HOME_DIR = process.env.HOME || os.homedir();
 export const MOUNT_ALLOWLIST_PATH = path.join(HOME_DIR, '.config', 'nanoclaw', 'mount-allowlist.json');
 export const SENDER_ALLOWLIST_PATH = path.join(HOME_DIR, '.config', 'nanoclaw', 'sender-allowlist.json');
 export const STORE_DIR = path.resolve(PROJECT_ROOT, 'store');
-export const GROUPS_DIR = path.resolve(
-  PROJECT_ROOT,
-  process.env.GROUPS_DIR || envConfig.GROUPS_DIR || 'groups',
-);
+export const GROUPS_DIR = path.resolve(PROJECT_ROOT, process.env.GROUPS_DIR || envConfig.GROUPS_DIR || 'groups');
 export const DATA_DIR = path.resolve(PROJECT_ROOT, process.env.DATA_DIR || envConfig.DATA_DIR || 'data');
 
 // Per-checkout image tag so two installs on the same host don't share
