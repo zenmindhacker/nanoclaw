@@ -1,0 +1,4 @@
+{
+  "install": "pnpm install --frozen-lockfile && (command -v bun >/dev/null && cd container/agent-runner && bun install --frozen-lockfile || true)",
+  "start": "bash .cursor/setup-ssh.sh"
+}

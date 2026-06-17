@@ -37,7 +37,6 @@ groups/*
 
 agents-sdk-docs
 .agents
-AGENTS.md
 
 # Internal working docs, never committed
 docs/maintainer-guide.md
