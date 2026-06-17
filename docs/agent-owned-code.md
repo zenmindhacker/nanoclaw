@@ -19,7 +19,7 @@ Cleo and Silas share one canonical repo (`nanoclaw`). Runtime state stays on eac
 | Agent | Folder | Purpose |
 |-------|--------|---------|
 | Cleo | `agents/cleo/groups/global/` | Persona, orchestration rules, delegate config |
-| Cleo | `agents/cleo/groups/main/` | Primary Slack + DM group |
+| Cleo | `agents/cleo/groups/dm-with-cian/` | Primary Slack + DM group |
 | Cleo | `agents/cleo/groups/slack_sysops/` | Sysops channel |
 | Cleo | `agents/cleo/groups/slack_scheduled/` | Scheduled tasks (NVS, oauth-health) |
 | Silas | `agents/silas/groups/global/` | Persona, Christina context |
@@ -77,4 +77,4 @@ Keep channel-specific state (e.g. Christina’s cycle dates) in the active group
 
 ## Server deploy
 
-See [server-sync.md](./server-sync.md) — snapshot server diffs before pull/reset; prefer `git pull --ff-only`.
+On each server: `git pull --ff-only`, `pnpm install --frozen-lockfile`, `pnpm run build`, restart `nanoclaw`, rebuild container image when Dockerfile changes. Post-upgrade smoke: [post-upgrade.md](post-upgrade.md).

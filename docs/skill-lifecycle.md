@@ -1,8 +1,8 @@
-# Agent-Created Skill Lifecycle (Phase 5 Design)
+# Agent-Created Skill Lifecycle
+
+> **Status:** Tier 1–2 shipped (audit, archive, catalog, injection-scan). Tier 3 review-queue pending full LLM integration.
 
 Based on microclaw's skill auto-improvement system ([PR #329](https://github.com/microclaw/microclaw/pull/329)), ported to NanoClaw's host/container split and git-backed skill model.
-
-> **Status:** Design only. Tiers are independent — Tier 1 (audit/archive) is lowest-risk and highest-ROI.
 
 ---
 

@@ -18,6 +18,7 @@ import { runMigrations } from '../../src/db/migrations/index.js';
 import { getAgentGroupByFolder } from '../../src/db/agent-groups.js';
 import { findSessionByAgentGroup } from '../../src/db/sessions.js';
 import { runCliScenarioChecks } from './checks/cli-scenarios.js';
+import { runCompositionChecks } from './checks/composition.js';
 import { runHostChecks } from './checks/host.js';
 import { runMemoryChecks } from './checks/memory.js';
 import { runSkillsReadonlyChecks } from './checks/skills-readonly.js';
@@ -108,6 +109,7 @@ async function main(): Promise<void> {
 
   if (args.tiers.has(1)) {
     checks.push(...(await runHostChecks(ctx)));
+    checks.push(...runCompositionChecks(ctx));
     checks.push(...(await runMemoryChecks(ctx)));
     checks.push(...(await runSkillsReadonlyChecks(ctx)));
     checks.push(...(await runSlackSyntheticChecks(ctx, new Set([1]))));

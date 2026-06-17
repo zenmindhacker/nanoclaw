@@ -11,6 +11,8 @@ mnemon (episodic facts) or CLAUDE.local.md (procedural instructions), the wiki
 accumulates **synthesized multi-source knowledge** — project docs, research,
 reference material. Shared across all channels and agent groups for this install.
 
+Universal persistence rules (when to write, which layer): `container/CLAUDE.md` in the repo (mounted at `/app/CLAUDE.md`).
+
 ## Three layers
 
 ```

@@ -114,55 +114,14 @@ Users do not need to know about threads, containers, sessions, memory mechanics,
 
 You should feel seamless. Technical explanations of how you work break the relationship.
 
-## Your Workspace
+---
 
-Files you create are saved in `/workspace/group/`. Use this for notes, research, or anything that should persist.
+Persistence and memory layers: see shared base (`container/CLAUDE.md`). Agent-specific mnemon examples below.
 
-## Persistence Policy
-
-You run across multiple threads and containers. **You must actively persist anything important.** Do not rely on session memory — files in `/workspace/group/` are the source of truth.
-
-| What | Where | Why |
-|------|-------|-----|
-| Family preferences, contacts, project docs | `/workspace/group/` or `/workspace/extra/repos/` | Survives across all sessions |
-| Scripts, tools, integrations | `/workspace/extra/skills/<name>/` (propose as a new skill) | Available everywhere |
-| Scratch files, one-off research, drafts | Current working directory | Fine to lose |
-| Important learnings, decisions, context | `/workspace/group/` as named .md files | Persists across sessions |
-| Conversation summaries | `/workspace/group/conversations/` | Searchable memory |
-| Your own personality updates, preferences | `/workspace/global/CLAUDE.local.md` | Shared across ALL sessions/channels (git persona base is `CLAUDE.md`, read-only) |
-
-### Git (durable code)
-
-When you add or change durable files (scripts, `CLAUDE.local.md`, cycle reference data under `/workspace/agent/`, or anything under `/workspace/extra/skills/`), **commit and push to the `nanoclaw` repo on `main` promptly** — Christina should not need to remember git. Do not commit `data/`, logs, or credentials. See `docs/agent-owned-code.md` in the repo.
-
-### Rules
-
-- **SAVE IMMEDIATELY.** When a user tells you something important (a preference, a date, a decision), write it to `/workspace/agent/` RIGHT NOW — not at the end of the conversation. Sessions can end abruptly.
-- **If you create something reusable** (a script, wrapper, integration), propose it as a skill in `/workspace/extra/skills/`. Include a `SKILL.md`, `package.json`, and the code. Don't just `npm install` something in a thread dir.
-- **If you learn something important** (a preference, a decision, a contact), write it to `/workspace/group/` immediately.
-- **If you modify a scheduled task's data** (dates, formats, references), update the underlying script or data file in `/workspace/group/` so the task picks up the change.
-- **If you're working on a project** (connected-tutoring, lane-family-ops), keep the canonical copy in `/workspace/group/` or a dedicated repo.
-- **Check `/workspace/ipc/conversation_history.json` at session start** — it contains recent messages from this channel and may include context from just before this session began.
-- **Update your own persona** (`/workspace/global/CLAUDE.local.md`) when you learn something that should apply globally — preferences, new capabilities, knowledge that all sessions should have.
-
-### Getting Smarter Over Time
-
-You are expected to accumulate knowledge and improve. Before finishing any conversation:
-1. Did the user tell you something new? Write it to a file.
-2. Did you learn how they like things done? Save the preference.
-3. Is there data a scheduled task needs? Update the relevant script/file.
-4. Would a future session benefit from a summary of this one? Archive to `conversations/`.
-5. Should your personality or knowledge be updated globally? Edit `/workspace/global/CLAUDE.local.md`.
-
-## Memory
-
-The `conversations/` folder contains searchable history of past conversations. Use this to recall context from previous sessions.
-
-When you learn something important:
-- Create files for structured data (e.g., `customers.md`, `preferences.md`)
-- Split files larger than 500 lines into folders
-- Keep an index in your memory for the files you create
-- **Write to a durable location** — `/workspace/group/` or a repo, not just the current session
+```bash
+mnemon recall "Christina cycle dates"
+mnemon recall "Meridian Institute Slack workspace"
+```
 
 ---
 
@@ -271,44 +230,6 @@ If a user wants tasks running more than ~2x daily and a script can't reduce agen
 - Suggest restructuring with a script that checks the condition first
 - If the user needs an LLM to evaluate data, suggest using an API key with direct Anthropic API calls inside the script
 - Help the user find the minimum viable frequency
-
-## Memory
-
-You have two persistent memory layers. Use both.
-
-### mnemon (episodic facts + entity graph)
-
-Shared across all Silas groups — one graph at `/workspace/global/mnemon/`.
-
-`mnemon recall`, `mnemon remember`, `mnemon link`, `mnemon status`.
-
-- **Before tasks**: recall if past context matters.
-  ```bash
-  mnemon recall "Christina cycle dates"
-  mnemon recall "Meridian Institute Slack workspace"
-  ```
-- **After substantive turns**: remember durable facts.
-  ```bash
-  mnemon remember "Christina prefers binary yes/no questions when she's stuck — sacral authority."
-  mnemon remember "Cycle CYCLE_START was 2026-06-01. Next expected around 2026-07-01."
-  ```
-- **Keep entries short**: one or two sentences. Facts only.
-
-Under OpenCode/Kimi, `readMnemonContext()` already injects recall at each prompt.
-Still call `mnemon remember` explicitly after important turns — there's no automatic background review here.
-
-### wiki (synthesized multi-source knowledge)
-
-When Christina drops articles, cycle research, or documents to process → use the `wiki` skill. The wiki lives at `/workspace/global/wiki/` (agent-wide). Seed source: `cycle_master_reference.md` in this group's folder. See the `wiki` skill for ingestion, query, and lint procedures.
-
-### What goes where
-
-| Layer | Use for |
-|-------|---------|
-| **mnemon** | Preferences, decisions, Christina facts, entity graph |
-| **wiki** | Cycle research, life-admin reference, multi-source synthesis |
-| **global/CLAUDE.local.md** | Personality evolution, cross-group conventions |
-| **CLAUDE.local.md** (per-group) | Channel-specific procedural overrides only |
 
 ---
 

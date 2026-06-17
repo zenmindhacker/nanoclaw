@@ -79,6 +79,8 @@ Host wake hooks are registered from `src/extensions/slack/on-wake.ts` via
 `registerOnWakeHook` / `registerOnWakeFailedHook` in trunk `router.ts` (generic
 hook points only — no Slack-specific logic in router).
 
+Operator doc: [docs/fork-extensions.md](../docs/fork-extensions.md).
+
 ## What's NOT in extensions (and why)
 
 | File | Location | Reason |

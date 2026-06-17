@@ -16,7 +16,7 @@ OAuth token files live under:
 ~/.config/nanoclaw/credentials/services/
 ```
 
-The host process refreshes those files via `src/oauth-refresher.ts`. Containers mount the files read-only at:
+The host process refreshes those files via `src/extensions/oauth/refresher.ts`. Containers mount the files read-only at:
 
 ```bash
 /workspace/extra/credentials/

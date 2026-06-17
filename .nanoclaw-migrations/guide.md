@@ -37,82 +37,13 @@ On replay: re-run the corresponding skill after switching to clean upstream.
 
 ## Fork Extensions (`src/extensions/`)
 
-Upstream never edits `src/extensions/**`. All fork host code lives here.
+Upstream never edits `src/extensions/**`. See [extensions.md](extensions.md) and [docs/fork-extensions.md](../docs/fork-extensions.md) for merge discipline.
 
-See `extensions.md` in this directory for the full rationale.
+**OAuth:** `src/extensions/oauth/` + `src/cli/commands/oauth.ts` + `OAUTH_ALERT_SLACK_CHANNEL` in `.env`. Docs: [docs/oauth-hybrid-repair.md](../docs/oauth-hybrid-repair.md). Wire `initExtensions()` / `teardownExtensions()` in `src/index.ts`.
 
-### OAuth Token Refresher
+**Slack streaming:** `src/extensions/slack/adapter.ts`, `on-wake.ts`, `src/channels/slack-stream.ts`, `session-activity.ts`, `container/agent-runner/src/extensions/slack/stream-progress.ts`. Ensure `mcp-tools/index.ts` imports `../extensions/index.js`.
 
-**Intent:** Auto-refresh Google and Xero OAuth tokens from the host process.
-Containers mount token files read-only, so only the host can rotate them.
-Failures alert `#sysops` via Slack delivery.
-
-**Files:**
-- `src/extensions/oauth/refresher.ts` — core refresh logic + registry loading
-- `src/extensions/oauth/alerts.ts` — delivers alerts to `OAUTH_ALERT_SLACK_CHANNEL`
-- `src/cli/commands/oauth.ts` — `ncl oauth-health`, `ncl oauth-refresh-now`, `ncl oauth-refresh-one`
-
-**Config:** `OAUTH_ALERT_SLACK_CHANNEL=slack:C07F195GB96` in `.env`.  
-**Registry:** `~/.config/nanoclaw/credentials/services/oauth-registry.json`  
-**Docs:** `docs/oauth-hybrid-repair.md`
-
-**Wiring in `src/index.ts`:**
-```typescript
-import { initExtensions, teardownExtensions } from './extensions/index.js';
-// In main(): initExtensions();
-// In shutdown(): teardownExtensions();
-```
-
-**On replay:** Copy these three files into `src/extensions/oauth/`, update
-`src/cli/commands/index.ts` to import `./oauth.js`, wire `initExtensions` /
-`teardownExtensions` in `src/index.ts`, add `OAUTH_ALERT_SLACK_CHANNEL` to
-`.env`.
-
-### Slack Streaming Enhancements
-
-**Intent:** Keep Slack DM composer usable while the agent works.
-Uses Slack's native `stream()` API (chat.startStream / append / stop).
-Adds Thinking Steps cards via `task_update` chunks. Falls back to normal
-`postMessage` when metadata or thread context is missing.
-
-**Files:**
-- `src/extensions/slack/adapter.ts` — Slack channel adapter (self-registers via `registerChannelAdapter`)
-- `src/channels/slack-stream.ts` — session activity + streaming logic (kept in `channels/` because `src/channels/adapter.ts` and `src/delivery.ts` import from it)
-- `src/channels/session-activity.ts` — stream types, metadata parsers
-
-**Note:** `session-activity.ts` and `slack-stream.ts` remain in `src/channels/` because
-they are imported by core trunk files (`adapter.ts`, `delivery.ts`). Moving them
-would require editing core files. Acceptable — these files don't conflict with upstream
-because upstream doesn't have Slack in trunk.
-
-**Key behaviours added:**
-- `enrichSlackInboundContent`: writes `slackRecipientUserId`, `slackStreamThreadTs` into message content for streaming metadata
-- `attachSlackSessionActivity`: hooks `startSessionActivity`, `appendSessionActivity`, `completeSessionActivity`, `cancelSessionActivity` on the bridge
-- `on-wake.ts`: registers router wake hooks to open the Slack assistant stream before container wake (keeps trunk `router.ts` generic)
-- `report_stream_progress` MCP tool: lives in `container/agent-runner/src/extensions/slack/` (not trunk `mcp-tools/`)
-- HTTP-level tracing on Slack API calls for debugging auth issues
-
-**On replay:** Copy `extensions/slack/adapter.ts`, `extensions/slack/on-wake.ts`,
-`channels/slack-stream.ts`, `channels/session-activity.ts`,
-`container/agent-runner/src/extensions/slack/stream-progress.ts` (+ `.instructions.md`),
-`container/agent-runner/src/extensions/index.ts`. Remove `import './slack.js'` from
-`src/channels/index.ts` (extensions barrel imports the adapter instead). Ensure
-`mcp-tools/index.ts` imports `../extensions/index.js`. Ensure `claude-md-compose.ts`
-scans `container/agent-runner/src/extensions/**` for instruction fragments.
-
-### Voice Transcription
-
-**Intent:** Transcribe WhatsApp voice notes so agents can read and respond to them.
-
-**File:** `src/transcription.ts` — Whisper API via OpenRouter or OpenAI direct.
-
-**Note:** Kept at trunk path `src/transcription.ts` because `src/channels/chat-sdk-bridge.ts`
-imports it directly. Cannot move to extensions without editing core files.
-
-**Config:** `OPENROUTER_API_KEY` or `OPENAI_API_KEY` in `.env`.
-
-**On replay:** Copy `src/transcription.ts`. `chat-sdk-bridge.ts` will
-already import it — no extra wiring needed.
+**Voice transcription:** `src/transcription.ts` (trunk path — imported by `chat-sdk-bridge.ts`). Config: `OPENROUTER_API_KEY` or `OPENAI_API_KEY`.
 
 ---
 
@@ -153,15 +84,15 @@ All durable agent artifacts live here. Upstream never has these paths.
 agents/
   cleo/
     groups/
-      global/CLAUDE.md          # Cleo persona, orchestration, delegate rules
-      main/                     # Primary Cleo group (Slack + DM)
+      global/CLAUDE.md          # Cleo persona (persistence rules in container/CLAUDE.md)
+      dm-with-cian/              # Primary Cleo group (Slack + DM)
       slack_sysops/             # Sysops channel group
       slack_scheduled/          # Scheduled tasks group (NVS, oauth-health)
   silas/
     groups/
-      global/CLAUDE.md          # Silas persona, Christina context
+      global/CLAUDE.md          # Silas persona
       dm-with-christina/        # Primary Silas group (Christina DM)
-        cycle_briefing.mjs      # Cycle tracking script
+        cycle_briefing.mjs
         cycle_master_reference.md
         quotes.mjs
 ```
@@ -187,25 +118,11 @@ tasks on the target server via the seed script.
 
 ## Mnemon Persistent Memory
 
-**Intent:** Graph-based agent memory (`recall`, `remember`, `link`) closing the
-Hermes-style procedural memory gap. Under OpenCode/Kimi, hooks don't fire —
-context is injected via `readMnemonContext()` in the provider.
+Graph-based agent memory at `/workspace/global/mnemon/`. Context injected via `readMnemonContext()` under OpenCode/Kimi.
 
-**Files:**
-- `container/Dockerfile` — mnemon binary install (`MNEMON_VERSION=0.1.14`)
-- `container/entrypoint.sh` — `mnemon setup --target claude-code --yes --global`
-- `container/agent-runner/src/providers/opencode.ts` — `readMnemonContext()` + `readAgentSkillsCatalog()` in `wrapPromptWithContext()`
-- `container/agent-runner/src/providers/opencode-mnemon.test.ts` — structural tests
-- `container/skills/mnemon/SKILL.md` — agent instructions
-- `.claude/skills/add-mnemon/SKILL.md` — install skill doc
+**Files:** `container/Dockerfile` layer (see `05-dockerfile.md`), `container/entrypoint.sh`, `container/agent-runner/src/providers/opencode.ts` overlay, `container/skills/mnemon/SKILL.md`.
 
-**On replay:**
-1. Re-insert mnemon Dockerfile layer from `05-dockerfile.md` (after `/add-opencode` CLI block, before Bun runtime)
-2. Add entrypoint `mnemon setup` block
-3. After `/add-opencode` installs base provider, overlay fork delta onto `container/agent-runner/src/providers/opencode.ts` (do not blind-copy — diff against fresh base)
-4. Copy `container/skills/mnemon/SKILL.md` and test file
-
-**Do not** install `upstream/skill/wiki` — fork uses Karpathy wiki pattern below.
+**On replay:** Re-insert Dockerfile layer from `05-dockerfile.md`; overlay `opencode.ts` delta after `/add-opencode`; copy mnemon skill + tests.
 
 ---
 
@@ -218,7 +135,8 @@ One wiki per agent install (Cleo, Silas) — **not** per channel group.
 - `container/skills/wiki/SKILL.md` — ingest/query/lint operations
 - `agents/{cleo,silas}/groups/global/wiki/` — unified wiki (README, index, log, sources/)
 - `agents/{cleo,silas}/groups/global/CLAUDE.local.md` — agent-writable personality evolution
-- Memory sections in `agents/{cleo,silas}/groups/global/CLAUDE.md`
+- `agents/{cleo,silas}/groups/global/wiki/` — unified wiki
+- Persistence discipline lives in `container/CLAUDE.md` (always loaded); persona files hold identity only
 
 **Runtime paths (all Cleo/Silas groups):**
 - `/workspace/global/wiki/` — knowledge base (RW)
@@ -299,60 +217,5 @@ Check before deleting: `ncl groups list` on each server.
 
 ## Post-upgrade verification
 
-After major upgrades (upstream merge, mnemon/wiki, skill lifecycle, Slack changes),
-run the post-upgrade harness on each server. It produces JSON for Cursor agents
-to parse over SSH.
-
-### One-time CLI smoke setup (per server)
-
-Production Cleo/Silas are Slack-first. Tier 2 agent-loop checks use the CLI channel:
-
-```bash
-pnpm exec tsx scripts/init-cli-agent.ts --display-name "Upgrade Smoke" --agent-name smoke
-```
-
-Wire the CLI session to the same agent group as production (`main` for Cleo,
-`dm-with-christina` for Silas) so mnemon, wiki, and skill mounts match.
-
-### Run harness
-
-```bash
-# Cleo — Tier 1 only (fast, deterministic)
-pnpm run post-upgrade -- --agent cleo --tier 1 --json-out /tmp/upgrade-report.json
-
-# Cleo — full (Tier 1 + agent loop + synthetic Slack inject)
-pnpm run post-upgrade -- --agent cleo --tier 1,2 --json-out /tmp/upgrade-report.json
-
-# Silas
-pnpm run post-upgrade -- --agent silas --tier 1,2 --json-out /tmp/upgrade-report.json
-```
-
-From a dev laptop over SSH:
-
-```bash
-ssh cian@cleo-lc.cognitivetech.net \
-  "cd ~/nanoclaw && pnpm run post-upgrade -- --agent cleo --tier 1,2 --json-out /tmp/upgrade-report.json && cat /tmp/upgrade-report.json"
-```
-
-### Tiers
-
-| Tier | What it checks |
-|------|----------------|
-| **0** (local/CI) | `pnpm test`, `pnpm run typecheck` — unit tests incl. mnemon guards, slack-stream, catalog |
-| **1** | Host service, Docker image, OAuth health (Cleo), mnemon/wiki structure, skill audit, read-only skill scripts, Slack wiring |
-| **2** | CLI ping, mnemon seed/recall/injection, wiki query, skill catalog prompts, synthetic Slack inbound → outbound.db |
-
-Tier 2 is skipped automatically if Tier 1 has failures (use `--force-tier2` to override).
-
-### Policy
-
-- **Skills:** read-only smoke only (list-names, todoist list, etc.)
-- **Slack:** synthetic inbound via session DB + heartbeat — no live Slack posts from the harness
-- **Memory:** one isolated `__upgrade_test__` mnemon fact per run (Tier 2)
-
-### Key files
-
-- `scripts/post-upgrade/run.ts` — orchestrator
-- `scripts/post-upgrade/manifest.ts` — per-agent commands and wiki hints
-- `scripts/post-upgrade/checks/` — host, memory, skills, CLI scenarios, slack synthetic
+See [docs/post-upgrade.md](../docs/post-upgrade.md) for the full harness (`pnpm run post-upgrade`). Primary groups: Cleo `dm-with-cian`, Silas `dm-with-christina`.
 

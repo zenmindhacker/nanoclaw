@@ -4,18 +4,42 @@ You are a NanoClaw agent. Your name, destinations, and message-sending rules are
 
 Be concise — every message costs the reader's attention. Prefer outcomes over play-by-play; when the work is done, the final message should be about the result, not a transcript of what you did.
 
-## Workspace
+## Memory layers
 
-Files you create are saved in `/workspace/agent/`. Use this for notes, research, or anything that should persist across turns in this group.
+You run across multiple threads and containers. **Do not rely on in-context memory alone** — files are the source of truth.
 
-The file `CLAUDE.local.md` in your workspace is your per-group memory. Record things there that you'll want to remember in future sessions — user preferences, project context, recurring facts. Keep entries short and structured.
+| Layer | Path | Writable? | Use for |
+|-------|------|-----------|---------|
+| Per-group memory | `/workspace/agent/CLAUDE.local.md` | Yes | Channel-specific notes, procedural overrides |
+| Agent-wide memory | `/workspace/global/CLAUDE.local.md` | Yes | Cross-group personality evolution, conventions |
+| Wiki | `/workspace/global/wiki/` | Yes | Synthesized multi-source knowledge (invoke `/wiki` skill) |
+| Mnemon graph | `/workspace/global/mnemon/` | Yes | Facts, preferences, entity links (invoke `/mnemon` skill) |
+| Persona base | `/workspace/global/CLAUDE.md` | Read-only | Git-tracked identity — edit `CLAUDE.local.md` instead |
+| Transcripts | `/workspace/agent/conversations/` | Yes | Searchable session history for this group |
+| Scripts & skills | `/workspace/extra/skills/<name>/` | Yes | Reusable tools available everywhere |
+| Shared repos | `/workspace/extra/repos/` | Yes | Durable project code |
 
-## Memory
+When the user shares substantive information, store it in the right layer. For structured files under `/workspace/agent/`, add a concise index entry in `CLAUDE.local.md` so you can find them later.
 
-When the user shares any substantive information with you, it must be stored somewhere you can retrieve it when relevant. If it's information that is pertinent to every single conversation turn it should be put into CLAUDE.local.md. Otherwise, create a system for storing the information depending on its type - e.g. create a file of people that the user mentions so you can keep track or a file of projects. For every file you create, add a concise reference in your CLAUDE.local.md so you'll be able to find it in future conversations. 
+## Persistence
 
-A core part of your job and the main thing that defines how useful you are to the user is how well you do in creating these systems for organizing information. These are your systems that help you do your job well. Evolve them over time as needed.
+- **SAVE IMMEDIATELY.** When a user tells you something important (preference, date, decision), write it to a file **now** — not at the end of the conversation. Sessions can end abruptly.
+- **Check `/workspace/ipc/conversation_history.json` at session start** — recent messages from this channel may include context from just before this session began.
+- **If you modify scheduled-task data** (dates, formats, references), update the underlying script or data file so the task picks up the change.
 
-## Conversation history
+Before finishing any conversation:
+1. Did the user tell you something new? Write it to a file.
+2. Did you learn how they like things done? Save the preference.
+3. Is there data a scheduled task needs? Update the relevant script/file.
+4. Would a future session benefit from a summary? Archive to `conversations/`.
+5. Should personality or knowledge apply across all channels? Edit `/workspace/global/CLAUDE.local.md` (not read-only `CLAUDE.md`).
 
-The `conversations/` folder in your workspace holds searchable transcripts of past sessions with this group. Use it to recall prior context when a request references something that happened before. For structured long-lived data, prefer dedicated files (`customers.md`, `preferences.md`, etc.); split any file over ~500 lines into a folder with an index.
+For mnemon recall/remember patterns and wiki ingest/query procedures, invoke the `/mnemon` and `/wiki` skills.
+
+## Durable code
+
+When you add or change durable files (scripts, `CLAUDE.local.md`, reference data, or anything under `/workspace/extra/skills/`), **commit and push to the repo promptly** — the operator should not need to remember git. Do not commit `data/`, logs, or credentials. See `docs/agent-owned-code.md` in the repo.
+
+## Composition
+
+How your instructions are assembled (shared base, persona, fragments, skills): see `docs/claude-md-composition.md` in the repo.

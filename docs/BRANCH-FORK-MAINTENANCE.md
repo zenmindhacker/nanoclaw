@@ -1,5 +1,7 @@
 # Branch & Fork Maintenance Guidelines
 
+> **Note for end-user forks:** The current skills model ([skills-model.md](skills-model.md)) replaces merge-based channel forks with `/add-<channel>` skills that fetch and copy modules. This document is kept for **upstream channel-branch maintainers** who forward-merge long-lived `nanoclaw-*` forks.
+
 ## Structure
 
 **`nanocoai/nanoclaw`** (upstream) — core engine with skill definitions (`.claude/skills/`). No channel code on `main`.

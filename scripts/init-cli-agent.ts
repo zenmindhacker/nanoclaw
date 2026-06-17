@@ -103,7 +103,6 @@ async function main(): Promise<void> {
 
   // 2. Agent group + filesystem.
   const folder = args.folder || `cli-with-${normalizeName(args.displayName)}`;
-  const pickedProvider = process.env.NANOCLAW_PICKED_PROVIDER?.trim().toLowerCase();
   let ag: AgentGroup | undefined = getAgentGroupByFolder(folder);
   if (!ag) {
     const agId = generateId('ag');
@@ -126,8 +125,11 @@ async function main(): Promise<void> {
       'When the user first reaches out, introduce yourself briefly and invite them to chat. Keep replies concise.',
   });
   // Runtime provider lives on the config row, not the deprecated agent_provider.
-  if (pickedProvider && pickedProvider !== 'claude') {
-    updateContainerConfigScalars(ag.id, { provider: pickedProvider });
+  const defaultProvider =
+    process.env.NANOCLAW_PICKED_PROVIDER?.trim().toLowerCase() ||
+    process.env.NANOCLAW_DEFAULT_PROVIDER?.trim().toLowerCase();
+  if (defaultProvider && defaultProvider !== 'claude') {
+    updateContainerConfigScalars(ag.id, { provider: defaultProvider });
   }
 
   // 3. CLI messaging group + wiring.
