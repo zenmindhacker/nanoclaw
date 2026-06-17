@@ -1,7 +1,7 @@
 import path from 'path';
 
 import { CONTAINER_IMAGE } from '../../../src/config.js';
-import { agentGlobalDir } from '../../../src/agent-global.js';
+import { agentGlobalDir, agentGlobalMnemonDir } from '../../../src/agent-global.js';
 import { runCommand } from './exec.js';
 
 /** Find a running session container for the given agent group folder. */
