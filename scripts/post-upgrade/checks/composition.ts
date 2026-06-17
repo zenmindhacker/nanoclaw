@@ -118,7 +118,7 @@ export function runCompositionChecks(ctx: RunContext): CheckResult[] {
   );
 
   checks.push(
-    syncTimedCheck('persona.capabilities-guidance', 1, () => {
+    syncTimedCheck('persona.user-facing', 1, () => {
       const globalPersona = path.join(GROUPS_DIR, 'global', 'CLAUDE.md');
       if (!fs.existsSync(globalPersona)) {
         return { status: 'warn', message: 'No global CLAUDE.md persona file' };
@@ -133,8 +133,11 @@ export function runCompositionChecks(ctx: RunContext): CheckResult[] {
       if (!content.includes('Stay user-facing')) {
         return { status: 'fail', message: 'Persona missing Stay user-facing section' };
       }
-      if (!content.includes('mnemon')) {
-        return { status: 'fail', message: 'Persona missing mnemon capability guidance' };
+      if (/When asked whether you remember/i.test(content)) {
+        return {
+          status: 'fail',
+          message: 'Persona contains scripted capability Q&A — remove so answers reflect real memory',
+        };
       }
       return { status: 'pass' };
     }),

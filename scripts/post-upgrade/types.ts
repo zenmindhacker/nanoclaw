@@ -43,5 +43,6 @@ export interface RunContext {
   agentGroupFolder: string;
   primarySessionId: string | null;
   containerName: string | null;
+  /** Date stamp for reports (human-readable). */
   upgradeTestTag: string;
 }

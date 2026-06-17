@@ -6,7 +6,7 @@
  *
  * Prerequisites:
  *   - NanoClaw host service running on this machine
- *   - CLI agent wired: pnpm exec tsx scripts/init-cli-agent.ts --display-name "Upgrade Smoke" --agent-name smoke
+ *   - CLI agent wired: pnpm exec tsx scripts/wire-cli-primary.ts --agent cleo|silas
  *   - For Tier 2 Slack synthetic: active session on a wired Slack messaging group
  */
 import fs from 'fs';

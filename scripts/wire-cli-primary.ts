@@ -1,7 +1,7 @@
 /**
  * Wire the local CLI channel to the production primary agent group.
  *
- * Use this before `pnpm run chat` or `pnpm run test:capabilities` so behavioral
+ * Use this before `pnpm run chat` or `pnpm run post-upgrade -- --tier 2` so behavioral
  * smoke tests hit Cleo/Silas persona + provider, not a scratch smoke agent.
  *
  * Usage:
@@ -111,8 +111,8 @@ async function main(): Promise<void> {
 
   console.log('');
   console.log('Try:');
-  console.log('  pnpm run test:capabilities');
-  console.log('  pnpm run chat "Do you have persistent memory? One sentence."');
+  console.log('  pnpm run post-upgrade -- --agent ' + agent + ' --tier 2');
+  console.log('  pnpm run chat "What do you remember about last week?"');
 }
 
 main().catch((err) => {

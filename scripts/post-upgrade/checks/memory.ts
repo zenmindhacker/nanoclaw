@@ -1,12 +1,11 @@
 import fs from 'fs';
 import path from 'path';
 
-import { agentGlobalDir, agentGlobalMnemonDir, agentGlobalWikiDir } from '../../../src/agent-global.js';
+import { agentGlobalWikiDir } from '../../../src/agent-global.js';
 import { getDb, hasTable } from '../../../src/db/connection.js';
 import { auditGroupSkills } from '../../../src/modules/skills/audit.js';
 import { buildCatalogForQuery } from '../../../src/modules/skills/catalog.js';
 import { scanForInjection } from '../../../src/modules/skills/injection-scan.js';
-import { UPGRADE_TEST_PREFIX } from '../manifest.js';
 import type { RunContext } from '../types.js';
 import { syncTimedCheck } from '../report.js';
 import type { CheckResult } from '../types.js';
@@ -16,7 +15,6 @@ import {
   findRunningContainer,
   mnemonGuidePath,
 } from '../utils/container.js';
-import { runCommand } from '../utils/exec.js';
 
 export async function runMemoryChecks(ctx: RunContext): Promise<CheckResult[]> {
   const checks: CheckResult[] = [];
@@ -163,16 +161,4 @@ export async function runMemoryChecks(ctx: RunContext): Promise<CheckResult[]> {
   );
 
   return checks;
-}
-
-/** Seed an ephemeral mnemon fact for Tier 2 recall/injection tests. */
-export function seedUpgradeTestFact(ctx: RunContext): CheckResult {
-  return syncTimedCheck('mnemon.seed', 2, () => {
-    const fact = `${UPGRADE_TEST_PREFIX} ${ctx.upgradeTestTag} harness fact: recall me`;
-    const cmd = `mnemon remember ${JSON.stringify(fact)}`;
-    const container = ctx.containerName ?? findRunningContainer(ctx.agentGroupFolder);
-    const run = container ? execInContainer(container, cmd) : execMnemonOnHost(ctx.agentGroupId, cmd);
-    if (run.ok) return { status: 'pass', message: fact };
-    return { status: 'fail', message: 'Failed to seed upgrade test fact', detail: run.stderr || run.stdout };
-  });
 }

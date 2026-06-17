@@ -26,7 +26,6 @@
     "lint:fix": "eslint src/ --fix",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:capabilities": "tsx scripts/test-agent-capabilities.ts",
     "wire-cli-primary": "tsx scripts/wire-cli-primary.ts",
     "post-upgrade": "tsx scripts/post-upgrade/run.ts"
   },

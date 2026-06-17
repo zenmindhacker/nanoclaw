@@ -23,18 +23,7 @@ pnpm exec tsx scripts/wire-cli-primary.ts --agent cleo
 pnpm exec tsx scripts/wire-cli-primary.ts --agent silas
 ```
 
-Manual capability smoke anytime:
-
-```bash
-pnpm run test:capabilities
-pnpm run chat "Do you have persistent memory? One sentence."
-```
-
-Legacy scratch agent (optional, not recommended for persona tests):
-
-```bash
-pnpm exec tsx scripts/init-cli-agent.ts --display-name "Upgrade Smoke" --agent-name smoke
-```
+Tier 2 memory recall runs via `post-upgrade` — it seeds ephemeral facts into mnemon, wiki, `CLAUDE.local.md`, and `slack_history.json`, then asks natural questions and checks the reply contains the seeded blocker/token.
 
 | Agent | Primary group folder |
 |-------|---------------------|
@@ -70,7 +59,7 @@ ssh cian@cleo-lc.cognitivetech.net \
 |------|-------|----------------|
 | **0** | Local / CI | `pnpm test`, `pnpm run typecheck`, `bun test` in agent-runner |
 | **1** | Server | Host service, Docker image, OAuth health (Cleo), mnemon/wiki structure, skill audit, read-only skill scripts, Slack wiring, **CLAUDE composition** |
-| **2** | Server | CLI ping, **memory.capabilities-cli**, mnemon seed/recall/injection, wiki query, skill catalog prompts, synthetic Slack inbound → outbound.db |
+| **2** | Server | CLI ping, **memory recall** (mnemon / wiki / local / thread fixtures), skill catalog prompts, synthetic Slack inbound → outbound.db |
 
 Tier 2 is skipped automatically if Tier 1 has failures (use `--force-tier2` to override).
 
@@ -83,14 +72,24 @@ Tier 2 is skipped automatically if Tier 1 has failures (use `--force-tier2` to o
 | `global-memory-scaffold` | `groups/global/wiki/` and `groups/global/mnemon/` exist |
 | `stream-progress-fragment` | `.claude-fragments/module-stream-progress.md` present (Slack fork) |
 | `wiki-skill-paths` | `container/skills/wiki/SKILL.md` references `/workspace/global/wiki/` |
+| `persona.user-facing` | No deprecated architecture hiding; no scripted capability Q&A |
 
-Existing memory checks in `scripts/post-upgrade/checks/memory.ts` remain.
+Existing memory checks in `scripts/post-upgrade/checks/memory.ts` remain (mnemon binary, wiki scaffold, skill catalog, etc.).
 
-## Policy
+## Tier 2 memory recall checks
+
+| Check ID | Layer | Prompt style |
+|----------|-------|----------------|
+| `memory.mnemon-recall` | mnemon | "What do you remember about Project Zephyr-{nonce}?" |
+| `memory.wiki-recall` | wiki page | "Look up … in the wiki — what was the blocker?" |
+| `memory.local-recall` | `CLAUDE.local.md` | "Check your agent-wide notes for …" |
+| `memory.thread-recall` | `slack_history.json` | "We discussed … in a sysops thread earlier" |
+
+Each fixture uses a unique nonce and verification token. Pass = reply contains the seeded blocker (`oauth refresh token expired`) or token (`__upgrade_test___{nonce}`).
 
 - **Skills:** read-only smoke only (`list-names`, `todoist list`, etc.)
 - **Slack:** synthetic inbound via session DB + heartbeat — no live Slack posts from the harness
-- **Memory:** one isolated `__upgrade_test__` mnemon fact per run (Tier 2)
+- **Memory:** Tier 2 seeds unique `Project Zephyr-{nonce}` facts per layer; asserts reply recalls blocker/token (not scripted capability language)
 
 ## Key files
 
@@ -100,7 +99,8 @@ Existing memory checks in `scripts/post-upgrade/checks/memory.ts` remain.
 | `scripts/post-upgrade/manifest.ts` | Per-agent commands and wiki hints |
 | `scripts/post-upgrade/checks/host.ts` | Host + composition checks |
 | `scripts/post-upgrade/checks/memory.ts` | Mnemon/wiki structure |
-| `scripts/post-upgrade/checks/cli-scenarios.ts` | Tier 2 agent loop |
+| `scripts/post-upgrade/fixtures/memory-fixtures.ts` | Ephemeral recall seeds for Tier 2 |
+| `scripts/post-upgrade/checks/cli-scenarios.ts` | Tier 2 agent loop + memory recall |
 | `scripts/post-upgrade/checks/slack-synthetic.ts` | Synthetic Slack inject |
 
 Fork replay inventory: [migrations/guide.md](migrations/guide.md).
