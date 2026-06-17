@@ -2,7 +2,7 @@
 
 **Fork:** `zenmindhacker/nanoclaw` (Cleo + Silas two-agent production install)  
 **Upstream:** `nanocoai/nanoclaw` (`https://github.com/nanocoai/nanoclaw.git`)  
-**Recorded at:** 2026-06-17 (updated pre-migration 2026-06-17, commit `1e6e9a33`, base `479ca166`)
+**Recorded at:** 2026-06-17 (re-based onto upstream v2.1.17, commit `12d53681`, upstream base `ee7f8916`)
 
 This guide captures the intent behind every significant fork customization so
 future upgrades can replay them on a clean upstream base without archaeology.
