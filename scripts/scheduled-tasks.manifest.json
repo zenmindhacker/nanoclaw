@@ -17,7 +17,7 @@
   ],
   "pendingCleo": [
     {
-      "note": "Cleo production v2 DB only wires dm-with-cian. slack_scheduled tasks (im-sync, im-digest, im-audit, ganttsy-resume-daily) need v2 agent group + messaging wiring before seeding. shadow-transcript-sync retired — use transcript-search (live Shadow DB) instead of transcript-sync copy pipeline. Use /manage-channels or ncl after Slack channel is registered."
+      "note": "Cleo slack_scheduled tasks (im-sync, im-digest, im-audit, ganttsy-resume-daily, oauth-health-check) need v2 agent group + messaging wiring before seeding. RETIRED — do not re-seed: transcript-sync, transcript-unmatched-reminder, pending-actions-reminder, catch-up-auditor (transcript replay). Meeting lookup: transcript-search + Mac shadow-sync."
     }
   ]
 }

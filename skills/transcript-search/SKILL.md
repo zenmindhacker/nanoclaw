@@ -7,7 +7,7 @@ description: Search meeting transcripts directly from the local SQLite database 
 
 Query the meeting transcript SQLite database directly. No copying transcripts to repos, no cron sync — just search, list, and read.
 
-**Companion skill:** `transcript-sync` exports transcripts to GitHub repos on a cron. Use **transcript-search** when you need live DB queries, grep, or excerpts without waiting for sync.
+**Companion skill:** `transcript-sync` (retired on Cleo — copy/git pipeline and #sysops classification cron disabled). Use **transcript-search** for live DB queries, grep, or excerpts.
 
 **Script:** `{baseDir}/scripts/transcript-search.mjs` (Node `node:sqlite`, no npm install)  
 **Router:** `{baseDir}/scripts/transcript-search.sh`
