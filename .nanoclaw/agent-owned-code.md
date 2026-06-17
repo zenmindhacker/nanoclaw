@@ -78,3 +78,15 @@ Keep channel-specific state (e.g. Christina’s cycle dates) in the active group
 ## Server deploy
 
 On each server: `git pull --ff-only`, `pnpm install --frozen-lockfile`, `pnpm run build`, restart `nanoclaw`, rebuild container image when Dockerfile changes. Post-upgrade smoke: [post-upgrade.md](post-upgrade.md).
+
+## Shadow DB sync (macOS → Cleo)
+
+Shadow runs on Cian's Mac only. Cleo reads transcripts from `/home/cian/shadow-data/` (mounted as `/workspace/extra/shadow/` in containers).
+
+**Mac LaunchAgent:** `~/Library/LaunchAgents/com.nanoclaw.shadow-sync.plist` — every **15 minutes**, rsyncs `shadow.db` + `-wal` + `-shm` to Cleo. Manual run: `scripts/shadow-sync.sh`. Missed runs while the Mac is asleep are fine; the next wake syncs the latest state.
+
+Re-install after editing the plist:
+```bash
+launchctl bootout gui/$UID/com.nanoclaw.shadow-sync 2>/dev/null || true
+launchctl bootstrap gui/$UID ~/Library/LaunchAgents/com.nanoclaw.shadow-sync.plist
+```
