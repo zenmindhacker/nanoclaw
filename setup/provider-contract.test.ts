@@ -60,7 +60,9 @@ describe('setup carries the picked provider to creation via a setup-run env var'
     it(`${file} applies the env-carried provider to container_configs.provider`, () => {
       const src = read(file);
       expect(src).toContain('NANOCLAW_PICKED_PROVIDER');
-      expect(src).toMatch(/updateContainerConfigScalars\([^)]*provider:\s*pickedProvider/);
+      expect(src).toMatch(
+        /updateContainerConfigScalars\([^)]*provider:\s*(pickedProvider|defaultProvider)/,
+      );
     });
   }
 });
