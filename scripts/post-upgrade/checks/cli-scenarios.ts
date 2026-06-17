@@ -22,8 +22,12 @@ import {
 } from '../utils/cli-session.js';
 import { runPnpmChat } from '../utils/exec.js';
 
-/** Wall-clock budget for one agent turn (CLI socket + outbound poll). */
-const AGENT_TURN_MS = 300_000;
+/** CLI socket wait per question (chat.ts reads CHAT_TIMEOUT_MS). */
+const CHAT_TURN_MS = 180_000;
+/** Poll outbound.db after CLI returns if socket missed delivery. */
+const OUTBOUND_POLL_MS = 45_000;
+/** Max wait for a stuck container to exit before sending the next prompt. */
+const IDLE_WAIT_MS = 90_000;
 
 async function askAgent(
   ctx: RunContext,
@@ -35,10 +39,10 @@ async function askAgent(
     return { ok: false, text: '', via: 'none' };
   }
 
-  await waitForGroupContainersIdle(ctx.agentGroupFolder, AGENT_TURN_MS);
+  await waitForGroupContainersIdle(ctx.agentGroupFolder, IDLE_WAIT_MS);
   const outboundBefore = countOutboundChat(ctx.agentGroupId, session.id);
 
-  const r = runPnpmChat(prompt, AGENT_TURN_MS + 30_000, AGENT_TURN_MS);
+  const r = runPnpmChat(prompt, CHAT_TURN_MS + 15_000, CHAT_TURN_MS);
   const cliText = [r.stdout, r.stderr].filter(Boolean).join('\n').trim();
 
   if (replyContainsFixture(cliText, fixture)) {
@@ -50,7 +54,7 @@ async function askAgent(
     session.id,
     fixture,
     outboundBefore,
-    60_000,
+    OUTBOUND_POLL_MS,
   );
   if (outboundText) {
     return { ok: true, text: outboundText, via: 'outbound' };
@@ -59,7 +63,7 @@ async function askAgent(
   if (cliText.includes('timeout: no reply')) {
     return {
       ok: false,
-      text: cliText + '\n(no matching outbound within 60s after CLI timeout)',
+      text: cliText + `\n(no matching outbound within ${OUTBOUND_POLL_MS / 1000}s after CLI timeout)`,
       via: 'none',
     };
   }
@@ -103,7 +107,7 @@ export async function runCliScenarioChecks(ctx: RunContext): Promise<CheckResult
 
   checks.push(
     await timedCheck('cli.ping', 2, async () => {
-      const result = await pingCliAgent(AGENT_TURN_MS);
+      const result = await pingCliAgent(CHAT_TURN_MS + 15_000, CHAT_TURN_MS);
       if (result === 'ok') return { status: 'pass', message: 'CLI ping replied' };
       if (result === 'socket_error') {
         return {
@@ -196,13 +200,13 @@ export async function runCliScenarioChecks(ctx: RunContext): Promise<CheckResult
 
   checks.push(
     await timedCheck('skills.catalog-cli', 2, async () => {
-      await waitForGroupContainersIdle(ctx.agentGroupFolder, AGENT_TURN_MS);
+      await waitForGroupContainersIdle(ctx.agentGroupFolder, IDLE_WAIT_MS);
       const prompt =
         ctx.agent === 'cleo'
           ? 'I need to search meeting transcripts from Shadow. Which skill handles that? Name it only.'
           : 'Show my grocery lists. Which skill or tool do you use? Name it only.';
       const expected = ctx.agent === 'cleo' ? 'transcript-search' : 'anylist';
-      const r = runPnpmChat(prompt, AGENT_TURN_MS + 30_000, AGENT_TURN_MS);
+      const r = runPnpmChat(prompt, CHAT_TURN_MS + 15_000, CHAT_TURN_MS);
       const combined = [r.stdout, r.stderr].filter(Boolean).join('\n').toLowerCase();
       if (combined.includes(expected)) {
         return { status: 'pass', message: `Agent referenced ${expected}` };

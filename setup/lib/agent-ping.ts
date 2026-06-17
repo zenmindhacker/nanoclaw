@@ -32,10 +32,11 @@ export function classifyPingResult(exitCode: number | null, stdout: string, stde
   return 'no_reply';
 }
 
-export function pingCliAgent(timeoutMs = 30_000): Promise<PingResult> {
+export function pingCliAgent(timeoutMs = 30_000, chatTimeoutMs = timeoutMs): Promise<PingResult> {
   return new Promise((resolve) => {
     const child = spawn('pnpm', ['run', 'chat', 'ping'], {
       stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, CHAT_TIMEOUT_MS: String(chatTimeoutMs) },
     });
     let stdout = '';
     let stderr = '';

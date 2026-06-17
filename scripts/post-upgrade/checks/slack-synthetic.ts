@@ -126,7 +126,7 @@ export async function runSlackSyntheticCheck(ctx: RunContext): Promise<CheckResu
       };
     }
 
-    await waitForGroupContainersIdle(ctx.agentGroupFolder, 180_000);
+    await waitForGroupContainersIdle(ctx.agentGroupFolder, 90_000);
 
     const before = countOutboundChat(ctx.agentGroupId, session.id);
     const msgId = `upgrade-slack-${Date.now()}`;
@@ -159,7 +159,7 @@ export async function runSlackSyntheticCheck(ctx: RunContext): Promise<CheckResu
     const now = new Date();
     fs.utimesSync(hb, now, now);
 
-    const timeoutMs = 300_000;
+    const timeoutMs = 180_000;
     const start = Date.now();
     let found = false;
     let lastText = '';

@@ -87,7 +87,7 @@ Existing memory checks in `scripts/post-upgrade/checks/memory.ts` remain (mnemon
 
 Each fixture uses a unique nonce and verification token. Pass = reply contains the seeded blocker (`oauth refresh token expired`) or token (`__upgrade_test___{nonce}`).
 
-Tier 2 CLI turns allow up to 5 minutes per question (`CHAT_TIMEOUT_MS`). If the CLI socket disconnects before delivery, the harness also checks `outbound.db` for the reply (OpenCode often finishes after the 120s default chat timeout).
+Tier 2 CLI turns allow up to 3 minutes per question (`CHAT_TIMEOUT_MS=180000`). If the CLI socket disconnects before delivery, the harness polls `outbound.db` for 45s. Run Cleo and Silas **sequentially** on the shared host — not in parallel.
 
 - **Skills:** read-only smoke only (`list-names`, `todoist list`, etc.)
 - **Slack:** synthetic inbound via session DB + heartbeat — no live Slack posts from the harness

@@ -141,9 +141,10 @@ export function cleanupWikiFixture(fixture: MemoryFixture): void {
   if (fs.existsSync(pagePath)) fs.unlinkSync(pagePath);
 }
 
-export function replyContainsFixture(reply: string, fixture: MemoryFixture): boolean {
+export function replyContainsFixture(reply: string, fixture: MemoryFixture, requireToken = false): boolean {
   const lower = reply.toLowerCase();
   if (lower.includes(fixture.token.toLowerCase())) return true;
+  if (requireToken) return false;
   if (lower.includes(fixture.blocker.toLowerCase())) return true;
   if (lower.includes('oauth') && lower.includes('refresh')) return true;
   return false;

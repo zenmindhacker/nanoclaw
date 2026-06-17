@@ -67,7 +67,7 @@ export function findFixtureInOutbound(
 ): string | null {
   if (countOutboundChat(agentGroupId, sessionId) <= minCount) return null;
   for (const text of recentOutboundTexts(agentGroupId, sessionId)) {
-    if (replyContainsFixture(text, fixture)) return text;
+    if (replyContainsFixture(text, fixture, true)) return text;
   }
   return null;
 }
