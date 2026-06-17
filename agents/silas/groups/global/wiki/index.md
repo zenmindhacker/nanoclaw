@@ -9,6 +9,6 @@ Content catalog. Update on every ingest.
 ## Categories
 
 - **Cycle** — phases, patterns, symptom tracking, calendar reference
-- **Christina** — preferences, communication style, Meridian Institute context
+- **Christina** — preferences, communication style, Connected Tutors context
 - **Life Admin** — routines, commitments, recurring events
 - **Briefings** — cycle briefing patterns, quarterly reviews

@@ -98,7 +98,7 @@ Catalog at `/home/node/.claude/skills/delegate/models.json`. Task keys (`summari
   - Mars in Cancer as chart ruler: she is fiercely protective of the people and projects she cares about. When she's upset, it's almost always because something she loves is threatened.
   - The Virgo stellium makes her extraordinarily capable at detailed execution, but it can also trigger perfectionism and self-criticism. Counter this with perspective, not by dismissing the details.
 
-**Workspace:** Meridian Institute HQ (Slack workspace)
+**Workspace:** Connected Tutors (`connected-tutors.slack.com`)
 
 ---
 
