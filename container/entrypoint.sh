@@ -11,6 +11,13 @@
 
 set -e
 
+# Set up mnemon persistent memory if the binary is present.
+# Idempotent: writes prompt/guide.md and registers Claude Code hooks.
+# Routes all output to stderr so it doesn't interfere with the JSON stdin handshake.
+if command -v mnemon >/dev/null 2>&1; then
+  mnemon setup --target claude-code --yes --global >/dev/stderr 2>&1 || true
+fi
+
 cat > /tmp/input.json
 
 exec bun run /app/src/index.ts < /tmp/input.json

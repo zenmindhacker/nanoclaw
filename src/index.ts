@@ -18,6 +18,8 @@ import { startHostSweep, stopHostSweep } from './host-sweep.js';
 import { routeInbound } from './router.js';
 import { log } from './log.js';
 import { enforceUpgradeTripwire } from './upgrade-state.js';
+// Fork extensions (OAuth refresh, Slack adapter, etc.) — upstream never edits this path.
+import { initExtensions, teardownExtensions } from './extensions/index.js';
 
 // Response + shutdown registries live in response-registry.ts to break the
 // circular import cycle: src/index.ts imports src/modules/index.js for side
@@ -49,6 +51,7 @@ async function dispatchResponse(payload: ResponsePayload): Promise<void> {
 
 // Channel barrel — each enabled channel self-registers on import.
 // Channel skills uncomment lines in channels/index.ts to enable them.
+import './extensions/index.js';
 import './channels/index.js';
 
 // Modules barrel — default modules (typing, mount-security) ship here; skills
@@ -168,7 +171,10 @@ async function main(): Promise<void> {
   startHostSweep();
   log.info('Host sweep started');
 
-  // 7. Start the `ncl` CLI socket server (data/ncl.sock).
+  // 7. Start fork extensions (OAuth token refresh, etc.).
+  initExtensions();
+
+  // 8. Start the `ncl` CLI socket server (data/ncl.sock).
   await startCliServer();
 
   log.info('NanoClaw running');
@@ -186,6 +192,7 @@ async function shutdown(signal: string): Promise<void> {
   }
   stopDeliveryPolls();
   stopHostSweep();
+  teardownExtensions();
   await stopCliServer();
   try {
     await teardownChannelAdapters();

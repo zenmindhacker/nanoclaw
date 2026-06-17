@@ -1,0 +1,13 @@
+{
+  "mcpServers": {},
+  "packages": {
+    "apt": [],
+    "npm": []
+  },
+  "additionalMounts": [],
+  "skills": "all",
+  "provider": "opencode",
+  "groupName": "Silas",
+  "assistantName": "Silas",
+  "agentGroupId": "ag-1779225837260-j7xqo0"
+}

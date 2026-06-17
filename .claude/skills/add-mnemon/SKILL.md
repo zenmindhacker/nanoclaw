@@ -9,13 +9,16 @@ Installs [mnemon](https://github.com/mnemon-dev/mnemon) in the agent container i
 
 ## Provider Compatibility
 
-mnemon hooks fire only under `--target claude-code`. Use this skill on agent groups that run the default Claude provider (`AGENT_PROVIDER=claude`). Confirm the provider before applying:
+**mnemon hooks only work with `--target claude-code`.** If the agent group uses `AGENT_PROVIDER=opencode`, hooks registered by `mnemon setup` will never fire — OpenCode spawns its own process and doesn't invoke the `claude` CLI at all.
+
+Check your provider:
 
 ```bash
 grep AGENT_PROVIDER .env groups/*/container.json 2>/dev/null
 ```
 
-If a group uses a different provider (e.g. `AGENT_PROVIDER=opencode`), it spawns its own process and never invokes the `claude` CLI, so the hooks registered by `mnemon setup` do not run for that group.
+- `AGENT_PROVIDER=claude` (default) — fully compatible, proceed with both Phase 2 steps.
+- `AGENT_PROVIDER=opencode` — use **Phase 2 (OpenCode path)** instead of the standard entrypoint step.
 
 ## Phase 1: Pre-flight
 
@@ -25,7 +28,7 @@ If a group uses a different provider (e.g. `AGENT_PROVIDER=opencode`), it spawns
 grep -q 'MNEMON_VERSION' container/Dockerfile && echo "Already applied" || echo "Not applied"
 ```
 
-If already applied, re-run Phase 2 anyway — every step is idempotent and skips work that is already in place — then continue to Phase 3 (Verify).
+If already applied, skip to Phase 3 (Verify).
 
 ### Check latest mnemon version
 
@@ -33,17 +36,17 @@ If already applied, re-run Phase 2 anyway — every step is idempotent and skips
 curl -fsSL https://api.github.com/repos/mnemon-dev/mnemon/releases/latest | grep '"tag_name"'
 ```
 
-Note the version (e.g. `v0.1.1`) — use it as `MNEMON_VERSION` in the next step.
+Note the version (e.g. `v0.1.14`) — use it as `MNEMON_VERSION` in the next step.
 
-## Phase 2: Apply Changes
+## Phase 2: Apply Changes (Claude Code path)
 
 ### 1. Dockerfile — install mnemon binary
 
-Insert the mnemon block immediately above the `# ---- Bun runtime` section of `container/Dockerfile` (skip if `grep -q 'MNEMON_VERSION' container/Dockerfile` already matches):
+Add after the AWS CLI block, before the Bun runtime section:
 
 ```dockerfile
 # ---- mnemon — persistent agent memory ----------------------------------------
-ARG MNEMON_VERSION=0.1.1
+ARG MNEMON_VERSION=0.1.14
 RUN ARCH=$(dpkg --print-architecture) && \
     curl -fsSL "https://github.com/mnemon-dev/mnemon/releases/download/v${MNEMON_VERSION}/mnemon_${MNEMON_VERSION}_linux_${ARCH}.tar.gz" \
     | tar -xz -C /usr/local/bin mnemon && \
@@ -52,17 +55,11 @@ RUN ARCH=$(dpkg --print-architecture) && \
 ENV MNEMON_DATA_DIR=/home/node/.claude/mnemon
 ```
 
-`MNEMON_DATA_DIR` points into the per-agent-group `.claude/` mount, so memory persists across container restarts.
+`MNEMON_DATA_DIR` points into the per-agent-group `.claude/` mount so memory persists across container restarts. No extra volume mounts needed.
 
 ### 2. Entrypoint — run mnemon setup on each container start
 
-`mnemon setup` is idempotent. Run it once per `container/entrypoint.sh`. First check whether the line is already present:
-
-```bash
-grep -q 'mnemon setup' container/entrypoint.sh && echo "Already wired" || echo "Wire it"
-```
-
-If it prints `Wire it`, add the setup call right after `set -e`, before the `cat` that captures stdin, so the result looks like:
+`mnemon setup` is idempotent. Edit `container/entrypoint.sh` to run it right after `set -e`, before the `cat` that captures stdin:
 
 ```bash
 #!/bin/bash
@@ -81,19 +78,7 @@ exec bun run /app/src/index.ts < /tmp/input.json
 
 `>/dev/stderr 2>&1` routes all mnemon output to stderr (docker logs) so it doesn't interfere with the JSON stdin handshake between host and agent-runner.
 
-### 3. Copy the integration tests
-
-Both reach-ins are into container build/runtime files that aren't importable or typed (a GitHub-release binary in the Dockerfile, a shell line in the entrypoint), so structural tests guard them. Copy them into the host test tree:
-
-```bash
-cp .claude/skills/add-mnemon/mnemon-dockerfile.test.ts src/mnemon-dockerfile.test.ts
-cp .claude/skills/add-mnemon/mnemon-entrypoint.test.ts src/mnemon-entrypoint.test.ts
-pnpm exec vitest run src/mnemon-dockerfile.test.ts src/mnemon-entrypoint.test.ts
-```
-
-`mnemon-dockerfile.test.ts` asserts the `MNEMON_VERSION` ARG and `MNEMON_DATA_DIR` ENV are present (red if the install layer is dropped on an upgrade). `mnemon-entrypoint.test.ts` asserts the entrypoint invokes `mnemon setup --target claude-code` (red if the wiring is removed).
-
-### 4. Rebuild and smoke-test the image
+### 3. Rebuild and smoke-test the image
 
 ```bash
 ./container/build.sh
@@ -104,12 +89,9 @@ docker run --rm --entrypoint mnemon nanoclaw-agent:latest --version
 
 ### Restart the service
 
-Run from your NanoClaw project root:
-
 ```bash
-source setup/lib/install-slug.sh
-systemctl --user restart $(systemd_unit)              # Linux
-# launchctl kickstart -k gui/$(id -u)/$(launchd_label)   # macOS
+systemctl --user restart nanoclaw          # Linux
+# launchctl kickstart -k gui/$(id -u)/com.nanoclaw   # macOS
 ```
 
 ### Confirm mnemon hooks are registered
@@ -131,6 +113,41 @@ docker exec $(docker ps --filter name=nanoclaw-v2 --format '{{.Names}}' | head -
 
 Have a conversation with the agent, then start a new session and reference something from the earlier one. Mnemon should surface the relevant context automatically without you restating it.
 
+## Phase 2 (OpenCode path) — context injection
+
+mnemon hooks don't fire under OpenCode. Instead, the agent-runner injects mnemon context directly into every prompt via `readMnemonContext()` in `container/agent-runner/src/providers/opencode.ts`.
+
+**Status:** `readMnemonContext()` is **implemented** in NanoClaw — it is part of the mnemon rollout (not the old stale claim of "already done"). The function:
+1. Reads `$MNEMON_DATA_DIR/prompt/guide.md` (written by `mnemon setup`) or falls back to an inline guide.
+2. Runs `mnemon recall <query>` synchronously (5s timeout, 2KB cap) on the incoming prompt.
+3. Prepends both as a `<system>` block so Kimi/DeepSeek see past facts immediately.
+
+This requires **both** the Dockerfile layer (for the binary) AND the entrypoint step (for `guide.md` generation).
+
+**What this means for the agent:** The agent can call `mnemon recall`, `mnemon remember`, `mnemon link`, and `mnemon status` via its bash tool. mnemon writes its graph to `$MNEMON_DATA_DIR`, which is in the per-agent-group `.claude/` mount — memory persists across restarts.
+
+**Applying:** Both Phase 2 steps (Dockerfile + entrypoint) are needed for OpenCode agents — the Dockerfile layer for the binary and the entrypoint for generating `prompt/guide.md`.
+
+```dockerfile
+ARG MNEMON_VERSION=0.1.14
+RUN ARCH=$(dpkg --print-architecture) && \
+    curl -fsSL "https://github.com/mnemon-dev/mnemon/releases/download/v${MNEMON_VERSION}/mnemon_${MNEMON_VERSION}_linux_${ARCH}.tar.gz" \
+    | tar -xz -C /usr/local/bin mnemon && \
+    chmod +x /usr/local/bin/mnemon
+ENV MNEMON_DATA_DIR=/home/node/.claude/mnemon
+```
+
+Then rebuild: `./container/build.sh`
+
+### Verify (OpenCode)
+
+Start a session and ask the agent to run `mnemon status`. It should report empty graphs (no error) on first run.
+
+```bash
+# Also confirm the binary is present in the image:
+docker run --rm --entrypoint mnemon nanoclaw-agent:latest --version
+```
+
 ## Memory Storage
 
 Mnemon writes to `/home/node/.claude/mnemon/` inside the container, which maps to the per-agent-group `.claude/` directory on the host. To find the exact host path:
@@ -141,6 +158,25 @@ docker inspect $(docker ps --filter name=nanoclaw-v2 --format '{{.Names}}' | hea
 ```
 
 To reset all memory for an agent, stop the container and delete the `mnemon/` subdirectory from that host path.
+
+## Migration Guide Update
+
+If you are using `/migrate-nanoclaw`, add these entries to `.nanoclaw-migrations/05-dockerfile.md`:
+
+**Dockerfile — before the Bun runtime block:**
+```dockerfile
+ARG MNEMON_VERSION=0.1.14
+RUN ARCH=$(dpkg --print-architecture) && \
+    curl -fsSL "https://github.com/mnemon-dev/mnemon/releases/download/v${MNEMON_VERSION}/mnemon_${MNEMON_VERSION}_linux_${ARCH}.tar.gz" \
+    | tar -xz -C /usr/local/bin mnemon && \
+    chmod +x /usr/local/bin/mnemon
+ENV MNEMON_DATA_DIR=/home/node/.claude/mnemon
+```
+
+**`container/entrypoint.sh` — add after `set -e`:**
+```bash
+mnemon setup --target claude-code --yes --global >/dev/stderr 2>&1
+```
 
 ## Troubleshooting
 

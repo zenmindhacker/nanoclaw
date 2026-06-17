@@ -1,0 +1,16 @@
+{
+  "mcpServers": {},
+  "packages": {
+    "apt": [
+      "jq"
+    ],
+    "npm": []
+  },
+  "imageTag": "nanoclaw-agent-v2-28c794a6:ag-1779305793766-x8xwuv",
+  "additionalMounts": [],
+  "skills": "all",
+  "provider": "opencode",
+  "groupName": "sysops",
+  "assistantName": "sysops",
+  "agentGroupId": "ag-1779305793766-x8xwuv"
+}

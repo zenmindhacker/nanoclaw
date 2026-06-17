@@ -1,0 +1,30 @@
+{
+  "id": "ts-2026-04-16-churchill-advisor-coach-onboarding-terms-rates",
+  "meetingTitle": "Churchill advisor-coach onboarding, terms & rates",
+  "meetingDate": "2026-04-16",
+  "org": "ct",
+  "sourceRel": "2026-04-16-ava-depaw-finance-plan-with-wells-fargo-georgia-529-drawthing.md",
+  "targetDir": "/workspace/extra/github/personal/transcripts",
+  "transcriptPath": "/workspace/extra/github/personal/transcripts/2026-04-16-ava-depaw-finance-plan-with-wells-fargo-georgia-529-drawthing.md",
+  "lineageTag": "meeting:Churchill advisor-coach onboarding, terms & rates|date:2026-04-16",
+  "actions": [
+    {
+      "title": "Follow up on Churchill advisor-coach onboarding",
+      "context": "**Background**: Cian had an onboarding discussion with Jane from Churchill Leadership about joining their advisor-coach roster as a contractor. Churchill works with corporate and government clients providing executive coaching, team coaching, and organizational development services.\n\n**Discussion**: Jane explained the full engagement model:\n- Contractors receive 60% of what Churchill charges clients\n- Corporate executive coaching engagements range from $16K-$25K for six months\n- Advisor-coach pricing will be higher than standard coaching (still being figured out)\n- Typical commitment is 2-3 hours/month of coaching plus alignment meetings\n- Churchill retains client relationships; any client introduced through Churchill remains a Churchill client\n- Coaches can bring opportunities to Churchill for larger engagements and receive a piece of all revenue\n- Cian's sweet spot: technology strategy, translating between management and technology teams, turning strategy into execution\n- Notable clients for credibility: NFL, Bell MTS, BC Housing (government AI consulting), Trillium\n\n**Decision/Direction**: Jane said Churchill is updating their system to handle advisor-coaches separately from executive coaches, including a second bio format. She mentioned an internal meeting on Monday to finalize this. Jane committed to coming back in **approximately two weeks** (target: ~2026-04-30) to introduce Cian to **Lisa, their country director**, who will handle the formal onboarding process.\n\n**Next steps**: Wait for Jane's follow-up in ~2 weeks. When contacted, Cian will need to: (1) review and sign the Master Services Agreement, (2) fill in an onboarding form, (3) complete a bio template. Cian noted the MSA should be with his Canadian company initially, with the understanding it can be redone later when he moves to a Florida LLC within the next year. Background check and insurance are only required when an engagement starts.",
+      "assignee": "cian@copperteams.ai",
+      "priority": "medium",
+      "project": "Kora Voice Integration",
+      "index": 2
+    },
+    {
+      "title": "Prepare Churchill advisor-coach bio highlighting Zen and tech background",
+      "context": "**Background**: As part of the Churchill onboarding process, Cian will need to complete a bio template. Churchill is creating a separate bio format specifically for advisor-coaches (distinct from their standard executive coaching bios).\n\n**Discussion**: Jane emphasized that the bio should highlight Cian's unique combination of skills. She specifically noted that including both the technology strategy background AND the contemplative/Zen Buddhist priest background would be a strong differentiator for the right clients. Jane mentioned they like to include a personal \"about the coach\" section — she gave the example of a coach whose marathon running helped a leader choose her. Jane said: *\"Including the whole technology background but then the contemplative and zen background is really a value add for the right client.\"*\n\nCian's key credentials to feature: 25 years translating between executives and technology teams, NFL consulting, BC Housing AI implementation, Bell MTS, government compliance/privacy expertise, Zen Buddhist priest who integrates contemplative practices into coaching.\n\n**Decision/Direction**: Both agreed the Zen/tech combination is compelling. Churchill will provide a bio template; Cian should prepare content highlighting both dimensions.\n\n**Next steps**: When Lisa reaches out with the bio template, have content ready covering: technology strategy expertise, notable clients (NFL, government), and the Zen Buddhist priest background as a differentiator.",
+      "assignee": "cian@copperteams.ai",
+      "priority": "low",
+      "project": "Kora Voice Integration",
+      "index": 3
+    }
+  ],
+  "createdAt": "2026-04-20T13:07:22.031Z",
+  "status": "pending"
+}

@@ -1,0 +1,54 @@
+{
+  "id": "ts-2026-04-09-tanium-integration-ai-decision-orchestration-plan",
+  "meetingTitle": "Tanium Integration & AI Decision Orchestration Plan",
+  "meetingDate": "2026-04-09",
+  "org": "ctci",
+  "sourceRel": "2026-04-09-shadow-330-questions-for-tanium.md",
+  "targetDir": "/workspace/extra/github/nvs/nvs-docs/transcripts",
+  "transcriptPath": "/workspace/extra/github/nvs/nvs-docs/transcripts/2026-04-09-shadow-330-questions-for-tanium.md",
+  "lineageTag": "meeting:Tanium Integration & AI Decision Orchestration Pla|date:2026-04-09",
+  "actions": [
+    {
+      "title": "Find experienced Tanium implementer for team",
+      "context": "**Background**: The team had a call with Serge from Tanium to understand the platform's capabilities for a BC government contract. After Serge left, the internal team (Mauro, Sted, Cian) realized they have no hands-on Tanium experience. Sted raised serious concerns: *\"If we win this and we fuck up the delivery, we are sued. It's a government contract. There's no limitation of liability.\"* and *\"We don't know the first thing about Tanium.\"*\n\n**Discussion**: The team debated who would actually deploy and configure Tanium. Sted emphasized this isn't just about the AI/decision layer — someone needs to configure the Tanium server, set up workflows, and manage the agent rollout. Mauro suggested TELUS might help, but Sted clarified: *\"We are the ones delivering this thing, whole thing, not TELUS. They're just putting the paper on.\"* One speaker offered to call **Nari** immediately to see if they have someone with Tanium experience.\n\n**Decision/Direction**: The team agreed they need both a **Plan A** (find someone with Tanium implementation experience) and **Plan B** (engage Tanium's professional services). Someone committed to calling Nari right away and circling back.\n\n**Next steps**: Identify and vet a person or partner with real Tanium deployment experience. This is critical for scoping the proposal accurately and mitigating delivery risk on the government contract.",
+      "assignee": "cian@cognitivetech.net",
+      "priority": "high",
+      "project": "Cognitive Tech",
+      "index": 22
+    },
+    {
+      "title": "Determine if Tanium offers professional services",
+      "context": "**Background**: During the internal debrief after the Tanium call, the team identified a major gap — they can build the AI decision intelligence layer but have no capability to deploy, configure, or manage Tanium itself. Cian asked: *\"Do they have professional services that come and set the stuff up? Or is this just like we buy it from them and then IT installs it?\"*\n\n**Discussion**: Cian proposed the ideal model: *\"We stay in our own lane. We're kind of like the master partner, but we bring Tanium in with professional services and like they roll their piece out. We plug into it.\"* Sted noted this might mean losing consulting hours but said *\"I don't care right now\"* — the priority is delivery risk. Mauro agreed that Tanium professional services could handle the deployment side while the team focuses on the orchestration/AI brain.\n\n**Decision/Direction**: The team needs to confirm whether Tanium offers professional services engagement as part of procurement, and what that looks like in terms of scope and cost for the proposal.\n\n**Next steps**: Reach out to Tanium (likely through Nicole or Serge) to ask about their professional services model — scope, pricing, and whether they can be included as a subcontractor/partner in the BC government proposal.",
+      "assignee": "cian@cognitivetech.net",
+      "priority": "high",
+      "project": "Cognitive Tech",
+      "index": 23
+    },
+    {
+      "title": "Evaluate Anthropic vs Microsoft Cowork for proposal",
+      "context": "**Background**: The team needs to decide which AI orchestration platform to use for the decision intelligence layer that sits on top of Tanium. The original assumption was Microsoft Cowork (since BC likely already has Microsoft licensing), but Cian discovered a constraint.\n\n**Discussion**: Cian reported: *\"Microsoft Cowork is like relatively new. They just announced it in March. Frontier is launching May 1st or something. It looks like the focus for Microsoft Cowork is predominantly orchestrating Microsoft 365 native.\"* This means Microsoft Cowork **cannot currently do third-party API orchestration** (like connecting to Tanium). Cian noted: *\"Anthropic Cowork can do third-party APIs and orchestration... it looks like Microsoft's not allowed that for their Cowork yet.\"* Mauro pushed back slightly, noting that Cowork is essentially *\"just a nice interface around the basic LLM\"* and they could build the workflow directly. Cian responded that going custom would mean *\"a little more of a build and an architecture and some sort of platform\"* rather than leveraging an existing tool.\n\n**Decision/Direction**: The current leaning is toward Anthropic Cowork for third-party API integration, but Cian noted a dependency: the client must be *\"okay from a security standpoint\"* and have appropriate licenses. It would run on people's endpoints, not in the cloud. The team also discussed a fallback of building a custom platform if neither Cowork option is viable.\n\n**Next steps**: Document the Cowork platform options (Microsoft vs Anthropic vs custom build) with pros/cons and security implications for inclusion in the proposal. Confirm whether BC government would accept Anthropic Cowork from a security/compliance perspective.",
+      "assignee": "cian@cognitivetech.net",
+      "priority": "medium",
+      "project": "Cognitive Tech",
+      "index": 24
+    },
+    {
+      "title": "Check Tanium API rate limits for integration design",
+      "context": "**Background**: During the call with Serge (Tanium), the team explored how the AI decision engine would interface with Tanium. The integration model is: AI pulls data from Tanium via API, makes decisions, then triggers actions back through the API.\n\n**Discussion**: When asked about API rate limits, Serge said: *\"On the API side, I don't know... I'd have to go back to product.\"* He noted the API is typically lightweight since it's issuing commands while Tanium does the heavy lifting, and their existing integrations with ServiceNow and Microsoft push large volumes via API without issues. Serge offered: *\"I'd be curious to see what kind of API load you're thinking in a use case.\"* Cian noted: *\"I think most of our challenge would be on the API layer. But since we're not doing all the orchestration, we're just doing the management... I don't think we're going to hit API limits.\"* However, Cian also noted a scenario where they might pull large amounts of data for analysis: *\"If we're doing kind of an analysis and we're just pulling a whole bunch of data out of Tanium.\"*\n\n**Decision/Direction**: Serge will check with product on specific API rate limits. The team should also define their expected API usage patterns to share with Tanium.\n\n**Next steps**: Follow up with Serge via email to get confirmed API rate limits from Tanium's product team. Document expected API call patterns for the integration design.",
+      "assignee": "cian@cognitivetech.net",
+      "priority": "medium",
+      "project": "Cognitive Tech",
+      "index": 25
+    },
+    {
+      "title": "Scope AI decision intelligence layer for proposal",
+      "context": "**Background**: After the Tanium deep-dive, the team clarified the division of responsibilities. Cian summarized it clearly: *\"They have implementation intelligence. We have the decision intelligence.\"* Tanium handles all the execution — patching, remediation, workflows, rollback — while the team's value-add is the AI brain that analyzes the environment and makes decisions about what to patch, when, and in what order.\n\n**Discussion**: Serge confirmed Tanium can handle complex sequencing (e.g., snapshot → graceful shutdown → patch → bring up), dependency-based workflows, confidence scoring, ring deployments, and real-time status reporting — all natively. Cian noted: *\"His default is the human goes into Tanium and clicks around... We don't have human time to go in and click around. We want the AI to do all that work.\"* Mauro suggested starting with a limited scope: *\"We can start building an initial part, the brain, but we will do a limited amount of work... especially with vulnerabilities and understanding from the Internet what this vulnerability is all about and then elaborate a plan of what needs to be and when.\"* He specifically cautioned against overlapping with Tanium's existing Patch Tuesday automation.\n\n**Decision/Direction**: The AI layer should focus on:\n- **Vulnerability intelligence**: Gathering and analyzing CVE/threat data from external sources\n- **Decision-making**: Determining patch priority, sequencing, and timing\n- **Triggering execution**: Using Tanium's API to initiate pre-built workflows\n- **Monitoring outcomes**: Pulling status/performance data back from Tanium\n\nThe team agreed NOT to replicate Tanium's native orchestration capabilities.\n\n**Next steps**: Define the specific scope of the AI decision intelligence layer for the proposal, including what decisions the AI makes vs. what Tanium handles natively. This directly feeds into the proposal writing and LOE estimation.",
+      "assignee": "cian@cognitivetech.net",
+      "priority": "medium",
+      "project": "Cognitive Tech",
+      "index": 26
+    }
+  ],
+  "createdAt": "2026-04-17T19:48:45.112Z",
+  "status": "pending"
+}

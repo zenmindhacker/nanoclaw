@@ -1,0 +1,13 @@
+{
+  "mcpServers": {},
+  "packages": {
+    "apt": [],
+    "npm": []
+  },
+  "additionalMounts": [],
+  "skills": "all",
+  "provider": "opencode",
+  "groupName": "Cleo",
+  "assistantName": "Cleo",
+  "agentGroupId": "ag-1779224777223-b43lzj"
+}

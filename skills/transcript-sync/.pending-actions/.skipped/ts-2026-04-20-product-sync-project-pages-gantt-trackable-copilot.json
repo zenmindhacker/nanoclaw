@@ -1,0 +1,62 @@
+{
+  "id": "ts-2026-04-20-product-sync-project-pages-gantt-trackable-copilot",
+  "meetingTitle": "Product sync: project pages, Gantt, trackable & Copilot",
+  "meetingDate": "2026-04-20",
+  "org": "ganttsy",
+  "sourceRel": "ganttsy-docs/transcripts/2026-04-20-ganttsy-planning.md",
+  "targetDir": "/workspace/extra/github/ganttsy/ganttsy-docs/transcripts",
+  "transcriptPath": "/workspace/extra/github/ganttsy/ganttsy-docs/transcripts/2026-04-20-ganttsy-planning.md",
+  "lineageTag": "meeting:Product sync: project pages, Gantt, trackable & Co|date:2026-04-20",
+  "actions": [
+    {
+      "title": "Share Mrinal design session transcripts with Cian",
+      "context": "**Background**: Bart has been working with Mrinal (designer) on refining project detail screens and will be starting Gantt chart designs. Cian wants visibility into these design discussions so he can follow along and start wiring up functionality.\n\n**Discussion**: Cian asked Bart to share transcripts of his chats with Mrinal. Bart asked if Cian doesn't already receive them automatically. Cian confirmed he doesn't get Bart's private transcripts automatically but noted \"We can make it so I get them.\" Bart said \"it's no problem on my end\" and made a note of it.\n\n**Decision/Direction**: Bart will share his design session transcripts with Cian going forward so Cian can track design decisions and start technical wiring in parallel.\n\n**Next steps**: Set up transcript sharing (either manually forwarding or configuring automatic access for Cian to Bart's Mrinal sessions).",
+      "assignee": "bart@ganttsy.com",
+      "priority": "high",
+      "project": "Ganttsy MVP",
+      "index": 3
+    },
+    {
+      "title": "Write followable projects spec document",
+      "context": "**Background**: The product has two types of external projects users can bring in: \"trackable\" projects (with events, milestones, and epics scraped from public sources) and \"followable\" projects (which follow different logic for organizing and surfacing information). Cian needs both specs before designing the database schema.\n\n**Discussion**: Cian said he's \"hesitant to design the trackable project piece without having [the followable spec], because that has potential to completely change what I design.\" He explained: \"I don't really want to build a special database for each type. I actually want them both to be part of our general project database, not like a special thing over here.\" Bart acknowledged this and said the followable projects \"will follow a whole different type of logic in the information that it organizes and brings up to you and then what it finds relevant.\"\n\n**Decision/Direction**: Bart will write the followable projects spec this week. Cian will wait to have both the trackable and followable specs before designing the unified database architecture.\n\n**Next steps**: Bart to deliver followable projects spec to Cian this week. Cian will then design both trackable and followable as part of the general project database.",
+      "assignee": "bart@ganttsy.com",
+      "priority": "high",
+      "project": "Ganttsy MVP",
+      "index": 4
+    },
+    {
+      "title": "Write copilot architecture proposal document",
+      "context": "**Background**: Bart had previously shared a document titled \"Chat Functionalities\" describing agentic chat features (which he's calling \"Copilot\"). These include document generation, writing/sending emails, sourcing resources, and image recognition — essentially AI-powered assistant features within the product.\n\n**Discussion**: Bart asked if Cian had a chance to look into the copilot functionality. Cian confirmed he'd seen the document listing capabilities: \"Generate documents, write, send emails, source resources, image recognition... I already see the value and that sort of stuff. And there are established patterns for doing these things. They're not necessarily easy to do, but they are possible.\" Bart asked Cian to write up a light architecture document proposing where to slide these features in. Cian agreed: \"Yeah, I'll do that this week.\"\n\n**Decision/Direction**: Cian will produce an architecture document this week showing how the copilot/agentic chat features can be integrated into the existing system.\n\n**Next steps**: Write a light architecture doc that proposes where each copilot feature (doc generation, email, resource sourcing, image recognition) fits into the current system architecture.",
+      "assignee": "cian@ganttsy.com",
+      "priority": "high",
+      "project": "Ganttsy MVP",
+      "index": 5
+    },
+    {
+      "title": "Update runway and burn rate projections for April",
+      "context": "**Background**: Cian had created a development plan (v3.1) and nine-month cycle plan at the end of March showing $152K remaining budget with runway through end of September at current burn rate. The team is spending about 25% less than predicted. However, Bart suggested summer months may still see ~$10K/week burn rather than the projected ~$6K/week reduction.\n\n**Discussion**: Cian walked through the timeline: Alpha launch June-July, maintenance mode August, budget cap originally projected around October 1st. Bart pushed back on the reduced summer burn assumption, suggesting it would still be around $10K/week. Cian recalculated: \"Then we'll probably lose September. We'll have runway through the end of August then.\" They also discussed that 500 alpha users wouldn't materially impact costs (maybe $500-$1000 vs labor costs). Bart asked Cian to send the doc. Cian said: \"I can do that after this call. I can run a quick update based on what we discussed and just see what it looks like.\"\n\n**Decision/Direction**: Update the projections with more realistic summer burn rate (~$10K/week) and share updated doc with Bart.\n\n**Next steps**: Update development plan 3.1 with April actuals and revised summer burn rate assumptions, then share with Bart.",
+      "assignee": "cian@ganttsy.com",
+      "priority": "high",
+      "project": "Ganttsy Admin",
+      "index": 6
+    },
+    {
+      "title": "Scope books as additional sales agent channel",
+      "context": "**Background**: The product includes a sales/resource agent that can recommend tools and products to users (with affiliate-style revenue). Currently planned channels include Home Depot, Walmart, and Amazon for tools/supplies.\n\n**Discussion**: The conversation turned to books as an additional resource channel. Cian noted they already have Amazon integration for tools, so adding books would leverage the same connection. He estimated it's \"probably just be a prompt change, not a new channel\" but needs to investigate. He mentioned the agent would get roughly 3% commission on book sales.\n\n**Decision/Direction**: Add books (via Amazon) as an additional channel for the sales agent to search through and recommend to users.\n\n**Next steps**: Cian to scope out the technical requirements — likely a prompt change rather than a new integration, but needs verification.",
+      "assignee": "cian@ganttsy.com",
+      "priority": "medium",
+      "project": "Ganttsy MVP",
+      "index": 7
+    },
+    {
+      "title": "Assign Mrinal to style chat cards while Bart is away",
+      "context": "**Background**: There are 20 chat cards (UI widgets like single choice, yes/no, slider, date picker, time picker, etc.) that the onboarding agent uses to collect user input without requiring typing. These cards have functional schemas and validation rules but need visual design/styling. Bart will be away all of next week.\n\n**Discussion**: Cian suggested the chat cards would be \"a good one for Mrinal to work on while you're gone.\" He argued: \"Some of them should be pretty straightforward. If he already knows your design style and what you guys have done, these cards — not a lot you can do to them except make them fit in with the rest of the thing.\" The plan would be: Mrinal styles all 20 cards during Bart's absence, then when Bart returns he can work on the overall chat view look/feel/function with the styled cards already complete.\n\n**Decision/Direction**: Bart agreed to leave Mrinal with the task of styling the 20 chat cards as one of his specific tasks during Bart's week away.\n\n**Next steps**: Bart to brief Mrinal on styling the 20 chat cards before leaving. Cards are documented in the codebase under the chat components.",
+      "assignee": "bart@ganttsy.com",
+      "priority": "high",
+      "project": "Ganttsy MVP",
+      "index": 8
+    }
+  ],
+  "createdAt": "2026-04-20T17:12:34.123Z",
+  "status": "pending"
+}

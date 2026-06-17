@@ -1,0 +1,54 @@
+{
+  "id": "ts-2026-04-16-q2-rocks-cohort-5-sales-to-extend-runway",
+  "meetingTitle": "Q2 Rocks & Cohort‑5 Sales to Extend Runway",
+  "meetingDate": "2026-04-16",
+  "org": "ctci",
+  "sourceRel": "ctci-docs/transcripts/2026-04-16-jayne-cian-advisor-coach-phone-call.md",
+  "targetDir": "/workspace/extra/github/cognitivetech/ctci-docs/transcripts",
+  "transcriptPath": "/workspace/extra/github/cognitivetech/ctci-docs/transcripts/2026-04-16-jayne-cian-advisor-coach-phone-call.md",
+  "lineageTag": "meeting:Q2 Rocks & Cohort‑5 Sales to Extend Runway|date:2026-04-16",
+  "actions": [
+    {
+      "title": "Schedule all-hands call to plan Cohort 5 sales push",
+      "context": "**Background**: The team identified that Cognitive Tech has only 4-6 weeks of cash runway remaining. The fastest path to cash is filling AI Edge Cohort 5 (starting mid-May, target 30 seats at ~$60K total). This was unanimously agreed as the single most critical priority, overriding all other Q2 rocks.\n\n**Discussion**: Juliana raised that the team keeps ending up in \"rush mode trying to sell at the very last minute\" and called it a recurring pattern. She said: *\"I want us to shift that pattern... if it really is the most priority somehow we need to do an all hands-on-deck 20-30 minute call with the leadership team then figure out what else is going to happen in the next two weeks because this has to happen otherwise we have no cash.\"* Rob advocated strongly for a live session: *\"We have to discuss and agree on every step, every duration, every project element that's going to contribute to number nine [the cohort sales rock]. And we need to get total agreement and a total commitment.\"* Greg proposed making this the center of the next whiteboard session.\n\n**Decision/Direction**: Everyone agreed this needs to happen immediately — within the next two days. Cian noted they realistically have about **4 weeks to sell**, not 6. The session should include Trevor (product owner of Edge) and the full leadership team.\n\n**Next steps**: Schedule and facilitate the all-hands planning call within 2 days. Define who does what, timelines, and sales targets for filling 30 seats in Cohort 5 by mid-May.",
+      "assignee": "cian@cognitivetech.net",
+      "priority": "urgent",
+      "project": "Cognitive Tech",
+      "index": 4
+    },
+    {
+      "title": "Finalize and distribute Q2 rocks to team",
+      "context": "**Background**: The team spent the bulk of this 90-minute session doing a collaborative rock-setting exercise for Q2. They used a Zoom whiteboard where each person proposed 1-3 rocks for every team member, then ran a straw poll (7 votes each across ~30 items) to surface priorities. The highest-voted items were highlighted in green.\n\n**Discussion**: At the close of the session, Cian suggested the final step: *\"I think the last piece would be just either a Teams message just saying here are the rocks or an update of the document or something like that.\"* Juliana echoed this: *\"I echo just like a clear 'here based on what we heard, there's the rocks' and that we can chime in if we want to alter or shift those because we didn't get into much other dialogue around them.\"* The team ran out of time before fully discussing all the green-highlighted rocks beyond the critical Cohort 5 sales item.\n\n**Decision/Direction**: The voting results and green-highlighted rocks need to be written up and shared so the team can finalize them asynchronously.\n\n**Next steps**: Compile the straw poll results and green-highlighted Q2 rocks into a clear document or Teams message. Share with leadership team for final review and sign-off.",
+      "assignee": "cian@cognitivetech.net",
+      "priority": "high",
+      "project": "Cognitive Tech",
+      "index": 5
+    },
+    {
+      "title": "Call Edge channel partner to push Cohort 5 sales",
+      "context": "**Background**: As part of the urgent discussion about filling AI Edge Cohort 5 (30 seats, mid-May start) to extend the company's cash runway, Cian raised that there's a key contact who could help push Cohort 5 through existing channels.\n\n**Discussion**: Cian offered to share the contact's cell phone number with Greg, explaining: *\"I want you to call him because he's like emails really bad for him... hey, we've got a cohort starting on this date, this is free money, let's just push this through our channels and that'll just get him really focused.\"* Cian added: *\"I can do it as well but then I'm just relaying it to you.\"* Greg agreed: *\"Great, go for it.\"*\n\n**Decision/Direction**: Direct phone outreach to this channel partner is needed immediately to activate their network for Cohort 5 seat sales.\n\n**Next steps**: Make the call to the channel partner, brief them on Cohort 5 dates and the offer, and get them focused on pushing it through their channels. This is time-sensitive given the 3-4 week sales window.",
+      "assignee": "cian@cognitivetech.net",
+      "priority": "urgent",
+      "project": "Cognitive Tech",
+      "index": 6
+    },
+    {
+      "title": "Ensure Edge campaign materials ready by Monday",
+      "context": "**Background**: The team agreed that filling AI Edge Cohort 5 is the single most urgent priority given 4-6 weeks of remaining cash runway. To execute a sales blitz, marketing materials and campaigns need to be ready immediately.\n\n**Discussion**: Greg committed during the meeting: *\"The materials, the campaigns and the materials will be ready for Monday morning. Trevor and team have been hard at work on that.\"* He also said he'd *\"propose to put up a draft of, hey, this is how we could all contribute to this.\"* Juliana specifically requested clear direction: *\"Lead us and direct us well in exactly what you need from us and communicate clearly where we're at, what you need... be bossy about it. Say, okay guys, we need like three leads.\"*\n\n**Decision/Direction**: Greg owns the Edge materials delivery with Trevor's support. The team expects to receive ready-to-use collateral and a clear ask for how each person contributes.\n\n**Next steps**: Confirm with Greg and Trevor that campaign materials and collateral are on track for Monday (2026-04-20). Follow up if not received, as the 3-4 week sales window is already ticking. Ensure a clear contribution plan accompanies the materials so each team member knows their role.",
+      "assignee": "cian@cognitivetech.net",
+      "priority": "urgent",
+      "project": "Cognitive Tech",
+      "index": 7
+    },
+    {
+      "title": "Set up visual sales tracker for Cohort 5 seats",
+      "context": "**Background**: During the Cohort 5 sales discussion, Juliana emphasized that the sales push needs to be visible and fun to maintain team energy over the next 2-3 weeks.\n\n**Discussion**: Juliana said: *\"Let's have some fun with it in the next two weeks and just see the sales happen... like the sales done, for sure we have 30 people in this cohort, no question about it. And let's have some fun with it but it has to be visual in order for us to have fun with it.\"* She referenced Cian's existing tracking norms: *\"Cian has established... which is a fabulous norm.\"*\n\n**Decision/Direction**: A visual tracker (like a progress bar or leaderboard) should be created so the team can see Cohort 5 seat sales accumulating toward the 30-seat target in real time.\n\n**Next steps**: Create a shared visual tracker for Cohort 5 sales progress (0/30 seats). Make it accessible to the whole leadership team — could be in Teams, a shared doc, or the existing tracking system Cian maintains.",
+      "assignee": "cian@cognitivetech.net",
+      "priority": "high",
+      "project": "Cognitive Tech",
+      "index": 8
+    }
+  ],
+  "createdAt": "2026-04-20T13:08:27.413Z",
+  "status": "pending"
+}

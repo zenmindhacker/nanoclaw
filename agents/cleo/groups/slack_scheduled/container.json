@@ -1,0 +1,16 @@
+{
+  "mcpServers": {},
+  "packages": {
+    "apt": [
+      "jq"
+    ],
+    "npm": []
+  },
+  "imageTag": "nanoclaw-agent-v2-28c794a6:ag-1779305793650-yffcyh",
+  "additionalMounts": [],
+  "skills": "all",
+  "provider": "opencode",
+  "groupName": "Scheduled Tasks",
+  "assistantName": "Scheduled Tasks",
+  "agentGroupId": "ag-1779305793650-yffcyh"
+}

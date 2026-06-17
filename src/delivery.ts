@@ -23,7 +23,8 @@ import {
 import { log } from './log.js';
 import { normalizeOptions } from './channels/ask-question.js';
 import { clearOutbox, openInboundDb, openOutboundDb, readOutboxFiles } from './session-manager.js';
-import { pauseTypingRefreshAfterDelivery, setTypingAdapter } from './modules/typing/index.js';
+import { pauseTypingRefreshAfterDelivery, setTypingAdapter, stopTypingRefresh } from './modules/typing/index.js';
+import { extractDeliverableText } from './channels/session-activity.js';
 import type { OutboundFile } from './channels/adapter.js';
 import type { Session } from './types.js';
 
@@ -62,11 +63,60 @@ export interface ChannelDeliveryAdapter {
     instance?: string,
   ): Promise<string | undefined>;
   setTyping?(channelType: string, platformId: string, threadId: string | null, instance?: string): Promise<void>;
+  completeSessionActivity?(
+    sessionId: string,
+    channelType: string,
+    kind: string,
+    content: string,
+    files?: OutboundFile[],
+  ): Promise<string | undefined | null>;
+  cancelSessionActivity?(sessionId: string, channelType: string): Promise<void>;
+  appendSessionActivity?(sessionId: string, channelType: string, content: string): Promise<boolean>;
 }
 
 let deliveryAdapter: ChannelDeliveryAdapter | null = null;
 let activePolling = false;
 let sweepPolling = false;
+
+function resolveSlackDmThreadFallback(
+  msg: {
+    id: string;
+    platform_id: string | null;
+    channel_type: string | null;
+    thread_id: string | null;
+  },
+  session: Session,
+  inDb: Database.Database,
+): string | null {
+  if (msg.thread_id || msg.channel_type !== 'slack' || !msg.platform_id) {
+    return msg.thread_id;
+  }
+
+  const mg = getMessagingGroupByPlatform(msg.channel_type, msg.platform_id);
+  if (!mg || mg.is_group !== 0 || session.messaging_group_id !== mg.id) {
+    return msg.thread_id;
+  }
+
+  const row = inDb
+    .prepare(
+      `SELECT thread_id
+       FROM messages_in
+       WHERE channel_type = ? AND platform_id = ? AND thread_id IS NOT NULL
+       ORDER BY seq DESC
+       LIMIT 1`,
+    )
+    .get(msg.channel_type, msg.platform_id) as { thread_id: string | null } | undefined;
+
+  if (row?.thread_id) {
+    log.debug('Filled missing Slack DM thread_id from latest inbound', {
+      messageId: msg.id,
+      threadId: row.thread_id,
+    });
+    return row.thread_id;
+  }
+
+  return msg.thread_id;
+}
 
 /**
  * Callbacks fired when the delivery adapter is first set (and again if it's
@@ -187,12 +237,21 @@ async function drainSession(session: Session): Promise<void> {
     const undelivered = allDue.filter((m) => !delivered.has(m.id));
     if (undelivered.length === 0) return;
 
+    // Slack stream should only complete on the last deliverable chat message in
+    // this drain. Mid-turn send_message rows must use postMessage so the stream
+    // stays open for the final reply (and the assistant status card does not error).
+    const streamEligible = undelivered.filter((m) => isSlackStreamEligible(m));
+    const lastStreamMessageId =
+      streamEligible.length > 0 ? streamEligible[streamEligible.length - 1].id : null;
+
     // Ensure platform_message_id column exists (migration for existing sessions)
     migrateDeliveredTable(inDb);
 
     for (const msg of undelivered) {
       try {
-        const platformMsgId = await deliverMessage(msg, session, inDb);
+        const platformMsgId = await deliverMessage(msg, session, inDb, {
+          completeStream: msg.id === lastStreamMessageId,
+        });
         markDelivered(inDb, msg.id, platformMsgId ?? null);
         deliveryAttempts.delete(msg.id);
 
@@ -203,7 +262,11 @@ async function drainSession(session: Session): Promise<void> {
         // agent-to-agent routing) — the user doesn't see those and
         // shouldn't get a gap in their typing indicator for them.
         if (msg.kind !== 'system' && msg.channel_type !== 'agent') {
-          pauseTypingRefreshAfterDelivery(session.id);
+          if (msg.channel_type === 'slack') {
+            stopTypingRefresh(session.id);
+          } else {
+            pauseTypingRefreshAfterDelivery(session.id);
+          }
         }
       } catch (err) {
         const attempts = (deliveryAttempts.get(msg.id) ?? 0) + 1;
@@ -234,6 +297,20 @@ async function drainSession(session: Session): Promise<void> {
   }
 }
 
+function isSlackStreamEligible(msg: {
+  kind: string;
+  channel_type: string | null;
+  content: string;
+}): boolean {
+  if (msg.kind !== 'chat' || msg.channel_type !== 'slack') return false;
+  try {
+    const content = JSON.parse(msg.content) as Record<string, unknown>;
+    return extractDeliverableText(content) !== null;
+  } catch {
+    return false;
+  }
+}
+
 async function deliverMessage(
   msg: {
     id: string;
@@ -246,6 +323,7 @@ async function deliverMessage(
   },
   session: Session,
   inDb: Database.Database,
+  options: { completeStream?: boolean } = {},
 ): Promise<string | undefined> {
   if (!deliveryAdapter) {
     log.warn('No delivery adapter configured, dropping message', { id: msg.id });
@@ -253,6 +331,23 @@ async function deliverMessage(
   }
 
   const content = JSON.parse(msg.content);
+
+  // Slack Thinking Steps — consumed by the live assistant stream, not postMessage.
+  if (msg.kind === 'stream_progress') {
+    if (!deliveryAdapter?.appendSessionActivity || !msg.channel_type) {
+      log.debug('stream_progress dropped — no appendSessionActivity', { id: msg.id });
+      return;
+    }
+    const appended = await deliveryAdapter.appendSessionActivity(
+      session.id,
+      msg.channel_type,
+      msg.content,
+    );
+    if (!appended) {
+      log.debug('stream_progress not applied — no active stream', { id: msg.id, sessionId: session.id });
+    }
+    return;
+  }
 
   // System actions — handle internally (schedule_task, cancel_task, etc.)
   if (msg.kind === 'system') {
@@ -291,11 +386,6 @@ async function deliverMessage(
   // which was the pre-refactor bug).
   let deliverInstance: string | undefined;
   if (msg.channel_type && msg.platform_id) {
-    // Resolve the messaging group ORIGIN-SESSION-FIRST: when the message
-    // targets the session's own chat address, the origin row wins even if
-    // sibling instances share the same (channel_type, platform_id) — so the
-    // reply goes out through the instance the message came in on. Otherwise
-    // fall back to the by-platform lookup (default-instance-first).
     const originMg = session.messaging_group_id ? getMessagingGroup(session.messaging_group_id) : undefined;
     const mg =
       originMg && originMg.channel_type === msg.channel_type && originMg.platform_id === msg.platform_id
@@ -324,6 +414,8 @@ async function deliverMessage(
     deliverInstance = mg.instance;
   }
 
+  const deliveryThreadId = resolveSlackDmThreadFallback(msg, session, inDb);
+
   // Track pending questions for ask_user_question flow.
   // Guarded: without the interactive module, `pending_questions` doesn't
   // exist and we skip persistence — the card still delivers to the user,
@@ -342,7 +434,7 @@ async function deliverMessage(
         message_out_id: msg.id,
         platform_id: msg.platform_id,
         channel_type: msg.channel_type,
-        thread_id: msg.thread_id,
+        thread_id: deliveryThreadId,
         title,
         options: normalizeOptions(rawOptions as never),
         created_at: new Date().toISOString(),
@@ -367,10 +459,30 @@ async function deliverMessage(
       ? readOutboxFiles(session.agent_group_id, session.id, msg.id, content.files as string[])
       : undefined;
 
+  if (options.completeStream !== false && deliveryAdapter.completeSessionActivity && msg.channel_type) {
+    const streamedId = await deliveryAdapter.completeSessionActivity(
+      session.id,
+      msg.channel_type,
+      msg.kind,
+      msg.content,
+      files,
+    );
+    if (streamedId !== null) {
+      log.info('Message delivered via session activity', {
+        id: msg.id,
+        channelType: msg.channel_type,
+        platformId: msg.platform_id,
+        platformMsgId: streamedId,
+      });
+      clearOutbox(session.agent_group_id, session.id, msg.id);
+      return streamedId;
+    }
+  }
+
   const platformMsgId = await deliveryAdapter.deliver(
     msg.channel_type,
     msg.platform_id,
-    msg.thread_id,
+    deliveryThreadId,
     msg.kind,
     msg.content,
     files,

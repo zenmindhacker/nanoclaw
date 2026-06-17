@@ -1,0 +1,151 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+API_BASE="${ELEVENLABS_API_BASE:-https://api.elevenlabs.io/v1}"
+API_KEY_FILE="${ELEVENLABS_API_KEY_FILE:-/workspace/extra/credentials/elevenlabs}"
+MODEL_ID="eleven_multilingual_v2"
+OUTPUT_DIR="/workspace/ipc"
+OUTPUT_FILE=""
+TEXT=""
+TEXT_FILE=""
+VOICE_ID=""
+STABILITY=""
+SIMILARITY=""
+STYLE=""
+SPEED=""
+
+usage() {
+  cat >&2 <<'EOF'
+Usage:
+  voice-note --voice-id <id> (--text "..." | --text-file <path>) [options]
+
+Options:
+  --voice-id <id>       ElevenLabs voice ID (required)
+  --text <text>         Text to synthesize
+  --text-file <path>    File containing text to synthesize
+  --output <path>       Output mp3 path (default: /workspace/ipc/voice-note-<ts>.mp3)
+  --output-dir <dir>    Output directory when --output is omitted
+  --model <id>          ElevenLabs model (default: eleven_multilingual_v2)
+  --stability <value>   Voice stability, 0..1
+  --similarity <value>  Voice similarity boost, 0..1
+  --style <value>       Voice style, 0..1
+  --speed <value>       Speaking speed
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --voice-id) VOICE_ID="${2:-}"; shift 2 ;;
+    --text) TEXT="${2:-}"; shift 2 ;;
+    --text-file) TEXT_FILE="${2:-}"; shift 2 ;;
+    --output) OUTPUT_FILE="${2:-}"; shift 2 ;;
+    --output-dir) OUTPUT_DIR="${2:-}"; shift 2 ;;
+    --model) MODEL_ID="${2:-}"; shift 2 ;;
+    --stability) STABILITY="${2:-}"; shift 2 ;;
+    --similarity) SIMILARITY="${2:-}"; shift 2 ;;
+    --style) STYLE="${2:-}"; shift 2 ;;
+    --speed) SPEED="${2:-}"; shift 2 ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "voice-note: unknown argument: $1" >&2; usage; exit 2 ;;
+  esac
+done
+
+if [[ -z "$VOICE_ID" ]]; then
+  echo "voice-note: --voice-id is required" >&2
+  exit 2
+fi
+if [[ ! "$VOICE_ID" =~ ^[A-Za-z0-9_-]+$ ]]; then
+  echo "voice-note: --voice-id may only contain letters, numbers, '_' and '-'" >&2
+  exit 2
+fi
+
+if [[ -n "$TEXT_FILE" ]]; then
+  if [[ ! -f "$TEXT_FILE" ]]; then
+    echo "voice-note: text file not found: $TEXT_FILE" >&2
+    exit 2
+  fi
+  TEXT="$(<"$TEXT_FILE")"
+fi
+
+if [[ -z "${TEXT//[[:space:]]/}" ]]; then
+  echo "voice-note: provide non-empty text with --text or --text-file" >&2
+  exit 2
+fi
+
+if [[ -n "${ELEVENLABS_API_KEY:-}" ]]; then
+  API_KEY="$ELEVENLABS_API_KEY"
+elif [[ -f "$API_KEY_FILE" ]]; then
+  API_KEY="$(tr -d '\r\n' < "$API_KEY_FILE")"
+else
+  echo "voice-note: ElevenLabs key missing; create $API_KEY_FILE or set ELEVENLABS_API_KEY" >&2
+  exit 1
+fi
+
+if [[ -z "$API_KEY" ]]; then
+  echo "voice-note: ElevenLabs key is empty" >&2
+  exit 1
+fi
+
+mkdir -p "$OUTPUT_DIR"
+if [[ -z "$OUTPUT_FILE" ]]; then
+  OUTPUT_FILE="$OUTPUT_DIR/voice-note-$(date +%s).mp3"
+fi
+
+BODY_FILE="$(mktemp)"
+RESP_FILE="$(mktemp)"
+cleanup() {
+  rm -f "$BODY_FILE" "$RESP_FILE"
+}
+trap cleanup EXIT
+
+python3 - "$BODY_FILE" "$TEXT" "$MODEL_ID" "$STABILITY" "$SIMILARITY" "$STYLE" "$SPEED" <<'PY'
+import json
+import sys
+
+body_file, text, model_id, stability, similarity, style, speed = sys.argv[1:]
+body = {
+    "text": text,
+    "model_id": model_id,
+}
+
+settings = {}
+if stability:
+    settings["stability"] = float(stability)
+if similarity:
+    settings["similarity_boost"] = float(similarity)
+if style:
+    settings["style"] = float(style)
+if speed:
+    settings["speed"] = float(speed)
+if settings:
+    body["voice_settings"] = settings
+
+with open(body_file, "w", encoding="utf-8") as f:
+    json.dump(body, f)
+PY
+
+STATUS="$(curl -sS -w '%{http_code}' -o "$RESP_FILE" \
+  -X POST "$API_BASE/text-to-speech/$VOICE_ID?output_format=mp3_44100_128" \
+  -H "xi-api-key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  --data-binary "@$BODY_FILE")"
+
+if [[ "$STATUS" != 2* ]]; then
+  echo "voice-note: ElevenLabs request failed (HTTP $STATUS)" >&2
+  python3 - "$RESP_FILE" >&2 <<'PY'
+import json
+import sys
+from pathlib import Path
+
+raw = Path(sys.argv[1]).read_text(errors="replace")
+try:
+    parsed = json.loads(raw)
+    print(json.dumps(parsed, indent=2)[:2000])
+except Exception:
+    print(raw[:2000])
+PY
+  exit 1
+fi
+
+mv "$RESP_FILE" "$OUTPUT_FILE"
+printf '%s\n' "$OUTPUT_FILE"

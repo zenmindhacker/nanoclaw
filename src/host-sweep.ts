@@ -130,6 +130,10 @@ export function stopHostSweep(): void {
   running = false;
 }
 
+// Skill archive sweep runs once per day (not every 60s tick).
+const SKILL_ARCHIVE_INTERVAL_MS = 24 * 60 * 60 * 1000;
+let lastSkillArchiveSweep = 0;
+
 async function sweep(): Promise<void> {
   if (!running) return;
 
@@ -150,6 +154,19 @@ async function sweep(): Promise<void> {
     }
   } catch (err) {
     log.error('Host sweep error', { err });
+  }
+
+  // Daily skill archive sweep.
+  if (Date.now() - lastSkillArchiveSweep > SKILL_ARCHIVE_INTERVAL_MS) {
+    lastSkillArchiveSweep = Date.now();
+    try {
+      const { sweepSkillArchives } = await import('./modules/skills/archive.js');
+      const { getAllAgentGroups: getAgentGroups } = await import('./db/agent-groups.js');
+      const groups = getAgentGroups();
+      await sweepSkillArchives(groups);
+    } catch (err) {
+      log.warn('Skill archive sweep error', { err });
+    }
   }
 
   setTimeout(sweep, SWEEP_INTERVAL_MS);

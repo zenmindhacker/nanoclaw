@@ -1,0 +1,23 @@
+{
+  "tasks": [
+    {
+      "id": "oauth-health-check",
+      "agentFolder": "slack_scheduled",
+      "recurrence": "0 */1 * * *",
+      "prompt": "OAuth health check (read-only). The host process owns token refresh every 30 minutes — do not edit files under /workspace/extra/credentials/.\n\n1. Run `ncl oauth-health` and review all tokens.\n2. Post to #sysops (slack:C07F195GB96) only when scriptOutput shows expired/errors, any token has status expired or error, or `ncl oauth-refresh-now` returns failed for any token. Do not alert for status expiring or expiresInMin alone — Xero tokens are short-lived and the host refreshes them proactively.\n3. If you post, run `ncl oauth-refresh-now` first and include results. If refresh still fails, name the token id and token_file for manual re-auth.\n4. If all tokens are ok or only expiring, exit silently.",
+      "script": "bash /workspace/agent/oauth-health-gate.sh"
+    },
+    {
+      "id": "cycle-daily-briefing",
+      "agentFolder": "dm-with-christina",
+      "recurrence": "0 11 * * *",
+      "prompt": "Deliver Christina's daily cycle briefing to Christina. The pre-task script attached today's briefing in scriptOutput. Send it in Christina's DM — keep the structure and tone warm and supportive. Do not re-run cycle_briefing.mjs unless scriptOutput is missing.",
+      "script": "cd /workspace/agent && node cycle_briefing.mjs --task-json $(TZ=America/New_York date +%Y-%m-%d)"
+    }
+  ],
+  "pendingCleo": [
+    {
+      "note": "Cleo production v2 DB only wires dm-with-cian. slack_scheduled tasks (im-sync, im-digest, im-audit, ganttsy-resume-daily, shadow-transcript-sync) are documented in agents/cleo/groups/slack_scheduled/CLAUDE.md but need a v2 agent group + messaging wiring before seeding. Use /manage-channels or ncl after Slack channel is registered."
+    }
+  ]
+}

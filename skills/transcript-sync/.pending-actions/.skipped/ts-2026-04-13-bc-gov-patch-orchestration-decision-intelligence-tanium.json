@@ -1,0 +1,30 @@
+{
+  "id": "ts-2026-04-13-bc-gov-patch-orchestration-decision-intelligence-tanium",
+  "meetingTitle": "BC Gov Patch Orchestration: Decision‑Intelligence + Tanium",
+  "meetingDate": "2026-04-13",
+  "org": "ct",
+  "sourceRel": "ct-docs/planning/transcripts/2026-04-13-kora-weekly-standup.md",
+  "targetDir": "/workspace/extra/github/copperteams/ct-docs/planning/transcripts",
+  "transcriptPath": "/workspace/extra/github/copperteams/ct-docs/planning/transcripts/2026-04-13-kora-weekly-standup.md",
+  "lineageTag": "meeting:BC Gov Patch Orchestration: Decision‑Intelligence |date:2026-04-13",
+  "actions": [
+    {
+      "title": "Implement auto-save transcript via WAPI webhooks",
+      "context": "**Background**: Some clients never press the \"save\" button after meetings, but the team is very interested in capturing the transcript regardless. Greg raised this as a request — transcripts should be preserved even when users skip the save-feedback step.\n\n**Discussion**: Rustam presented the problem and proposed a couple of options. The first option was to always initially save the transcript, then update/replace it with the full feedback payload when the user presses save. Cian agreed this was the right approach but raised a concern: what happens if the user just closes the browser instead of hitting stop? Rustam then suggested the more robust solution: **attach to the WAPI webhooks on call end** and create the record from there. Cian confirmed: *\"Yeah.\"* This approach ensures transcripts are captured regardless of user behavior (closing browser, skipping save, etc.).\n\nRustam also flagged a potential concern about Linear API rate limits: *\"once I saw that there are some kind of limit of the Linear issues creation... free tier or something like that... I'm not sure with the current payload we will not bombard it.\"* Cian acknowledged but said they're fine for now: *\"Eventually, I want to put it into something else or pay or whatever, but for now I think we're fine.\"*\n\n**Decision/Direction**: Use WAPI webhooks on call-end event to automatically save the transcript. When the user later presses save feedback, the record gets updated with the full feedback. Linear rate limits are acceptable for now.\n\n**Next steps**: Rustam to implement the webhook-based auto-save logic. Monitor Linear API usage to ensure free-tier limits aren't hit.",
+      "assignee": "rustam@copperteams.ai",
+      "priority": "high",
+      "project": "Kora Voice Integration",
+      "index": 27
+    },
+    {
+      "title": "Check with Greg on CT phase 3 investment status",
+      "context": "**Background**: There is an ongoing project referred to as \"CT\" which is currently in the process of sending TEPs (for the first time), requiring various infrastructure adjustments. Rustam noted that if there is a phase 3, automation will be needed because the current manual approach won't scale.\n\n**Discussion**: Rustam expressed enthusiasm for the idea of a phase 3: *\"I really like that there is an idea of this phase three because we need to sooner or later automate this because it will not scale.\"* Cian explained the blocker: *\"We're just waiting on some investment dollars to come in. I'll be talking to Greg soon and find out what's happening. But right now everything's still paused.\"*\n\n**Decision/Direction**: Everything on CT is paused pending investment. No immediate work needed from Rustam's side.\n\n**Next steps**: Cian to follow up with Greg on the investment status and report back on whether phase 3 will proceed.",
+      "assignee": "cian@copperteams.ai",
+      "priority": "medium",
+      "project": "Kora Voice Integration",
+      "index": 28
+    }
+  ],
+  "createdAt": "2026-04-17T19:49:12.984Z",
+  "status": "pending"
+}

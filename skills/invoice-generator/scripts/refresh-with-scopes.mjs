@@ -1,0 +1,31 @@
+import { loadXeroClientConfig, loadXeroTokens } from '../../xero/lib/xero-credentials.mjs';
+
+const tokens = loadXeroTokens();
+loadXeroClientConfig();
+
+// The scopes we need - including accounting.attachments
+const scopes = [
+  'openid',
+  'profile', 
+  'email',
+  'accounting.contacts',
+  'accounting.settings',
+  'accounting.transactions',
+  'accounting.attachments',  // THIS IS WHAT WE WERE MISSING!
+  'offline_access'
+].join(' ');
+
+console.log('Required scopes:', scopes);
+
+// We need to re-authorize to get new scopes
+// Since we only have refresh_token, we can only refresh existing scopes
+// But the issue is that the original authorization didn't include accounting.attachments
+
+console.log('\n⚠️  The current token was authorized WITHOUT accounting.attachments scope.');
+console.log('To fix this, you need to:');
+console.log('1. Go to https://login.xero.com/identity/connect/authorize');
+console.log('2. Authorize again with the accounting.attachments scope');
+console.log('3. Update the credentials file with the new tokens');
+console.log('\nOr we can try using the refresh token with a new authorization...');
+
+console.log('\nCurrent scopes in token:', tokens.scope);

@@ -6,6 +6,7 @@
  */
 import type { ChannelAdapter, ChannelRegistration, ChannelSetup, OutboundFile } from './adapter.js';
 import type { ChannelDeliveryAdapter } from '../delivery.js';
+import { parseStreamTaskProgress } from './session-activity.js';
 import { log } from '../log.js';
 
 const SETUP_RETRY_DELAYS_MS = [2000, 5000, 10000];
@@ -98,6 +99,43 @@ export function createChannelDeliveryAdapter(): ChannelDeliveryAdapter {
     ): Promise<void> {
       const adapter = getChannelAdapterExact(instance ?? channelType);
       await adapter?.setTyping?.(platformId, threadId);
+    },
+    async completeSessionActivity(
+      sessionId: string,
+      channelType: string,
+      kind: string,
+      content: string,
+      files?: OutboundFile[],
+      instance?: string,
+    ): Promise<string | undefined | null> {
+      const adapter = getChannelAdapterExact(instance ?? channelType);
+      if (!adapter?.completeSessionActivity) return null;
+      if (kind !== 'chat') return null;
+      return adapter.completeSessionActivity(sessionId, {
+        kind,
+        content: JSON.parse(content),
+        files,
+      });
+    },
+    async cancelSessionActivity(sessionId: string, channelType: string, instance?: string): Promise<void> {
+      const adapter = getChannelAdapterExact(instance ?? channelType);
+      await adapter?.cancelSessionActivity?.(sessionId);
+    },
+    async appendSessionActivity(
+      sessionId: string,
+      channelType: string,
+      content: string,
+      instance?: string,
+    ): Promise<boolean> {
+      const adapter = getChannelAdapterExact(instance ?? channelType);
+      if (!adapter?.appendSessionActivity) return false;
+      try {
+        const progress = parseStreamTaskProgress(JSON.parse(content));
+        if (!progress) return false;
+        return adapter.appendSessionActivity(sessionId, progress);
+      } catch {
+        return false;
+      }
     },
   };
 }

@@ -7,3 +7,5 @@
 // self-registration import below.
 
 import './cli.js';
+// Slack adapter is registered by src/extensions/index.ts (fork extension).
+// Upstream only has cli here; keeping this file clean avoids merge conflicts.
