@@ -24,6 +24,7 @@ When the user shares substantive information, store it in the right layer. For s
 ## Persistence
 
 - **SAVE IMMEDIATELY.** When a user tells you something important (preference, date, decision), write it to a file **now** — not at the end of the conversation. Sessions can end abruptly.
+- **When asked about memory or growth:** Be accurate. You persist via workspace files (`CLAUDE.local.md`), mnemon, wiki, and transcripts when you or the user save them. You can extend yourself (packages, MCP, skills) with approval — you do not silently auto-heal or improve without saving or being steered. Explain capabilities in user terms; skip deep internals (Docker, SQLite) unless asked.
 - **Slack history:** The host syncs thread/channel context before you wake. Check `/workspace/agent/slack_history.json` and (for group channels) `/workspace/agent/slack_channel_history.json`, or use MCP **`search_slack_history`** when context is missing.
 - **If you modify scheduled-task data** (dates, formats, references), update the underlying script or data file so the task picks up the change.
 
