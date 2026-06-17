@@ -23,6 +23,7 @@ import {
 import { log } from './log.js';
 import { normalizeOptions } from './channels/ask-question.js';
 import { clearOutbox, openInboundDb, openOutboundDb, readOutboxFiles } from './session-manager.js';
+import { registerMentionStickyThreadAfterOutbound } from './router.js';
 import { pauseTypingRefreshAfterDelivery, setTypingAdapter, stopTypingRefresh } from './modules/typing/index.js';
 import { extractDeliverableText } from './channels/session-activity.js';
 import type { OutboundFile } from './channels/adapter.js';
@@ -466,6 +467,22 @@ async function deliverMessage(
         platformMsgId: streamedId,
       });
       clearOutbox(session.agent_group_id, session.id, msg.id);
+      if (msg.kind === 'chat' && msg.platform_id) {
+        const originMg = session.messaging_group_id ? getMessagingGroup(session.messaging_group_id) : undefined;
+        const streamMg =
+          originMg && originMg.channel_type === msg.channel_type && originMg.platform_id === msg.platform_id
+            ? originMg
+            : getMessagingGroupByPlatform(msg.channel_type, msg.platform_id);
+        if (streamMg) {
+          registerMentionStickyThreadAfterOutbound(
+            streamMg,
+            msg.channel_type,
+            msg.platform_id,
+            deliveryThreadId,
+            streamMg.instance,
+          );
+        }
+      }
       return streamedId;
     }
   }
@@ -488,6 +505,23 @@ async function deliverMessage(
   });
 
   clearOutbox(session.agent_group_id, session.id, msg.id);
+
+  if (msg.kind === 'chat' && msg.platform_id) {
+    const originMg = session.messaging_group_id ? getMessagingGroup(session.messaging_group_id) : undefined;
+    const deliveredMg =
+      originMg && originMg.channel_type === msg.channel_type && originMg.platform_id === msg.platform_id
+        ? originMg
+        : getMessagingGroupByPlatform(msg.channel_type, msg.platform_id);
+    if (deliveredMg) {
+      registerMentionStickyThreadAfterOutbound(
+        deliveredMg,
+        msg.channel_type,
+        msg.platform_id,
+        deliveryThreadId,
+        deliverInstance,
+      );
+    }
+  }
 
   return platformMsgId;
 }

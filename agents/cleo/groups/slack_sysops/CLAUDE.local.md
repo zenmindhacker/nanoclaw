@@ -49,6 +49,7 @@ Manual `transcript-sync` still exists under `/workspace/extra/skills/transcript-
 
 ## Inbound wiring
 
-- You respond to **all** messages in #sysops and its threads — Cian does not need `@Cleo`.
-- Scheduled-task containers post *outbound* alerts here; they do not handle interactive replies.
+- **Main channel:** Cian must `@Cleo` to start a conversation.
+- **Threads Cleo is already in:** reply without `@Cleo` — includes alert threads where scheduled tasks posted first (host registers sticky state on outbound).
+- Scheduled-task containers post *outbound* alerts here; interactive replies are handled by this `slack_sysops` container.
 - If asked to verify a skill path, run: `ls /workspace/extra/skills/invoice-generator/scripts/nvs-processor.mjs`

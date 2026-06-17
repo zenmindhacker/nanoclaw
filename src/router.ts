@@ -400,7 +400,9 @@ export async function routeInbound(event: InboundEvent): Promise<void> {
  *                      already exists for this (agent, mg, thread). The
  *                      session existence IS our subscription state; once
  *                      a thread has engaged us once, follow-ups arrive
- *                      with no mention and should still fire.
+ *                      with no mention and should still fire. Top-level
+ *                      channel posts (threadId=null) always require a
+ *                      mention — sticky follow-ups are thread-only.
  */
 function evaluateEngage(
   agent: MessagingGroupAgent,
@@ -427,6 +429,7 @@ function evaluateEngage(
       // Sticky follow-up: session already exists for this (agent, mg, thread)
       // — the thread was activated before, keep firing.
       if (mg.is_group === 0) return false; // DMs never use mention-sticky sensibly
+      if (threadId === null) return false; // main channel always needs @mention
       const existing = findSessionForAgent(agent.agent_group_id, mg.id, threadId);
       return existing !== undefined;
     }
@@ -554,4 +557,41 @@ async function deliverToAgent(
 function messageIdForAgent(baseId: string | undefined, agentGroupId: string): string {
   const id = baseId && baseId.length > 0 ? baseId : generateId();
   return `${id}:${agentGroupId}`;
+}
+
+/**
+ * After outbound delivery to a group thread, register mention-sticky state
+ * for every mention-sticky agent wired to that chat. Creates per-thread
+ * sessions (so evaluateEngage sticky follow-ups fire) and subscribes the
+ * thread on the adapter (so Chat SDK routes replies via onSubscribedMessage).
+ *
+ * Covers alert threads started by a different agent (e.g. scheduled tasks
+ * posting to #sysops) without requiring @mention on the first user reply.
+ */
+export function registerMentionStickyThreadAfterOutbound(
+  mg: MessagingGroup,
+  channelType: string,
+  platformId: string,
+  threadId: string | null,
+  instance?: string,
+): void {
+  if (!threadId || mg.is_group === 0) return;
+
+  const adapter = getChannelAdapter(instance ?? channelType);
+  if (!adapter?.supportsThreads || !adapter.subscribe) return;
+
+  const stickyAgents = getMessagingGroupAgents(mg.id).filter((a) => a.engage_mode === 'mention-sticky');
+  if (stickyAgents.length === 0) return;
+
+  for (const agent of stickyAgents) {
+    let effectiveSessionMode = agent.session_mode;
+    if (effectiveSessionMode !== 'agent-shared' && mg.is_group !== 0) {
+      effectiveSessionMode = 'per-thread';
+    }
+    resolveSession(agent.agent_group_id, mg.id, threadId, effectiveSessionMode);
+  }
+
+  void adapter.subscribe(platformId, threadId).catch((err) => {
+    log.warn('mention-sticky outbound subscribe failed', { channelType, platformId, threadId, err });
+  });
 }
