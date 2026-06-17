@@ -1,4 +1,5 @@
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 
 import Database from 'better-sqlite3';
@@ -7,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { decodeSlackThreadId } from '../../channels/slack-stream.js';
 import type { MessagingGroup } from '../../types.js';
 
-const TEST_DIR = '/tmp/nanoclaw-history-sync-test';
+const TEST_DIR = path.join(os.tmpdir(), `nanoclaw-history-sync-test-${process.getuid?.() ?? process.pid}`);
 const GROUPS_DIR_TEST = path.join(TEST_DIR, 'groups');
 
 vi.mock('../../env.js', () => ({
@@ -22,8 +23,8 @@ vi.mock('../../config.js', async () => {
   const actual = await vi.importActual<typeof import('../../config.js')>('../../config.js');
   return {
     ...actual,
-    DATA_DIR: '/tmp/nanoclaw-history-sync-test',
-    GROUPS_DIR: '/tmp/nanoclaw-history-sync-test/groups',
+    DATA_DIR: path.join(os.tmpdir(), `nanoclaw-history-sync-test-${process.getuid?.() ?? process.pid}`),
+    GROUPS_DIR: path.join(os.tmpdir(), `nanoclaw-history-sync-test-${process.getuid?.() ?? process.pid}`, 'groups'),
     ASSISTANT_NAME: 'Cleo',
   };
 });
