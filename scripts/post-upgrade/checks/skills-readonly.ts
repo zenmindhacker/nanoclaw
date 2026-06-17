@@ -1,3 +1,5 @@
+import path from 'path';
+
 import { LINEAR_CONTAINER_ENV } from '../../../src/config.js';
 import type { RunContext } from '../types.js';
 import { syncTimedCheck } from '../report.js';
@@ -25,7 +27,10 @@ export async function runSkillsReadonlyChecks(ctx: RunContext): Promise<CheckRes
         const r = runCommand(hostCmd, {
           cwd: skill.cwd ? process.cwd() : process.cwd(),
           timeoutMs: 60_000,
-          env: { ...LINEAR_CONTAINER_ENV },
+          env: {
+            ...LINEAR_CONTAINER_ENV,
+            SKILLS_ROOT: path.join(process.cwd(), 'skills'),
+          },
         });
         if (r.ok) return { status: 'pass', message: 'ran on host (no container)', detail: r.stdout.slice(0, 200) };
         return {

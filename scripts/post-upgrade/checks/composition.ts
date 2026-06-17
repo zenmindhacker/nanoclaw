@@ -92,13 +92,15 @@ export function runCompositionChecks(ctx: RunContext): CheckResult[] {
       if (!fs.existsSync(source)) {
         return { status: 'warn', message: 'stream-progress extension source missing (fork-only)' };
       }
-      if (!fs.existsSync(fragment)) {
+      try {
+        fs.lstatSync(fragment);
+        return { status: 'pass' };
+      } catch {
         return {
           status: 'warn',
           message: 'module-stream-progress fragment missing (regenerated on container spawn)',
         };
       }
-      return { status: 'pass' };
     }),
   );
 
