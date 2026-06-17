@@ -19,11 +19,7 @@ import {
   ONECLI_URL,
   TIMEZONE,
 } from './config.js';
-import {
-  agentGlobalDir,
-  ensureAgentGlobalScaffold,
-  GLOBAL_MNEMON_CONTAINER_PATH,
-} from './agent-global.js';
+import { agentGlobalDir, ensureAgentGlobalScaffold, GLOBAL_MNEMON_CONTAINER_PATH } from './agent-global.js';
 import { materializeContainerJson } from './container-config.js';
 import { getContainerConfig } from './db/container-configs.js';
 import { updateContainerConfigScalars } from './db/container-configs.js';
