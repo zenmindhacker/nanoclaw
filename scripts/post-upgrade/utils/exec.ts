@@ -28,11 +28,15 @@ export function runCommand(cmd: string, opts?: { cwd?: string; timeoutMs?: numbe
   }
 }
 
-export function runPnpmChat(message: string, timeoutMs = 130_000): ExecResult {
+export function runPnpmChat(
+  message: string,
+  timeoutMs = 330_000,
+  chatTimeoutMs = 300_000,
+): ExecResult {
   const result = spawnSync('pnpm', ['run', 'chat', message], {
     encoding: 'utf8',
     timeout: timeoutMs,
-    env: process.env,
+    env: { ...process.env, CHAT_TIMEOUT_MS: String(chatTimeoutMs) },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   return {

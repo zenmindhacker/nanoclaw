@@ -16,7 +16,7 @@ import path from 'path';
 import { DATA_DIR } from '../src/config.js';
 
 const SILENCE_MS = 2000; // exit after this much quiet time following the first reply
-const TOTAL_TIMEOUT_MS = 120_000; // hard stop
+const TOTAL_TIMEOUT_MS = parseInt(process.env.CHAT_TIMEOUT_MS ?? '120000', 10) || 120_000;
 
 function socketPath(): string {
   return path.join(DATA_DIR, 'cli.sock');

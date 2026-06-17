@@ -9,6 +9,7 @@ import { UPGRADE_SLACK_REPLY_TOKEN } from '../manifest.js';
 import type { RunContext } from '../types.js';
 import { timedCheck } from '../report.js';
 import type { CheckResult } from '../types.js';
+import { waitForGroupContainersIdle } from '../utils/cli-session.js';
 
 function countOutboundChat(agentGroupId: string, sessionId: string): number {
   const dbPath = outboundDbPath(agentGroupId, sessionId);
@@ -125,6 +126,8 @@ export async function runSlackSyntheticCheck(ctx: RunContext): Promise<CheckResu
       };
     }
 
+    await waitForGroupContainersIdle(ctx.agentGroupFolder, 180_000);
+
     const before = countOutboundChat(ctx.agentGroupId, session.id);
     const msgId = `upgrade-slack-${Date.now()}`;
 
@@ -156,7 +159,7 @@ export async function runSlackSyntheticCheck(ctx: RunContext): Promise<CheckResu
     const now = new Date();
     fs.utimesSync(hb, now, now);
 
-    const timeoutMs = 180_000;
+    const timeoutMs = 300_000;
     const start = Date.now();
     let found = false;
     let lastText = '';
