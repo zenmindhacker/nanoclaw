@@ -73,7 +73,7 @@ export async function runCliScenarioChecks(ctx: RunContext): Promise<CheckResult
 
   checks.push(
     await timedCheck('wiki.query', 2, async () => {
-      const prompt = 'Read wiki/index.md and list the category headings defined there. Reply with the category names only.';
+      const prompt = 'Read /workspace/global/wiki/index.md (or wiki/index.md via global mount) and list the category headings defined there. Reply with the category names only.';
       const r = runPnpmChat(prompt);
       const combined = `${r.stdout}\n${r.stderr}`.toLowerCase();
       const hit = ctx.manifest.wikiCategoryHints.some((hint) => combined.includes(hint.toLowerCase()));

@@ -10,7 +10,8 @@ Your memory survives container restarts and session boundaries.
 
 Under the **OpenCode provider** (Kimi / DeepSeek), the `readMnemonContext()`
 injection already runs `mnemon recall` at the start of each prompt and prepends
-the guide. You still call mnemon explicitly when the injected recall wasn't
+the guide. Memory is agent-wide at `/workspace/global/mnemon/` (all groups share
+one graph). You still call mnemon explicitly when the injected recall wasn't
 specific enough, or after substantive turns.
 
 ## When to recall

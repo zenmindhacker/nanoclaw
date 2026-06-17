@@ -211,17 +211,22 @@ context is injected via `readMnemonContext()` in the provider.
 
 ## Wiki (Karpathy LLM Wiki Pattern)
 
-**Intent:** Structured markdown knowledge base (sources → wiki → schema) for
-synthesized reference material. Distinct from mnemon (facts/decisions).
+**Intent:** Agent-wide structured markdown knowledge base (sources → wiki → schema).
+One wiki per agent install (Cleo, Silas) — **not** per channel group.
 
 **Files:**
 - `container/skills/wiki/SKILL.md` — ingest/query/lint operations
-- `agents/cleo/groups/main/wiki/` — Cleo wiki scaffold (README, index, log, sources/)
-- `agents/silas/groups/dm-with-christina/wiki/` — Silas wiki scaffold
+- `agents/{cleo,silas}/groups/global/wiki/` — unified wiki (README, index, log, sources/)
+- `agents/{cleo,silas}/groups/global/CLAUDE.local.md` — agent-writable personality evolution
 - Memory sections in `agents/{cleo,silas}/groups/global/CLAUDE.md`
 
-**On replay:** Copy `container/skills/wiki/SKILL.md` and `agents/` wiki directories.
-No host code changes — wiki lives under group mounts at `/workspace/agent/wiki/`.
+**Runtime paths (all Cleo/Silas groups):**
+- `/workspace/global/wiki/` — knowledge base (RW)
+- `/workspace/global/CLAUDE.local.md` — self-evolved persona (RW)
+- `/workspace/global/CLAUDE.md` — git persona base (RO)
+- `/workspace/global/mnemon/` — unified memory graph (MNEMON_DATA_DIR)
+
+**On replay:** Copy `container/skills/wiki/SKILL.md`, `src/agent-global.ts`, compose/mount changes, and `agents/{cleo,silas}/groups/global/` tree. Do not delete `groups/global/` on startup.
 
 ---
 

@@ -1,6 +1,7 @@
 import path from 'path';
 
-import { CONTAINER_IMAGE, DATA_DIR } from '../../../src/config.js';
+import { CONTAINER_IMAGE } from '../../../src/config.js';
+import { agentGlobalDir } from '../../../src/agent-global.js';
 import { runCommand } from './exec.js';
 
 /** Find a running session container for the given agent group folder. */
@@ -20,15 +21,15 @@ export function execInContainer(containerName: string, shellCmd: string, cwd?: s
 }
 
 /** Run a command in the agent image with mnemon data dir mounted (no live session required). */
-export function execMnemonOnHost(agentGroupId: string, shellCmd: string): ReturnType<typeof runCommand> {
-  const claudeShared = path.join(DATA_DIR, 'v2-sessions', agentGroupId, '.claude-shared');
+export function execMnemonOnHost(_agentGroupId: string, shellCmd: string): ReturnType<typeof runCommand> {
+  const globalDir = agentGlobalDir();
   const escapedCmd = shellCmd.replace(/'/g, `'\\''`);
   return runCommand(
-    `docker run --rm -v '${claudeShared}:/home/node/.claude' -e MNEMON_DATA_DIR=/home/node/.claude/mnemon ${CONTAINER_IMAGE} bash -lc '${escapedCmd}'`,
+    `docker run --rm --entrypoint bash -v '${globalDir}:/workspace/global' -e MNEMON_DATA_DIR=/workspace/global/mnemon ${CONTAINER_IMAGE} -lc '${escapedCmd}'`,
     { timeoutMs: 120_000 },
   );
 }
 
-export function mnemonGuidePath(agentGroupId: string): string {
-  return path.join(DATA_DIR, 'v2-sessions', agentGroupId, '.claude-shared', 'mnemon', 'prompt', 'guide.md');
+export function mnemonGuidePath(_agentGroupId: string): string {
+  return path.join(agentGlobalMnemonDir(), 'prompt', 'guide.md');
 }

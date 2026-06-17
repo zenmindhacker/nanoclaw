@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
-import { GROUPS_DIR } from '../../../src/config.js';
+import { agentGlobalDir, agentGlobalMnemonDir, agentGlobalWikiDir } from '../../../src/agent-global.js';
 import { getDb, hasTable } from '../../../src/db/connection.js';
 import { auditGroupSkills } from '../../../src/modules/skills/audit.js';
 import { buildCatalogForQuery } from '../../../src/modules/skills/catalog.js';
@@ -87,7 +87,7 @@ export async function runMemoryChecks(ctx: RunContext): Promise<CheckResult[]> {
 
   checks.push(
     syncTimedCheck('wiki.structure', 1, () => {
-      const wikiRoot = path.join(GROUPS_DIR, ctx.agentGroupFolder, 'wiki');
+      const wikiRoot = agentGlobalWikiDir();
       const required = ['index.md', 'log.md', 'sources'];
       const missing = required.filter((p) => !fs.existsSync(path.join(wikiRoot, p)));
       if (missing.length > 0) {
@@ -153,10 +153,10 @@ export async function runMemoryChecks(ctx: RunContext): Promise<CheckResult[]> {
 
   checks.push(
     syncTimedCheck('skills.injection-scan', 1, () => {
-      const sample = fs.readFileSync(path.join(process.cwd(), 'container', 'skills', 'wiki', 'SKILL.md'), 'utf8');
+      const sample = fs.readFileSync(path.join(process.cwd(), 'container', 'skills', 'mnemon', 'SKILL.md'), 'utf8');
       const scan = scanForInjection(sample);
       if (!scan.ok) {
-        return { status: 'fail', message: 'Benign wiki SKILL.md flagged by injection scan', detail: scan.reason };
+        return { status: 'fail', message: 'Benign mnemon SKILL.md flagged by injection scan', detail: scan.reason };
       }
       return { status: 'pass' };
     }),

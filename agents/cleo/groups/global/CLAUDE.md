@@ -218,13 +218,20 @@ You are expected to accumulate knowledge and improve. Before finishing any conve
 2. Did you learn how they like things done? Save the preference.
 3. Is there data a scheduled task needs? Update the relevant script/file.
 4. Would a future session benefit from a summary of this one? Archive to `conversations/`.
-5. Should your personality or knowledge be updated globally? Edit `/workspace/global/CLAUDE.md`.
+5. Should your personality or knowledge be updated globally? Edit `/workspace/global/CLAUDE.local.md` (not `CLAUDE.md` — that is the git persona base, read-only in container).
 
 ---
 
 ## Global Content
 
-**Important:** All shared content — repos, project files, notes, and customizations — belongs in `/workspace/global/` (which maps to `groups/global/`). This makes it available to every group automatically. Only put things in `/workspace/group/` if they are truly specific to one channel.
+**Important:** Agent-wide content — wiki, personality evolution, unified memory — lives under `/workspace/global/` (`groups/global/` on the host). This is shared across every Cleo group (DM, Slack, scheduled tasks). Only put things in `/workspace/agent/` if they are truly specific to one channel wiring.
+
+| Path | Purpose | Writable? |
+|------|---------|-----------|
+| `/workspace/global/CLAUDE.md` | Git-tracked persona base | Read-only |
+| `/workspace/global/CLAUDE.local.md` | Self-evolved personality & cross-group notes | **Yes** |
+| `/workspace/global/wiki/` | Unified knowledge base | **Yes** |
+| `/workspace/global/mnemon/` | Unified memory graph | **Yes** (via mnemon CLI) |
 
 ---
 
@@ -233,6 +240,8 @@ You are expected to accumulate knowledge and improve. Before finishing any conve
 You have two persistent memory layers. Use both.
 
 ### mnemon (episodic facts + entity graph)
+
+Shared across all Cleo groups — one graph at `/workspace/global/mnemon/`.
 
 `mnemon recall`, `mnemon remember`, `mnemon link`, `mnemon status`.
 
@@ -253,7 +262,7 @@ Still call `mnemon remember` explicitly after important turns — there's no aut
 
 ### wiki (synthesized multi-source knowledge)
 
-When Cian drops URLs, PDFs, or files to process → use the `wiki` skill. The wiki lives at `/workspace/agent/wiki/` and accumulates structured pages over time. See the `wiki` skill for ingestion, query, and lint procedures.
+When Cian drops URLs, PDFs, or files to process → use the `wiki` skill. The wiki lives at `/workspace/global/wiki/` (agent-wide, not per-channel). See the `wiki` skill for ingestion, query, and lint procedures.
 
 ### What goes where
 
@@ -261,7 +270,8 @@ When Cian drops URLs, PDFs, or files to process → use the `wiki` skill. The wi
 |-------|---------|
 | **mnemon** | Preferences, decisions, entity facts, lessons learned |
 | **wiki** | Research, project docs, synthesized multi-source knowledge |
-| **CLAUDE.local.md** | Procedural workflows, tool configs, persistent instructions |
+| **global/CLAUDE.local.md** | Personality evolution, cross-group conventions |
+| **CLAUDE.local.md** (per-group) | Channel-specific procedural overrides only |
 
 ---
 

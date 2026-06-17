@@ -21,7 +21,6 @@ import {
 } from './config.js';
 import {
   agentGlobalDir,
-  agentGlobalMnemonDir,
   ensureAgentGlobalScaffold,
   GLOBAL_MNEMON_CONTAINER_PATH,
 } from './agent-global.js';

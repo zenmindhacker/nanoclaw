@@ -1,14 +1,15 @@
 ---
 name: wiki
-description: Persistent wiki knowledge base. Ingest sources, maintain structured pages, query synthesized knowledge. Use when the user drops URLs, PDFs, or documents to process, asks about past research, or wants to build/maintain a structured knowledge store in this group.
+description: Persistent wiki knowledge base. Ingest sources, maintain structured pages, query synthesized knowledge. Use when the user drops URLs, PDFs, or documents to process, asks about past research, or wants to build/maintain a structured knowledge store for this agent.
 ---
 
 # Wiki — Structured Knowledge Base
 
 The wiki is a persistent, LLM-maintained markdown knowledge base that lives
-in the agent group folder under `wiki/`. Unlike mnemon (episodic facts) or
-CLAUDE.local.md (procedural instructions), the wiki accumulates **synthesized
-multi-source knowledge** — project docs, research, reference material.
+**agent-wide** at `/workspace/global/wiki/` (host: `groups/global/wiki/`). Unlike
+mnemon (episodic facts) or CLAUDE.local.md (procedural instructions), the wiki
+accumulates **synthesized multi-source knowledge** — project docs, research,
+reference material. Shared across all channels and agent groups for this install.
 
 ## Three layers
 
