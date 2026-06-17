@@ -1,6 +1,6 @@
 import { findByName, getAllDestinations, type DestinationEntry } from './destinations.js';
 import { getPendingMessages, markProcessing, markCompleted, type MessageInRow } from './db/messages-in.js';
-import { writeMessageOut } from './db/messages-out.js';
+import { hasRecentDuplicateOutbound, writeMessageOut } from './db/messages-out.js';
 import { getInboundDb, touchHeartbeat, clearStaleProcessingAcks } from './db/connection.js';
 import { clearContinuation, migrateLegacyContinuation, setContinuation } from './db/session-state.js';
 import { clearCurrentInReplyTo, setCurrentInReplyTo } from './current-batch.js';
@@ -645,6 +645,10 @@ function dispatchResultText(text: string, routing: RoutingContext): { sent: numb
 function sendToDestination(dest: DestinationEntry, body: string, routing: RoutingContext): void {
   const platformId = dest.type === 'channel' ? dest.platformId! : dest.agentGroupId!;
   const channelType = dest.type === 'channel' ? dest.channelType! : 'agent';
+  if (hasRecentDuplicateOutbound(channelType, platformId, body)) {
+    log(`Skipping duplicate <message> to "${dest.name}" — same text already sent via send_message`);
+    return;
+  }
   // Resolve thread_id per-destination from the most recent inbound message
   // that came from this same channel+platform. In agent-shared sessions,
   // different destinations have different thread contexts — using a single

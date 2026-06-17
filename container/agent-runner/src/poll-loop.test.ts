@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 
 import { initTestSessionDb, closeSessionDb, getInboundDb, getOutboundDb } from './db/connection.js';
 import { getPendingMessages, markCompleted } from './db/messages-in.js';
-import { getUndeliveredMessages } from './db/messages-out.js';
+import { getUndeliveredMessages, writeMessageOut } from './db/messages-out.js';
 import { formatMessages, extractRouting } from './formatter.js';
 import { isCorruptionError, processQuery } from './poll-loop.js';
 import { MockProvider } from './providers/mock.js';
@@ -435,6 +435,38 @@ describe('error result with no <message> envelope', () => {
     expect(getUndeliveredMessages()).toHaveLength(0);
     expect(pushes).toHaveLength(1);
     expect(pushes[0]).toContain('was not delivered');
+  });
+});
+
+describe('duplicate outbound suppression', () => {
+  it('skips a final <message> block when send_message already sent the same text', async () => {
+    getInboundDb()
+      .prepare(
+        `INSERT INTO destinations (name, display_name, type, channel_type, platform_id, agent_group_id)
+         VALUES ('discord-test', 'discord-test', 'channel', 'discord', 'chan-1', NULL)`,
+      )
+      .run();
+
+    const duplicateText = 'Same answer twice';
+    writeMessageOut({
+      id: 'out-existing',
+      kind: 'chat',
+      platform_id: 'chan-1',
+      channel_type: 'discord',
+      thread_id: null,
+      content: JSON.stringify({ text: duplicateText }),
+    });
+
+    const { query } = makeResultQuery({
+      type: 'result',
+      text: `<message to="discord-test">${duplicateText}</message>`,
+    });
+
+    await processQuery(query, ERR_ROUTING, ['m1'], 'claude', undefined, 'prompt', undefined);
+
+    const out = getUndeliveredMessages();
+    expect(out).toHaveLength(1);
+    expect(out[0].id).toBe('out-existing');
   });
 });
 

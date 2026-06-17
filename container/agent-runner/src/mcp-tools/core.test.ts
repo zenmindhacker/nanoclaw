@@ -39,12 +39,18 @@ describe('send_message MCP tool — in_reply_to plumbing', () => {
     expect(out[0].in_reply_to).toBe('inbound-msg-1');
   });
 
-  it('writes null when no batch is active', async () => {
-    // No setCurrentInReplyTo before this call — simulates ad-hoc / out-of-batch invocation.
+  it('falls back to latest inbound id when MCP runs out-of-process (OpenCode)', async () => {
+    getInboundDb()
+      .prepare(
+        `INSERT INTO messages_in (id, kind, timestamp, status, channel_type, platform_id, content)
+         VALUES ('inbound-msg-2', 'chat', datetime('now'), 'pending', 'agent', 'ag-peer', '{}')`,
+      )
+      .run();
+
     await sendMessage.handler({ to: 'peer', text: 'hello' });
 
     const out = getUndeliveredMessages();
     expect(out).toHaveLength(1);
-    expect(out[0].in_reply_to).toBeNull();
+    expect(out[0].in_reply_to).toBe('inbound-msg-2');
   });
 });

@@ -131,6 +131,32 @@ export function getRoutingBySeq(
   return outRow ?? null;
 }
 
+/** True when the same channel destination already has this exact text outbound. */
+export function hasRecentDuplicateOutbound(
+  channelType: string,
+  platformId: string,
+  text: string,
+  limit = 5,
+): boolean {
+  const normalized = text.trim();
+  const rows = getOutboundDb()
+    .prepare(
+      `SELECT content FROM messages_out
+       WHERE channel_type = ? AND platform_id = ?
+       ORDER BY seq DESC LIMIT ?`,
+    )
+    .all(channelType, platformId, limit) as { content: string }[];
+  for (const row of rows) {
+    try {
+      const parsed = JSON.parse(row.content) as { text?: string };
+      if (parsed.text?.trim() === normalized) return true;
+    } catch {
+      // ignore malformed rows
+    }
+  }
+  return false;
+}
+
 /** Get undelivered messages (for host polling — reads from outbound.db). */
 export function getUndeliveredMessages(): MessageOutRow[] {
   return getOutboundDb()

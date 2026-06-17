@@ -11,6 +11,7 @@ import path from 'path';
 
 import { getCurrentInReplyTo } from '../current-batch.js';
 import { findByName, getAllDestinations } from '../destinations.js';
+import { getInboundDb } from '../db/connection.js';
 import { getMessageIdBySeq, getRoutingBySeq, writeMessageOut } from '../db/messages-out.js';
 import { getSessionRouting } from '../db/session-routing.js';
 import { registerTools } from './server.js';
@@ -36,6 +37,28 @@ function destinationList(): string {
   const all = getAllDestinations();
   if (all.length === 0) return '(none)';
   return all.map((d) => d.name).join(', ');
+}
+
+/**
+ * OpenCode runs MCP tools in a separate process, so poll-loop's in-memory
+ * current-batch state is not visible here. Fall back to the latest inbound
+ * row for the session's default channel when stamping in_reply_to.
+ */
+function resolveInReplyTo(channelType: string, platformId: string): string | null {
+  const batch = getCurrentInReplyTo();
+  if (batch) return batch;
+  try {
+    const row = getInboundDb()
+      .prepare(
+        `SELECT id FROM messages_in
+         WHERE channel_type = ? AND platform_id = ?
+         ORDER BY seq DESC LIMIT 1`,
+      )
+      .get(channelType, platformId) as { id: string } | undefined;
+    return row?.id ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -118,7 +141,7 @@ export const sendMessage: McpToolDefinition = {
     const id = generateId();
     const seq = writeMessageOut({
       id,
-      in_reply_to: getCurrentInReplyTo(),
+      in_reply_to: resolveInReplyTo(routing.channel_type, routing.platform_id),
       kind: 'chat',
       platform_id: routing.platform_id,
       channel_type: routing.channel_type,
@@ -165,7 +188,7 @@ export const sendFile: McpToolDefinition = {
 
     writeMessageOut({
       id,
-      in_reply_to: getCurrentInReplyTo(),
+      in_reply_to: resolveInReplyTo(routing.channel_type, routing.platform_id),
       kind: 'chat',
       platform_id: routing.platform_id,
       channel_type: routing.channel_type,
