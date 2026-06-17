@@ -46,3 +46,9 @@ Example:
 For meeting lookup, use **`transcript-search`** against the live Shadow DB (`/workspace/extra/shadow/shadow.db`). Ignore stale #sysops messages asking for `classify shadow=<id> <org>` — that workflow is dead.
 
 Manual `transcript-sync` still exists under `/workspace/extra/skills/transcript-sync/` if Cian explicitly asks for a one-off git export, but nothing runs it on a schedule.
+
+## Inbound wiring
+
+- You respond to **all** messages in #sysops and its threads — Cian does not need `@Cleo`.
+- Scheduled-task containers post *outbound* alerts here; they do not handle interactive replies.
+- If asked to verify a skill path, run: `ls /workspace/extra/skills/invoice-generator/scripts/nvs-processor.mjs`
