@@ -55,6 +55,20 @@ export async function runSlackWiringCheck(ctx: RunContext): Promise<CheckResult>
   });
 }
 
+export async function runSlackHistorySyncCheck(ctx: RunContext): Promise<CheckResult> {
+  return timedCheck('slack.history-sync', 1, async () => {
+    const modPath = path.join(process.cwd(), 'src/extensions/slack/history-sync.ts');
+    if (!fs.existsSync(modPath)) {
+      return { status: 'fail', message: 'history-sync extension missing' };
+    }
+    const { registerInboundPreRouteHook } = await import('../../../src/router.js');
+    if (typeof registerInboundPreRouteHook !== 'function') {
+      return { status: 'fail', message: 'registerInboundPreRouteHook not exported' };
+    }
+    return { status: 'pass', message: 'Slack history sync extension present' };
+  });
+}
+
 export async function runSlackSyntheticCheck(ctx: RunContext): Promise<CheckResult> {
   return timedCheck('slack.synthetic', 2, async () => {
     const wiring = resolveSlackWiring(ctx.agentGroupId);
@@ -158,7 +172,10 @@ export async function runSlackSyntheticCheck(ctx: RunContext): Promise<CheckResu
 
 export async function runSlackSyntheticChecks(ctx: RunContext, tiers: Set<1 | 2>): Promise<CheckResult[]> {
   const checks: CheckResult[] = [];
-  if (tiers.has(1)) checks.push(await runSlackWiringCheck(ctx));
+  if (tiers.has(1)) {
+    checks.push(await runSlackWiringCheck(ctx));
+    checks.push(await runSlackHistorySyncCheck(ctx));
+  }
   if (tiers.has(2)) checks.push(await runSlackSyntheticCheck(ctx));
   return checks;
 }

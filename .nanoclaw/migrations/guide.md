@@ -10,6 +10,29 @@ Update this file after each new customization.
 
 ---
 
+## Lost in v2 re-base (audit 2026-06)
+
+Items dropped during `ddc20f78` / upstream re-base (`12d53681`) and restoration status:
+
+| Feature | v1 / backup | Status on main after restoration |
+|---------|-------------|----------------------------------|
+| Slack thread sync + gap-fill | `src/channels/slack-sync.ts` | **Restored** → `src/extensions/slack/history-sync.ts` |
+| IPC `conversation_history.json` | `container-runner.ts` writers | **Replaced** → session DB + `/workspace/agent/slack_*.json` |
+| Cross-thread channel context | `dm_history.json` | **Restored** → `slack_channel_history.json` |
+| `search_slack_history` MCP | Read-on-file pattern | **Restored** → `container/.../search-history.ts` |
+| Delegate worker skill | `container/skills/delegate/` | **Restored** from backup branch |
+| `seed-scheduled-tasks.ts` / `audit-scheduled-tasks.ts` | `cf1ded0f` (never on main) | **Restored** from backup commit |
+| Cleo im-* / ganttsy crons | manifest + CLAUDE.local | **Restored** in manifest |
+| Silas `CLAUDE.local.md` | backup branch | **Restored** |
+| Transcript-sync cron | slack_scheduled | **Intentionally retired** → `transcript-search` |
+| v1 OAuth/credential-proxy trunk | `src/oauth-refresher.ts` etc. | **Superseded** → `src/extensions/oauth/` |
+
+Stale docs to avoid: `/workspace/ipc/conversation_history.json`, v1 `registered_groups` / `available_groups.json` in legacy `agents/*/groups/main/CLAUDE.md`.
+
+Migration note: skill activation logs migration is **`017-skill-activation-logs.ts`** (not 016).
+
+---
+
 ## Context
 
 Two agents share one canonical repo (`nanoclaw`). They differ only by:
@@ -41,7 +64,9 @@ Upstream never edits `src/extensions/**`. See [extensions.md](extensions.md) and
 
 **OAuth:** `src/extensions/oauth/` + `src/cli/commands/oauth.ts` + `OAUTH_ALERT_SLACK_CHANNEL` in `.env`. Docs: [../oauth-hybrid-repair.md](../oauth-hybrid-repair.md). Wire `initExtensions()` / `teardownExtensions()` in `src/index.ts`.
 
-**Slack streaming:** `src/extensions/slack/adapter.ts`, `on-wake.ts`, `src/channels/slack-stream.ts`, `session-activity.ts`, `container/agent-runner/src/extensions/slack/stream-progress.ts`. Ensure `mcp-tools/index.ts` imports `../extensions/index.js`.
+**Slack streaming:** `src/extensions/slack/adapter.ts`, `on-wake.ts`, `history-sync.ts`, `history-sync-hooks.ts`, `src/channels/slack-stream.ts`, `session-activity.ts`, `container/agent-runner/src/extensions/slack/stream-progress.ts`, `search-history.ts`. Ensure `mcp-tools/index.ts` imports `../extensions/index.js`.
+
+**Slack history sync:** Host fetches `conversations.replies` / `conversations.history`, writes `trigger=0` rows to session inbound DBs, exports `slack_history.json` + `slack_channel_history.json` to the agent group folder. Startup + 30min periodic reconciliation. Replaces v1 `slack-sync.ts` + IPC snapshots.
 
 **Voice transcription:** `src/transcription.ts` (trunk path — imported by `chat-sdk-bridge.ts`). Config: `OPENROUTER_API_KEY` or `OPENAI_API_KEY`.
 
@@ -160,13 +185,13 @@ catalog, injection scan, end-of-turn review queue. Upstream does not have these.
 - `src/modules/skills/catalog.ts` — top-K retrieval-gated skill catalog
 - `src/modules/skills/injection-scan.ts` — prompt injection pattern detection
 - `src/modules/skills/review-queue.ts` — end-of-turn review (LLM stub)
-- `src/db/migrations/016-skill-activation-logs.ts` — activation log table
+- `src/db/migrations/017-skill-activation-logs.ts` — activation log table
 - `src/cli/resources/skills.ts` — `ncl skills audit`
 - `src/host-sweep.ts` — daily `sweepSkillArchives()` hook
 - `docs/skill-lifecycle.md` — design doc
 
 **On replay:** Copy all files above wholesale. Wire:
-- Register migration 016 in `src/db/migrations/index.ts`
+- Register migration 017 in `src/db/migrations/index.ts`
 - Register skills CLI in `src/cli/resources/index.ts`
 - Merge archive sweep block into upstream `src/host-sweep.ts`
 

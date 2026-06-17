@@ -60,6 +60,8 @@ src/extensions/
   slack/
     adapter.ts        # Slack channel adapter (registerChannelAdapter side effect)
     on-wake.ts        # Router wake hooks → startSessionActivity / cancel on failure
+    history-sync.ts   # Slack API backfill → session inbound DB + group JSON exports
+    history-sync-hooks.ts  # registerInboundPreRouteHook + periodic reconciliation
 ```
 
 Container-side fork extensions mirror the same pattern:
@@ -70,6 +72,8 @@ container/agent-runner/src/extensions/
   slack/
     stream-progress.ts              # report_stream_progress MCP tool
     stream-progress.instructions.md # CLAUDE.md fragment source
+    search-history.ts               # search_slack_history MCP tool
+    search-history.instructions.md
 ```
 
 Wire container extensions with one trunk line in `mcp-tools/index.ts`:

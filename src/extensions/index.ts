@@ -14,9 +14,12 @@
 import './slack/adapter.js';
 // Open Slack assistant stream on container wake (Thinking Steps).
 import './slack/on-wake.js';
+// Slack thread history sync (startup + periodic + inbound gap-fill).
+import './slack/history-sync-hooks.js';
 
 import { deliverOAuthAlert } from './oauth/alerts.js';
 import { startOAuthRefresher, stopOAuthRefresher } from './oauth/refresher.js';
+import { initSlackHistorySync, teardownSlackHistorySync } from './slack/history-sync-hooks.js';
 
 export type { RefreshOptions, RefreshResult, TokenHealth } from './oauth/refresher.js';
 
@@ -30,9 +33,11 @@ export function initExtensions(): void {
       void deliverOAuthAlert(message);
     },
   });
+  initSlackHistorySync();
 }
 
 /** Stop all fork extensions. Called from shutdown(). */
 export function teardownExtensions(): void {
   stopOAuthRefresher();
+  teardownSlackHistorySync();
 }

@@ -9,3 +9,5 @@
 
 // Slack Thinking Steps MCP tool (report_stream_progress).
 import './slack/stream-progress.js';
+// Slack history search MCP tool (search_slack_history).
+import './slack/search-history.js';

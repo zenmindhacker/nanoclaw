@@ -8,6 +8,34 @@
       "script": "bash /workspace/agent/oauth-health-gate.sh"
     },
     {
+      "id": "im-sync",
+      "agentFolder": "slack_scheduled",
+      "recurrence": "30 7 * * *",
+      "prompt": "Run im-sync. The pre-task script attached results in scriptOutput. Post a concise summary to #sysops (slack:C07F195GB96). Deliver a brief status to Cian's DM if scriptOutput indicates actionable items.",
+      "script": "bash /workspace/extra/skills/im-management/scripts/sync-messages.sh"
+    },
+    {
+      "id": "im-digest",
+      "agentFolder": "slack_scheduled",
+      "recurrence": "0 8 * * *",
+      "prompt": "Run im-digest. The pre-task script attached digest data in scriptOutput. Deliver the digest to Cian's Slack DM (U07F1909LCQ) in a warm, scannable format.",
+      "script": "bash /workspace/extra/skills/im-management/scripts/collect-digest-data.sh"
+    },
+    {
+      "id": "im-audit",
+      "agentFolder": "slack_scheduled",
+      "recurrence": "0 9 * * 0",
+      "prompt": "Run weekly im-audit. The pre-task script attached audit results in scriptOutput. Post summary to #sysops (slack:C07F195GB96).",
+      "script": "bash /workspace/extra/skills/im-management/scripts/weekly-audit.sh"
+    },
+    {
+      "id": "ganttsy-resume-daily",
+      "agentFolder": "slack_scheduled",
+      "recurrence": "0 6 * * *",
+      "prompt": "Run ganttsy-resume daily pipeline. The pre-task script attached results in scriptOutput. Post summary to #sysops (slack:C07F195GB96).",
+      "script": "bash /workspace/extra/skills/ganttsy-resume/scripts/run-daily.sh"
+    },
+    {
       "id": "cycle-daily-briefing",
       "agentFolder": "dm-with-christina",
       "recurrence": "0 11 * * *",

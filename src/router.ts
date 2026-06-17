@@ -173,6 +173,25 @@ export function registerOnWakeFailedHook(fn: WakeHookFn): void {
   onWakeFailedHooks.push(fn);
 }
 
+/**
+ * Pre-route hooks run after messaging group resolution and before fan-out.
+ * Extensions use this for Slack history gap-fill/backfill so agents see
+ * thread context before engage evaluation.
+ */
+export type InboundPreRouteHookFn = (mg: MessagingGroup, event: InboundEvent) => Promise<void>;
+
+const inboundPreRouteHooks: InboundPreRouteHookFn[] = [];
+
+export function registerInboundPreRouteHook(fn: InboundPreRouteHookFn): void {
+  inboundPreRouteHooks.push(fn);
+}
+
+async function runInboundPreRouteHooks(mg: MessagingGroup, event: InboundEvent): Promise<void> {
+  for (const hook of inboundPreRouteHooks) {
+    await hook(mg, event);
+  }
+}
+
 function safeParseContent(raw: string): { text?: string; sender?: string; senderId?: string } {
   try {
     return JSON.parse(raw);
@@ -286,6 +305,8 @@ export async function routeInbound(event: InboundEvent): Promise<void> {
     }
     return;
   }
+
+  await runInboundPreRouteHooks(mg, event);
 
   // 2. Sender resolution (permissions module upserts the users row as a
   //    side effect so later role/access lookups find a real record).
@@ -594,4 +615,8 @@ export function registerMentionStickyThreadAfterOutbound(
   void adapter.subscribe(platformId, threadId).catch((err) => {
     log.warn('mention-sticky outbound subscribe failed', { channelType, platformId, threadId, err });
   });
+
+  void import('./extensions/slack/history-sync.js')
+    .then(({ syncMentionStickyThreadAfterOutbound }) => syncMentionStickyThreadAfterOutbound(mg, platformId, threadId))
+    .catch((err) => log.warn('mention-sticky outbound history sync failed', { platformId, threadId, err }));
 }

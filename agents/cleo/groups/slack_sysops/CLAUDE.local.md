@@ -50,6 +50,7 @@ Manual `transcript-sync` still exists under `/workspace/extra/skills/transcript-
 ## Inbound wiring
 
 - **Main channel:** Cian must `@Cleo` to start a conversation.
-- **Threads Cleo is already in:** reply without `@Cleo` — includes alert threads where scheduled tasks posted first (host registers sticky state on outbound).
+- **Threads Cleo is already in:** reply without `@Cleo` — includes alert threads where scheduled tasks posted first (host syncs Slack history + registers sticky state on outbound).
+- **Thread context:** Host backfills Slack API history into this session before you wake. Also check `/workspace/agent/slack_history.json`, `slack_channel_history.json`, or MCP `search_slack_history`.
 - Scheduled-task containers post *outbound* alerts here; interactive replies are handled by this `slack_sysops` container.
 - If asked to verify a skill path, run: `ls /workspace/extra/skills/invoice-generator/scripts/nvs-processor.mjs`
