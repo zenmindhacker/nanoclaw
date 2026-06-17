@@ -15,11 +15,26 @@ Implementation: `scripts/post-upgrade/`.
 
 ### One-time CLI smoke setup (per server)
 
+Wire CLI to the **production** primary group (not a scratch smoke agent):
+
+```bash
+pnpm exec tsx scripts/wire-cli-primary.ts --agent cleo
+# or
+pnpm exec tsx scripts/wire-cli-primary.ts --agent silas
+```
+
+Manual capability smoke anytime:
+
+```bash
+pnpm run test:capabilities
+pnpm run chat "Do you have persistent memory? One sentence."
+```
+
+Legacy scratch agent (optional, not recommended for persona tests):
+
 ```bash
 pnpm exec tsx scripts/init-cli-agent.ts --display-name "Upgrade Smoke" --agent-name smoke
 ```
-
-Wire the CLI session to the same agent group as production:
 
 | Agent | Primary group folder |
 |-------|---------------------|
@@ -55,7 +70,7 @@ ssh cian@cleo-lc.cognitivetech.net \
 |------|-------|----------------|
 | **0** | Local / CI | `pnpm test`, `pnpm run typecheck`, `bun test` in agent-runner |
 | **1** | Server | Host service, Docker image, OAuth health (Cleo), mnemon/wiki structure, skill audit, read-only skill scripts, Slack wiring, **CLAUDE composition** |
-| **2** | Server | CLI ping, mnemon seed/recall/injection, wiki query, skill catalog prompts, synthetic Slack inbound → outbound.db |
+| **2** | Server | CLI ping, **memory.capabilities-cli**, mnemon seed/recall/injection, wiki query, skill catalog prompts, synthetic Slack inbound → outbound.db |
 
 Tier 2 is skipped automatically if Tier 1 has failures (use `--force-tier2` to override).
 

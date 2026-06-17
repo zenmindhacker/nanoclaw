@@ -117,5 +117,28 @@ export function runCompositionChecks(ctx: RunContext): CheckResult[] {
     }),
   );
 
+  checks.push(
+    syncTimedCheck('persona.capabilities-guidance', 1, () => {
+      const globalPersona = path.join(GROUPS_DIR, 'global', 'CLAUDE.md');
+      if (!fs.existsSync(globalPersona)) {
+        return { status: 'warn', message: 'No global CLAUDE.md persona file' };
+      }
+      const content = fs.readFileSync(globalPersona, 'utf8');
+      if (content.includes('Never Expose Your Architecture')) {
+        return {
+          status: 'fail',
+          message: 'Persona still uses deprecated Never Expose Your Architecture section',
+        };
+      }
+      if (!content.includes('Stay user-facing')) {
+        return { status: 'fail', message: 'Persona missing Stay user-facing section' };
+      }
+      if (!content.includes('mnemon')) {
+        return { status: 'fail', message: 'Persona missing mnemon capability guidance' };
+      }
+      return { status: 'pass' };
+    }),
+  );
+
   return checks;
 }

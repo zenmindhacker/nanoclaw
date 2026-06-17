@@ -1,6 +1,7 @@
 import { pingCliAgent } from '../../../setup/lib/agent-ping.js';
 import { UPGRADE_TEST_PREFIX } from '../manifest.js';
 import type { RunContext } from '../types.js';
+import { CAPABILITY_PROMPT, scoreCapabilityReply } from '../utils/capability-score.js';
 import { seedUpgradeTestFact } from './memory.js';
 import { timedCheck } from '../report.js';
 import type { CheckResult } from '../types.js';
@@ -101,6 +102,32 @@ export async function runCliScenarioChecks(ctx: RunContext): Promise<CheckResult
       return {
         status: 'warn',
         message: `Agent reply did not mention ${expected}`,
+        detail: combined.slice(0, 400),
+      };
+    }),
+  );
+
+  checks.push(
+    await timedCheck('memory.capabilities-cli', 2, async () => {
+      const r = runPnpmChat(CAPABILITY_PROMPT);
+      const combined = `${r.stdout}\n${r.stderr}`.trim();
+      if (!combined) {
+        return { status: 'fail', message: 'Empty CLI reply', detail: r.stderr.slice(0, 300) };
+      }
+      const score = scoreCapabilityReply(combined);
+      if (score === 'pass') {
+        return { status: 'pass', message: 'Agent acknowledged persistent memory layers' };
+      }
+      if (score === 'fail') {
+        return {
+          status: 'fail',
+          message: 'Agent denied persistent memory (generic disclaimer)',
+          detail: combined.slice(0, 400),
+        };
+      }
+      return {
+        status: 'warn',
+        message: 'Ambiguous capability reply — review manually',
         detail: combined.slice(0, 400),
       };
     }),
