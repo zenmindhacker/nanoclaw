@@ -30,7 +30,7 @@ import { getDb, hasTable } from './db/connection.js';
 import { initGroupFilesystem } from './group-init.js';
 import { stopTypingRefresh } from './modules/typing/index.js';
 import { log } from './log.js';
-import { validateAdditionalMounts } from './modules/mount-security/index.js';
+import { getDefaultMounts, validateAdditionalMounts } from './modules/mount-security/index.js';
 // Provider host-side config barrel — each provider that needs host-side
 // container setup self-registers on import.
 import './providers/index.js';
@@ -346,6 +346,10 @@ export function buildMounts(
   if (fs.existsSync(skillsSrc)) {
     mounts.push({ hostPath: skillsSrc, containerPath: '/app/skills', readonly: true });
   }
+
+  // Operator-configured default mounts from ~/.config/nanoclaw/mount-allowlist.json
+  // (skills, credentials, memory, repos, etc.) are available to every group.
+  mounts.push(...getDefaultMounts());
 
   // Additional mounts from container config
   if (containerConfig.additionalMounts && containerConfig.additionalMounts.length > 0) {

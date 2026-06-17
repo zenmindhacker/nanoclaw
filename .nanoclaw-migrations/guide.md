@@ -129,7 +129,13 @@ Not part of the agent container image; lived in git under `skills/`.
 | `skills/neondb/` | Cleo | NeonDB (Postgres) queries |
 | `skills/im-management/` | Cleo | iMessage / Beeper history mgmt |
 
-**On replay:** Copy the `skills/` directory in its entirety. Skills mount via
+**On replay:** Copy `skills/` directory in its entirety. Ensure `defaultMounts`
+in `~/.config/nanoclaw/mount-allowlist.json` includes the skills path — upstream
+v2.1.17 dropped `getDefaultMounts()` from mount-security; the fork restores it in
+`src/modules/mount-security/index.ts` + `src/container-runner.ts` so
+`/workspace/extra/skills` is mounted on every container spawn.
+
+Skills mount via
 `~/.config/nanoclaw/mount-allowlist.json` (server-only, not in git).
 
 ---

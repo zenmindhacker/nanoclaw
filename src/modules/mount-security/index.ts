@@ -21,10 +21,19 @@ export interface AdditionalMount {
 export interface MountAllowlist {
   allowedRoots: AllowedRoot[];
   blockedPatterns: string[];
+  /** Operator-configured mounts applied to every agent group. */
+  defaultMounts?: DefaultMount[];
 }
 
 export interface AllowedRoot {
   path: string;
+  allowReadWrite: boolean;
+  description?: string;
+}
+
+export interface DefaultMount {
+  path: string;
+  containerName: string;
   allowReadWrite: boolean;
   description?: string;
 }
@@ -353,6 +362,56 @@ export function validateAdditionalMounts(
   }
 
   return validatedMounts;
+}
+
+/**
+ * Default mounts are operator-configured in the external allowlist and apply to
+ * every group. They use explicit path/containerName pairs instead of the
+ * additional-mount validation path (whose blocked-pattern rules would reject
+ * intentional mounts like the credentials service directory).
+ */
+export function getDefaultMounts(): Array<{
+  hostPath: string;
+  containerPath: string;
+  readonly: boolean;
+}> {
+  const allowlist = loadMountAllowlist();
+  if (!allowlist?.defaultMounts) return [];
+
+  const mounts: Array<{
+    hostPath: string;
+    containerPath: string;
+    readonly: boolean;
+  }> = [];
+
+  for (const mount of allowlist.defaultMounts) {
+    if (!isValidContainerPath(mount.containerName)) {
+      log.warn('Default mount REJECTED', {
+        requestedPath: mount.path,
+        containerPath: mount.containerName,
+        reason: 'Invalid containerName',
+      });
+      continue;
+    }
+
+    const expandedPath = expandPath(mount.path);
+    const realPath = getRealPath(expandedPath);
+    if (realPath === null) {
+      log.warn('Default mount REJECTED', {
+        requestedPath: mount.path,
+        reason: `Host path does not exist: "${expandedPath}"`,
+      });
+      continue;
+    }
+
+    mounts.push({
+      hostPath: realPath,
+      containerPath: `/workspace/extra/${mount.containerName}`,
+      readonly: !mount.allowReadWrite,
+    });
+  }
+
+  return mounts;
 }
 
 /**
