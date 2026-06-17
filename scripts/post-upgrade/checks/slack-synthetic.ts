@@ -61,11 +61,52 @@ export async function runSlackHistorySyncCheck(ctx: RunContext): Promise<CheckRe
     if (!fs.existsSync(modPath)) {
       return { status: 'fail', message: 'history-sync extension missing' };
     }
+    const src = fs.readFileSync(modPath, 'utf8');
+    if (!src.includes('application/x-www-form-urlencoded')) {
+      return {
+        status: 'fail',
+        message: 'history-sync must use form-urlencoded bodies for Slack Web API',
+      };
+    }
+
+    const hooksPath = path.join(process.cwd(), 'src/extensions/slack/history-sync-hooks.ts');
+    if (!fs.existsSync(hooksPath)) {
+      return { status: 'fail', message: 'history-sync-hooks extension missing' };
+    }
+    const hooksSrc = fs.readFileSync(hooksPath, 'utf8');
+    if (!hooksSrc.includes('registerInboundPreRouteHook')) {
+      return { status: 'fail', message: 'history-sync-hooks must register inbound pre-route hook' };
+    }
+
     const { registerInboundPreRouteHook } = await import('../../../src/router.js');
     if (typeof registerInboundPreRouteHook !== 'function') {
       return { status: 'fail', message: 'registerInboundPreRouteHook not exported' };
     }
     return { status: 'pass', message: 'Slack history sync extension present' };
+  });
+}
+
+export async function runSlackSearchHistoryMcpCheck(_ctx: RunContext): Promise<CheckResult> {
+  return timedCheck('slack.search-history-mcp', 1, async () => {
+    const mcpPath = path.join(
+      process.cwd(),
+      'container/agent-runner/src/extensions/slack/search-history.ts',
+    );
+    if (!fs.existsSync(mcpPath)) {
+      return { status: 'fail', message: 'search_slack_history MCP tool missing' };
+    }
+    const src = fs.readFileSync(mcpPath, 'utf8');
+    if (!src.includes("name: 'search_slack_history'")) {
+      return { status: 'fail', message: 'search_slack_history tool not registered' };
+    }
+    const instructionsPath = path.join(
+      process.cwd(),
+      'container/agent-runner/src/extensions/slack/search-history.instructions.md',
+    );
+    if (!fs.existsSync(instructionsPath)) {
+      return { status: 'fail', message: 'search-history.instructions.md missing' };
+    }
+    return { status: 'pass', message: 'search_slack_history MCP present' };
   });
 }
 
@@ -175,6 +216,7 @@ export async function runSlackSyntheticChecks(ctx: RunContext, tiers: Set<1 | 2>
   if (tiers.has(1)) {
     checks.push(await runSlackWiringCheck(ctx));
     checks.push(await runSlackHistorySyncCheck(ctx));
+    checks.push(await runSlackSearchHistoryMcpCheck(ctx));
   }
   if (tiers.has(2)) checks.push(await runSlackSyntheticCheck(ctx));
   return checks;

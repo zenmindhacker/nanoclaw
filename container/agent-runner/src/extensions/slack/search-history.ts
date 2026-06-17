@@ -39,6 +39,13 @@ function searchEntries(entries: HistoryEntry[], query: string, limit: number): H
   return matches.slice(-limit);
 }
 
+/** @internal exported for unit tests */
+export { loadJsonFile, searchEntries };
+
+function agentHistoryDir(): string {
+  return process.env.NANOCLAW_AGENT_DIR ?? '/workspace/agent';
+}
+
 export const searchSlackHistory: McpToolDefinition = {
   tool: {
     name: 'search_slack_history',
@@ -64,7 +71,7 @@ export const searchSlackHistory: McpToolDefinition = {
     if (!query) return err('query is required');
 
     const limit = typeof args.limit === 'number' && args.limit > 0 ? Math.min(args.limit, 100) : 20;
-    const agentDir = '/workspace/agent';
+    const agentDir = agentHistoryDir();
     const threadHistory = loadJsonFile(path.join(agentDir, 'slack_history.json'));
     const channelHistory = loadJsonFile(path.join(agentDir, 'slack_channel_history.json'));
     const combined = [...threadHistory, ...channelHistory];

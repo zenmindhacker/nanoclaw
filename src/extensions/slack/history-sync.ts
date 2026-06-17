@@ -52,13 +52,20 @@ async function slackApi<T>(
   const token = getSlackToken();
   if (!token) throw new Error('SLACK_BOT_TOKEN not configured');
 
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(body)) {
+    if (value !== undefined && value !== null) {
+      params.set(key, String(value));
+    }
+  }
+
   const res = await fetch(`https://slack.com/api/${method}`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json; charset=utf-8',
+      'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8',
     },
-    body: JSON.stringify(body),
+    body: params.toString(),
   });
   return (await res.json()) as T & { ok?: boolean; error?: string };
 }
