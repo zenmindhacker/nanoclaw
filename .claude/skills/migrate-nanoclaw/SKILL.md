@@ -61,7 +61,7 @@ git diff --stat $BASE..HEAD | tail -1                   # insertions/deletions
 git diff --name-only $BASE..upstream/$UPSTREAM_BRANCH | wc -l  # upstream changed files
 ```
 
-Check for existing guide: `.nanoclaw-migrations/guide.md` or `.nanoclaw-migrations/index.md`.
+Check for existing guide: `.nanoclaw/migrations/guide.md` or `.nanoclaw/migrations/index.md`.
 
 **Determine the tier based on the total diff from base:**
 
@@ -189,7 +189,7 @@ Present the plan to the user for review before proceeding to the guide.
 
 ## 1.7 Write the migration guide
 
-**Storage:** `.nanoclaw-migrations/guide.md` for Tier 2. `.nanoclaw-migrations/` directory with `index.md` and section files for Tier 3.
+**Storage:** `.nanoclaw/migrations/guide.md` for Tier 2. `.nanoclaw/migrations/` directory with `index.md` and section files for Tier 3.
 
 **Verification:** After writing the guide, read it back and verify:
 - Every referenced file path exists in the current codebase
@@ -306,7 +306,7 @@ Example entries at different detail levels:
 
 After writing, offer to commit for the user:
 ```bash
-git add .nanoclaw-migrations/
+git add .nanoclaw/migrations/
 git commit -m "chore: save migration guide"
 ```
 
@@ -448,7 +448,7 @@ WORKTREE_PATH=$(cd "$PROJECT_ROOT/.upgrade-worktree" && pwd)
 UPGRADE_COMMIT=$(git -C "$WORKTREE_PATH" rev-parse HEAD)
 
 # 2. Copy the migration guide out of the worktree before removing it
-cp -r "$WORKTREE_PATH/.nanoclaw-migrations" /tmp/nanoclaw-migrations-backup 2>/dev/null || true
+cp -r "$WORKTREE_PATH/.nanoclaw/migrations" /tmp/nanoclaw-migrations-backup 2>/dev/null || true
 
 # 3. Remove the worktree
 git worktree remove "$WORKTREE_PATH" --force
@@ -457,13 +457,13 @@ git worktree remove "$WORKTREE_PATH" --force
 git reset --hard $UPGRADE_COMMIT
 
 # 5. Restore the migration guide and update its hashes
-cp -r /tmp/nanoclaw-migrations-backup/* .nanoclaw-migrations/ 2>/dev/null || true
+cp -r /tmp/nanoclaw-migrations-backup/* .nanoclaw/migrations/ 2>/dev/null || true
 rm -rf /tmp/nanoclaw-migrations-backup
 ```
 
 Update the guide's header hashes to reflect the new state. Offer to commit:
 ```bash
-git add .nanoclaw-migrations/
+git add .nanoclaw/migrations/
 git commit -m "chore: upgrade to upstream $(git rev-parse --short upstream/$UPSTREAM_BRANCH)"
 ```
 

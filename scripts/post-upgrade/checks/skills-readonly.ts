@@ -1,3 +1,4 @@
+import { LINEAR_CONTAINER_ENV } from '../../../src/config.js';
 import type { RunContext } from '../types.js';
 import { syncTimedCheck } from '../report.js';
 import type { CheckResult } from '../types.js';
@@ -21,7 +22,11 @@ export async function runSkillsReadonlyChecks(ctx: RunContext): Promise<CheckRes
         const hostCmd = skill.cmd
           .replace('/workspace/extra/skills/', 'skills/')
           .replace('/workspace/agent/', `agents/${ctx.agent}/groups/${ctx.agentGroupFolder}/`);
-        const r = runCommand(hostCmd, { cwd: skill.cwd ? process.cwd() : process.cwd(), timeoutMs: 60_000 });
+        const r = runCommand(hostCmd, {
+          cwd: skill.cwd ? process.cwd() : process.cwd(),
+          timeoutMs: 60_000,
+          env: { ...LINEAR_CONTAINER_ENV },
+        });
         if (r.ok) return { status: 'pass', message: 'ran on host (no container)', detail: r.stdout.slice(0, 200) };
         return {
           status: 'skip',

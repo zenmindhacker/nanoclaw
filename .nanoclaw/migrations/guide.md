@@ -37,9 +37,9 @@ On replay: re-run the corresponding skill after switching to clean upstream.
 
 ## Fork Extensions (`src/extensions/`)
 
-Upstream never edits `src/extensions/**`. See [extensions.md](extensions.md) and [docs/fork-extensions.md](../docs/fork-extensions.md) for merge discipline.
+Upstream never edits `src/extensions/**`. See [extensions.md](extensions.md) and [../fork-extensions.md](../fork-extensions.md) for merge discipline.
 
-**OAuth:** `src/extensions/oauth/` + `src/cli/commands/oauth.ts` + `OAUTH_ALERT_SLACK_CHANNEL` in `.env`. Docs: [docs/oauth-hybrid-repair.md](../docs/oauth-hybrid-repair.md). Wire `initExtensions()` / `teardownExtensions()` in `src/index.ts`.
+**OAuth:** `src/extensions/oauth/` + `src/cli/commands/oauth.ts` + `OAUTH_ALERT_SLACK_CHANNEL` in `.env`. Docs: [../oauth-hybrid-repair.md](../oauth-hybrid-repair.md). Wire `initExtensions()` / `teardownExtensions()` in `src/index.ts`.
 
 **Slack streaming:** `src/extensions/slack/adapter.ts`, `on-wake.ts`, `src/channels/slack-stream.ts`, `session-activity.ts`, `container/agent-runner/src/extensions/slack/stream-progress.ts`. Ensure `mcp-tools/index.ts` imports `../extensions/index.js`.
 
@@ -217,5 +217,5 @@ Check before deleting: `ncl groups list` on each server.
 
 ## Post-upgrade verification
 
-See [docs/post-upgrade.md](../docs/post-upgrade.md) for the full harness (`pnpm run post-upgrade`). Primary groups: Cleo `dm-with-cian`, Silas `dm-with-christina`.
+See [../post-upgrade.md](../post-upgrade.md) for the full harness (`pnpm run post-upgrade`). Primary groups: Cleo `dm-with-cian`, Silas `dm-with-christina`.
 

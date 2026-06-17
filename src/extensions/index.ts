@@ -6,7 +6,7 @@
  * upstream, resolve src/index.ts conflicts by keeping this single import
  * line plus whatever startup steps upstream adds.
  *
- * See .nanoclaw-migrations/extensions.md for the full rationale.
+ * See .nanoclaw/migrations/extensions.md for the full rationale.
  */
 
 // Slack channel adapter — self-registers as 'slack' on import.

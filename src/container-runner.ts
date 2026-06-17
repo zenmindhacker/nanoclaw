@@ -9,16 +9,7 @@ import path from 'path';
 
 import { OneCLI } from '@onecli-sh/sdk';
 
-import {
-  CONTAINER_IMAGE,
-  CONTAINER_IMAGE_BASE,
-  CONTAINER_INSTALL_LABEL,
-  DATA_DIR,
-  GROUPS_DIR,
-  ONECLI_API_KEY,
-  ONECLI_URL,
-  TIMEZONE,
-} from './config.js';
+import { CONTAINER_IMAGE, CONTAINER_IMAGE_BASE, CONTAINER_INSTALL_LABEL, DATA_DIR, GROUPS_DIR, LINEAR_CONTAINER_ENV, ONECLI_API_KEY, ONECLI_URL, TIMEZONE } from './config.js';
 import { agentGlobalDir, ensureAgentGlobalScaffold, GLOBAL_MNEMON_CONTAINER_PATH } from './agent-global.js';
 import { materializeContainerJson } from './container-config.js';
 import { getContainerConfig } from './db/container-configs.js';
@@ -453,6 +444,10 @@ async function buildContainerArgs(
   args.push('-e', `TZ=${TIMEZONE}`);
   // Unified mnemon graph for this agent install (all groups share one store).
   args.push('-e', `MNEMON_DATA_DIR=${GLOBAL_MNEMON_CONTAINER_PATH}`);
+
+  for (const [key, value] of Object.entries(LINEAR_CONTAINER_ENV)) {
+    args.push('-e', `${key}=${value}`);
+  }
 
   // Provider-contributed env vars (e.g. XDG_DATA_HOME, OPENCODE_*, NO_PROXY).
   if (providerContribution.env) {

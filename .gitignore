@@ -35,9 +35,6 @@ groups/*
 .idea/
 .vscode/
 
-# Skills system (local per-installation state)
-.nanoclaw/
-
 agents-sdk-docs
 .agents
 AGENTS.md

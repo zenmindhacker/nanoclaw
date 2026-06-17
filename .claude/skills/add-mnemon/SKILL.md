@@ -161,7 +161,7 @@ To reset all memory for an agent, stop the container and delete the `mnemon/` su
 
 ## Migration Guide Update
 
-If you are using `/migrate-nanoclaw`, add these entries to `.nanoclaw-migrations/05-dockerfile.md`:
+If you are using `/migrate-nanoclaw`, add these entries to `.nanoclaw/migrations/05-dockerfile.md`:
 
 **Dockerfile — before the Bun runtime block:**
 ```dockerfile

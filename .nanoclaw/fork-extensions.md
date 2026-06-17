@@ -2,7 +2,7 @@
 
 How customized NanoClaw installs (e.g. Cleo/Silas) keep fork-specific code out of upstream merge paths.
 
-Full merge discipline: [`.nanoclaw-migrations/extensions.md`](../.nanoclaw-migrations/extensions.md).
+Full merge discipline: [migrations/extensions.md](migrations/extensions.md).
 
 ## Why
 
@@ -62,4 +62,4 @@ Never add new fork host code directly to trunk files. Put it in `src/extensions/
 
 ## Replay on clean upstream
 
-See [`.nanoclaw-migrations/guide.md`](../.nanoclaw-migrations/guide.md) for the full file inventory.
+See [migrations/guide.md](migrations/guide.md) for the full file inventory.

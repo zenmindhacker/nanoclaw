@@ -1,4 +1,4 @@
-# Fork Migration Docs
+# Fork migration docs
 
 Intent-based replay guide for `zenmindhacker/nanoclaw` (Cleo + Silas). Used by `/migrate-nanoclaw` when upgrading from clean upstream.
 
@@ -8,6 +8,4 @@ Intent-based replay guide for `zenmindhacker/nanoclaw` (Cleo + Silas). Used by `
 | [extensions.md](extensions.md) | `src/extensions/` merge pattern and discipline |
 | [05-dockerfile.md](05-dockerfile.md) | Dockerfile fork layer ledger |
 
-Operator docs (testing, post-upgrade smoke): [docs/post-upgrade.md](../docs/post-upgrade.md), [docs/testing.md](../docs/testing.md).
-
-Fork extensions pattern: [docs/fork-extensions.md](../docs/fork-extensions.md).
+Operator docs: [../README.md](../README.md). Post-upgrade smoke: [../post-upgrade.md](../post-upgrade.md). Upstream testing: [../../docs/testing.md](../../docs/testing.md).

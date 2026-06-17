@@ -88,4 +88,4 @@ Existing memory checks in `scripts/post-upgrade/checks/memory.ts` remain.
 | `scripts/post-upgrade/checks/cli-scenarios.ts` | Tier 2 agent loop |
 | `scripts/post-upgrade/checks/slack-synthetic.ts` | Synthetic Slack inject |
 
-Fork replay inventory: [`.nanoclaw-migrations/guide.md`](../.nanoclaw-migrations/guide.md).
+Fork replay inventory: [migrations/guide.md](migrations/guide.md).

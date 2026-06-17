@@ -77,3 +77,20 @@ function resolveConfigTimezone(): string {
   return 'UTC';
 }
 export const TIMEZONE = resolveConfigTimezone();
+
+/** Per-org Linear API keys injected into agent containers for skills/linear. */
+export const LINEAR_ENV_KEYS = [
+  'LINEAR_API_KEY_COGNITIVE',
+  'LINEAR_API_KEY_CT',
+  'LINEAR_API_KEY_GANTTSY',
+  'LINEAR_API_KEY_TUTORING',
+] as const;
+
+const linearEnvFile = readEnvFile([...LINEAR_ENV_KEYS]);
+
+export const LINEAR_CONTAINER_ENV: Record<string, string> = Object.fromEntries(
+  LINEAR_ENV_KEYS.flatMap((key) => {
+    const value = process.env[key] || linearEnvFile[key];
+    return value ? [[key, value]] : [];
+  }),
+);

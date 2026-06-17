@@ -29,6 +29,22 @@ Before changing state or repairing production data, look for the established pat
 
 **Run commands directly** — don't tell the user to run them. See [docs/build-and-runtime.md](docs/build-and-runtime.md) for dev commands.
 
+## Operator docs (Cleo/Silas)
+
+Fork-specific runbooks — post-upgrade smoke, OAuth repair, extensions, agent-owned code, migration replay:
+
+**[.nanoclaw/README.md](.nanoclaw/README.md)**
+
+## Upstream reference
+
+For architecture, new features, and skill-installable capabilities:
+
+| Doc | Purpose |
+|-----|---------|
+| [docs/README.md](docs/README.md) | In-repo upstream doc index |
+| [docs.nanoclaw.dev](https://docs.nanoclaw.dev) | Published documentation site |
+| `.claude/skills/add-*` | Install channels, providers, tools (Ollama, Discord, etc.) |
+
 ## Contributing
 
 Before creating a PR or adding a skill, read [CONTRIBUTING.md](CONTRIBUTING.md). Skill taxonomy and authoring: [docs/skill-guidelines.md](docs/skill-guidelines.md). Customizing via skills: [docs/customizing.md](docs/customizing.md).
@@ -43,57 +59,3 @@ git log upstream/main..HEAD --oneline
 ```
 
 Show the output and wait for approval. Installation-specific files (group files, `.claude/settings.json`, local configs) should not be included.
-
-## Docs Index
-
-### Architecture & runtime
-
-| Doc | Purpose |
-|-----|---------|
-| [docs/architecture.md](docs/architecture.md) | Full architecture writeup |
-| [docs/db.md](docs/db.md) | Three-DB model overview |
-| [docs/db-central.md](docs/db-central.md) | Central DB schema |
-| [docs/db-session.md](docs/db-session.md) | Per-session inbound/outbound DBs |
-| [docs/agent-runner-details.md](docs/agent-runner-details.md) | Agent-runner + MCP tools |
-| [docs/claude-md-composition.md](docs/claude-md-composition.md) | How agent instructions are composed |
-| [docs/isolation-model.md](docs/isolation-model.md) | Channel isolation levels |
-| [docs/build-and-runtime.md](docs/build-and-runtime.md) | Node host + Bun container, CI, lockfiles |
-| [docs/ncl.md](docs/ncl.md) | Admin CLI reference |
-
-### Customizing & skills
-
-| Doc | Purpose |
-|-----|---------|
-| [docs/customizing.md](docs/customizing.md) | Short intro to customizing via skills |
-| [docs/skills-model.md](docs/skills-model.md) | Skills model: recipes, tests, upgrades |
-| [docs/skill-guidelines.md](docs/skill-guidelines.md) | Authoritative skill checklist |
-| [docs/skill-lifecycle.md](docs/skill-lifecycle.md) | Agent-created skill audit/archive |
-
-### Upgrading & migration
-
-| Doc | Purpose |
-|-----|---------|
-| [docs/post-upgrade.md](docs/post-upgrade.md) | Production smoke harness (Cleo/Silas) |
-| [docs/testing.md](docs/testing.md) | Test layers entry point |
-| [docs/upgrade-recovery.md](docs/upgrade-recovery.md) | Upgrade tripwire recovery |
-| [docs/migration-dev.md](docs/migration-dev.md) | v1→v2 migration development |
-| [docs/v1-to-v2-changes.md](docs/v1-to-v2-changes.md) | v1→v2 vocabulary map |
-| [docs/provider-migration.md](docs/provider-migration.md) | Switching agent providers |
-| [docs/onecli-upgrades.md](docs/onecli-upgrades.md) | OneCLI gateway upgrades |
-| [docs/oauth-hybrid-repair.md](docs/oauth-hybrid-repair.md) | OAuth token refresh + repair |
-
-### Fork-specific (Cleo/Silas)
-
-| Doc | Purpose |
-|-----|---------|
-| [docs/fork-extensions.md](docs/fork-extensions.md) | Fork extensions pattern |
-| [docs/agent-owned-code.md](docs/agent-owned-code.md) | Agent durable code layout |
-| [.nanoclaw-migrations/guide.md](.nanoclaw-migrations/guide.md) | Fork replay inventory |
-
-### Operations
-
-| Doc | Purpose |
-|-----|---------|
-| [docs/troubleshooting.md](docs/troubleshooting.md) | Logs, common issues |
-| [docs/setup-wiring.md](docs/setup-wiring.md) | Setup flow wiring |
-| [docs/api-details.md](docs/api-details.md) | Host API + DB details |

@@ -56,7 +56,7 @@ ncl oauth-refresh-now
 ncl oauth-refresh-one --id <registry-id>
 ```
 
-See [oauth-hybrid-repair.md](oauth-hybrid-repair.md).
+See [../.nanoclaw/oauth-hybrid-repair.md](../.nanoclaw/oauth-hybrid-repair.md).
 
 ## Key files
 

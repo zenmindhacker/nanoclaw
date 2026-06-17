@@ -79,4 +79,4 @@ Edit `CLAUDE.local.md` for per-group memory. Edit `groups/global/CLAUDE.local.md
 
 ## Post-upgrade validation
 
-Tier 1 of `pnpm run post-upgrade` checks composition and memory scaffold. See [post-upgrade.md](post-upgrade.md).
+Tier 1 of `pnpm run post-upgrade` checks composition and memory scaffold. See [../.nanoclaw/post-upgrade.md](../.nanoclaw/post-upgrade.md).

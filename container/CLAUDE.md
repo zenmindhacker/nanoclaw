@@ -38,7 +38,7 @@ For mnemon recall/remember patterns and wiki ingest/query procedures, invoke the
 
 ## Durable code
 
-When you add or change durable files (scripts, `CLAUDE.local.md`, reference data, or anything under `/workspace/extra/skills/`), **commit and push to the repo promptly** — the operator should not need to remember git. Do not commit `data/`, logs, or credentials. See `docs/agent-owned-code.md` in the repo.
+When you add or change durable files (scripts, `CLAUDE.local.md`, reference data, or anything under `/workspace/extra/skills/`), **commit and push to the repo promptly** — the operator should not need to remember git. Do not commit `data/`, logs, or credentials. See `.nanoclaw/agent-owned-code.md` in the repo.
 
 ## Composition
 

@@ -38,7 +38,7 @@ After major upgrades on production servers:
 pnpm run post-upgrade -- --agent cleo --tier 1,2 --json-out /tmp/report.json
 ```
 
-See [post-upgrade.md](post-upgrade.md) for tiers, SSH usage, and composition checks.
+See [../.nanoclaw/post-upgrade.md](../.nanoclaw/post-upgrade.md) for tiers, SSH usage, and composition checks.
 
 ## Migration testing
 

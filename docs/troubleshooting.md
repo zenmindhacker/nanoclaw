@@ -37,7 +37,7 @@ systemctl --user restart nanoclaw
 |---------|-------------|
 | Container won't spawn | Docker daemon, OneCLI gateway, `logs/nanoclaw.error.log` |
 | 401 from APIs in container | OneCLI agent secret mode — `onecli agents list` |
-| OAuth failures | `ncl oauth-health`, [oauth-hybrid-repair.md](oauth-hybrid-repair.md) |
+| OAuth failures | `ncl oauth-health`, [.nanoclaw/oauth-hybrid-repair.md](../.nanoclaw/oauth-hybrid-repair.md) |
 | Upgrade tripwire | [upgrade-recovery.md](upgrade-recovery.md) |
 | Stale container image | `./container/build.sh`; prune builder if COPY steps are stale |
 
@@ -47,4 +47,4 @@ For container agent issues, run the `/debug` operational skill.
 
 ## Post-upgrade smoke
 
-After major upgrades: [post-upgrade.md](post-upgrade.md).
+After major upgrades: [.nanoclaw/post-upgrade.md](../.nanoclaw/post-upgrade.md).
