@@ -287,7 +287,7 @@ describe('Slack history sync integration', () => {
         id: 'mga-normal',
         messaging_group_id: 'mg-sysops',
         agent_group_id: 'ag-normal',
-        engage_mode: 'always',
+        engage_mode: 'mention',
         engage_pattern: null,
         sender_scope: 'all',
         ignored_message_policy: 'drop',
