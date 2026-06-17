@@ -18,6 +18,11 @@ import fs from 'fs';
 import path from 'path';
 
 import { GROUPS_DIR } from './config.js';
+import {
+  ensureAgentGlobalScaffold,
+  GLOBAL_CLAUDE_IMPORT,
+  GLOBAL_CLAUDE_LOCAL_IMPORT,
+} from './agent-global.js';
 import type { McpServerConfig } from './container-config.js';
 import { getContainerConfig } from './db/container-configs.js';
 import { log } from './log.js';
@@ -28,12 +33,15 @@ import type { AgentGroup } from './types.js';
 const SHARED_CLAUDE_MD_CONTAINER_PATH = '/app/CLAUDE.md';
 const SHARED_SKILLS_CONTAINER_BASE = '/app/skills';
 const SHARED_MCP_TOOLS_CONTAINER_BASE = '/app/src/mcp-tools';
+const SHARED_EXTENSIONS_CONTAINER_BASE = '/app/src/extensions';
 
 // Host-side source paths used to discover fragment sources at compose time.
 // Resolved at call time (process.cwd() = project root) so tests can swap cwd.
 const MCP_TOOLS_HOST_SUBPATH = path.join('container', 'agent-runner', 'src', 'mcp-tools');
+const EXTENSIONS_HOST_SUBPATH = path.join('container', 'agent-runner', 'src', 'extensions');
 
-const COMPOSED_HEADER = '<!-- Composed at spawn — do not edit. Edit CLAUDE.local.md for per-group content. -->';
+const COMPOSED_HEADER =
+  '<!-- Composed at spawn — do not edit. Per-group: CLAUDE.local.md. Agent-wide: groups/global/CLAUDE.local.md + wiki/. -->';
 
 /**
  * Regenerate `groups/<folder>/CLAUDE.md` from the shared base, enabled skill
@@ -41,6 +49,8 @@ const COMPOSED_HEADER = '<!-- Composed at spawn — do not edit. Edit CLAUDE.loc
  * an empty `CLAUDE.local.md` if missing.
  */
 export function composeGroupClaudeMd(group: AgentGroup): void {
+  ensureAgentGlobalScaffold();
+
   const groupDir = path.resolve(GROUPS_DIR, group.folder);
   if (!fs.existsSync(groupDir)) {
     fs.mkdirSync(groupDir, { recursive: true });
@@ -95,6 +105,13 @@ export function composeGroupClaudeMd(group: AgentGroup): void {
     }
   }
 
+  // Fork extension fragments — MCP tools in container/agent-runner/src/extensions/**.
+  collectExtensionInstructionFragments(
+    path.join(process.cwd(), EXTENSIONS_HOST_SUBPATH),
+    path.join(process.cwd(), EXTENSIONS_HOST_SUBPATH),
+    desired,
+  );
+
   // MCP server fragments — inline instructions from container.json for
   // user-added external MCP servers.
   for (const [name, mcp] of Object.entries(mcpServers)) {
@@ -123,6 +140,14 @@ export function composeGroupClaudeMd(group: AgentGroup): void {
 
   // Composed entry — imports only.
   const imports = ['@./.claude-shared.md'];
+  const globalClaudeMd = path.join(GROUPS_DIR, 'global', 'CLAUDE.md');
+  const globalClaudeLocal = path.join(GROUPS_DIR, 'global', 'CLAUDE.local.md');
+  if (fs.existsSync(globalClaudeMd)) {
+    imports.push(GLOBAL_CLAUDE_IMPORT);
+  }
+  if (fs.existsSync(globalClaudeLocal)) {
+    imports.push(GLOBAL_CLAUDE_LOCAL_IMPORT);
+  }
   for (const name of [...desired.keys()].sort()) {
     imports.push(`@./.claude-fragments/${name}`);
   }
@@ -147,10 +172,12 @@ export function composeGroupClaudeMd(group: AgentGroup): void {
  *     is skipped because `CLAUDE.local.md` now exists)
  *
  * Globally:
- *   - delete `groups/global/` (content already in `container/CLAUDE.md`)
+ *   - ensure `groups/global/` scaffold exists (persona, wiki, mnemon) — never delete
  */
 export function migrateGroupsToClaudeLocal(): void {
   if (!fs.existsSync(GROUPS_DIR)) return;
+
+  ensureAgentGlobalScaffold();
 
   const actions: string[] = [];
 
@@ -177,14 +204,32 @@ export function migrateGroupsToClaudeLocal(): void {
     }
   }
 
-  const globalDir = path.join(GROUPS_DIR, 'global');
-  if (fs.existsSync(globalDir)) {
-    fs.rmSync(globalDir, { recursive: true, force: true });
-    actions.push('groups/global/ removed');
-  }
-
   if (actions.length > 0) {
     log.info('Migrated groups to CLAUDE.local.md model', { actions });
+  }
+}
+
+/** Recursively discover `*.instructions.md` under container extensions. */
+function collectExtensionInstructionFragments(
+  rootDir: string,
+  currentDir: string,
+  desired: Map<string, { type: 'symlink' | 'inline'; content: string }>,
+): void {
+  if (!fs.existsSync(currentDir)) return;
+  for (const entry of fs.readdirSync(currentDir, { withFileTypes: true })) {
+    const fullPath = path.join(currentDir, entry.name);
+    if (entry.isDirectory()) {
+      collectExtensionInstructionFragments(rootDir, fullPath, desired);
+      continue;
+    }
+    const match = entry.name.match(/^(.+)\.instructions\.md$/);
+    if (!match) continue;
+    const moduleName = match[1];
+    const relPath = path.relative(rootDir, fullPath).split(path.sep).join('/');
+    desired.set(`module-${moduleName}.md`, {
+      type: 'symlink',
+      content: `${SHARED_EXTENSIONS_CONTAINER_BASE}/${relPath}`,
+    });
   }
 }
 

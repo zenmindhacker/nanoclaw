@@ -88,12 +88,17 @@ because upstream doesn't have Slack in trunk.
 **Key behaviours added:**
 - `enrichSlackInboundContent`: writes `slackRecipientUserId`, `slackStreamThreadTs` into message content for streaming metadata
 - `attachSlackSessionActivity`: hooks `startSessionActivity`, `appendSessionActivity`, `completeSessionActivity`, `cancelSessionActivity` on the bridge
+- `on-wake.ts`: registers router wake hooks to open the Slack assistant stream before container wake (keeps trunk `router.ts` generic)
+- `report_stream_progress` MCP tool: lives in `container/agent-runner/src/extensions/slack/` (not trunk `mcp-tools/`)
 - HTTP-level tracing on Slack API calls for debugging auth issues
 
-**On replay:** Copy `extensions/slack/adapter.ts`, `channels/slack-stream.ts`,
-`channels/session-activity.ts`. Remove `import './slack.js'` from
-`src/channels/index.ts` (extensions barrel imports the adapter instead). Wire
-`appendSessionActivity` into the delivery adapter in `src/index.ts`.
+**On replay:** Copy `extensions/slack/adapter.ts`, `extensions/slack/on-wake.ts`,
+`channels/slack-stream.ts`, `channels/session-activity.ts`,
+`container/agent-runner/src/extensions/slack/stream-progress.ts` (+ `.instructions.md`),
+`container/agent-runner/src/extensions/index.ts`. Remove `import './slack.js'` from
+`src/channels/index.ts` (extensions barrel imports the adapter instead). Ensure
+`mcp-tools/index.ts` imports `../extensions/index.js`. Ensure `claude-md-compose.ts`
+scans `container/agent-runner/src/extensions/**` for instruction fragments.
 
 ### Voice Transcription
 
@@ -284,3 +289,65 @@ Safe to delete after confirming via `ncl groups list`:
 - `agents/silas/groups/slack_christina-dm/`
 
 Check before deleting: `ncl groups list` on each server.
+
+---
+
+## Post-upgrade verification
+
+After major upgrades (upstream merge, mnemon/wiki, skill lifecycle, Slack changes),
+run the post-upgrade harness on each server. It produces JSON for Cursor agents
+to parse over SSH.
+
+### One-time CLI smoke setup (per server)
+
+Production Cleo/Silas are Slack-first. Tier 2 agent-loop checks use the CLI channel:
+
+```bash
+pnpm exec tsx scripts/init-cli-agent.ts --display-name "Upgrade Smoke" --agent-name smoke
+```
+
+Wire the CLI session to the same agent group as production (`main` for Cleo,
+`dm-with-christina` for Silas) so mnemon, wiki, and skill mounts match.
+
+### Run harness
+
+```bash
+# Cleo — Tier 1 only (fast, deterministic)
+pnpm run post-upgrade -- --agent cleo --tier 1 --json-out /tmp/upgrade-report.json
+
+# Cleo — full (Tier 1 + agent loop + synthetic Slack inject)
+pnpm run post-upgrade -- --agent cleo --tier 1,2 --json-out /tmp/upgrade-report.json
+
+# Silas
+pnpm run post-upgrade -- --agent silas --tier 1,2 --json-out /tmp/upgrade-report.json
+```
+
+From a dev laptop over SSH:
+
+```bash
+ssh cian@cleo-lc.cognitivetech.net \
+  "cd ~/nanoclaw && pnpm run post-upgrade -- --agent cleo --tier 1,2 --json-out /tmp/upgrade-report.json && cat /tmp/upgrade-report.json"
+```
+
+### Tiers
+
+| Tier | What it checks |
+|------|----------------|
+| **0** (local/CI) | `pnpm test`, `pnpm run typecheck` — unit tests incl. mnemon guards, slack-stream, catalog |
+| **1** | Host service, Docker image, OAuth health (Cleo), mnemon/wiki structure, skill audit, read-only skill scripts, Slack wiring |
+| **2** | CLI ping, mnemon seed/recall/injection, wiki query, skill catalog prompts, synthetic Slack inbound → outbound.db |
+
+Tier 2 is skipped automatically if Tier 1 has failures (use `--force-tier2` to override).
+
+### Policy
+
+- **Skills:** read-only smoke only (list-names, todoist list, etc.)
+- **Slack:** synthetic inbound via session DB + heartbeat — no live Slack posts from the harness
+- **Memory:** one isolated `__upgrade_test__` mnemon fact per run (Tier 2)
+
+### Key files
+
+- `scripts/post-upgrade/run.ts` — orchestrator
+- `scripts/post-upgrade/manifest.ts` — per-agent commands and wiki hints
+- `scripts/post-upgrade/checks/` — host, memory, skills, CLI scenarios, slack synthetic
+

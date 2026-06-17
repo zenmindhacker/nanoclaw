@@ -12,6 +12,8 @@
 // Slack channel adapter — self-registers as 'slack' on import.
 // This keeps src/channels/index.ts clean (upstream only has cli there).
 import './slack/adapter.js';
+// Open Slack assistant stream on container wake (Thinking Steps).
+import './slack/on-wake.js';
 
 import { deliverOAuthAlert } from './oauth/alerts.js';
 import { startOAuthRefresher, stopOAuthRefresher } from './oauth/refresher.js';

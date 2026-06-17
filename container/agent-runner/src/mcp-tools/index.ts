@@ -4,8 +4,11 @@
  *
  * Adding a new tool module: create the file, call `registerTools([...])`
  * at module scope, and append the import here. No central list.
+ *
+ * Fork-specific tools live in `../extensions/` and register via that barrel.
  */
 import './core.js';
+import '../extensions/index.js';
 import './scheduling.js';
 import './interactive.js';
 import './agents.js';

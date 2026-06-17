@@ -143,6 +143,36 @@ export function setChannelRequestGate(fn: ChannelRequestGateFn): void {
   channelRequestGate = fn;
 }
 
+/**
+ * Wake hooks. Run when the router decides to wake a container (engaged
+ * branch only). Extensions register these to open channel-specific live
+ * activity UI (e.g. Slack assistant streams) without editing deliverToAgent.
+ */
+export type WakeHookContext = {
+  sessionId: string;
+  agentGroupId: string;
+  event: InboundEvent;
+  mg: MessagingGroup;
+  deliveryAddr: {
+    channelType: string;
+    platformId: string;
+    threadId: string | null;
+  };
+};
+
+export type WakeHookFn = (ctx: WakeHookContext) => void;
+
+const onWakeHooks: WakeHookFn[] = [];
+const onWakeFailedHooks: WakeHookFn[] = [];
+
+export function registerOnWakeHook(fn: WakeHookFn): void {
+  onWakeHooks.push(fn);
+}
+
+export function registerOnWakeFailedHook(fn: WakeHookFn): void {
+  onWakeFailedHooks.push(fn);
+}
+
 function safeParseContent(raw: string): { text?: string; sender?: string; senderId?: string } {
   try {
     return JSON.parse(raw);
@@ -481,6 +511,15 @@ async function deliverToAgent(
   });
 
   if (wake) {
+    const wakeCtx: WakeHookContext = {
+      sessionId: session.id,
+      agentGroupId: session.agent_group_id,
+      event,
+      mg,
+      deliveryAddr,
+    };
+    for (const hook of onWakeHooks) hook(wakeCtx);
+
     // Typing indicator + wake are only for the engaged branch; accumulated
     // messages sit silently until a real trigger fires.
     // Typing fires via the adapter instance that owns this chat's row.
@@ -498,7 +537,10 @@ async function deliverToAgent(
       // wakeContainer never throws — it returns false on transient spawn
       // failure (host-sweep retries). Stop the typing indicator we just
       // started so it doesn't leak; the inbound row stays pending.
-      if (!woke) stopTypingRefresh(freshSession.id);
+      if (!woke) {
+        stopTypingRefresh(freshSession.id);
+        for (const hook of onWakeFailedHooks) hook(wakeCtx);
+      }
     }
   }
 }

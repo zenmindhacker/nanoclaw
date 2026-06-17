@@ -52,14 +52,32 @@ or other trunk files. Put it in `src/extensions/` and wire it through the barrel
 
 ```
 src/extensions/
-  index.ts            # Barrel: imports slack adapter (side effects),
+  index.ts            # Barrel: imports slack adapter + on-wake (side effects),
                       # exports initExtensions() / teardownExtensions()
   oauth/
     refresher.ts      # OAuth token refresh (host-side; containers read-only)
     alerts.ts         # Alert delivery to OAUTH_ALERT_SLACK_CHANNEL
   slack/
     adapter.ts        # Slack channel adapter (registerChannelAdapter side effect)
+    on-wake.ts        # Router wake hooks → startSessionActivity / cancel on failure
 ```
+
+Container-side fork extensions mirror the same pattern:
+
+```
+container/agent-runner/src/extensions/
+  index.ts            # Barrel: imports slack/stream-progress (side-effect MCP registration)
+  slack/
+    stream-progress.ts              # report_stream_progress MCP tool
+    stream-progress.instructions.md # CLAUDE.md fragment source
+```
+
+Wire container extensions with one trunk line in `mcp-tools/index.ts`:
+`import '../extensions/index.js';`
+
+Host wake hooks are registered from `src/extensions/slack/on-wake.ts` via
+`registerOnWakeHook` / `registerOnWakeFailedHook` in trunk `router.ts` (generic
+hook points only — no Slack-specific logic in router).
 
 ## What's NOT in extensions (and why)
 
@@ -69,6 +87,7 @@ src/extensions/
 | `src/channels/session-activity.ts` | `src/channels/` | Imported by `src/delivery.ts` and `src/channels/adapter.ts` |
 | `src/transcription.ts` | `src/` | Imported by `src/channels/chat-sdk-bridge.ts` |
 | `src/providers/opencode.ts` | `src/providers/` | Installed by `/add-opencode` skill; already follows the providers branch pattern |
+| `container/agent-runner/src/extensions/**` | `container/agent-runner/src/extensions/` | Fork MCP tools; wired via `import '../extensions/index.js'` in `mcp-tools/index.ts` |
 
 These files don't conflict in practice because upstream doesn't have them at all
 in the upstream branch — they only conflict if upstream adds files at the same
