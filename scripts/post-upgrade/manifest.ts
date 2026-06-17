@@ -18,6 +18,10 @@ const MANIFESTS: Record<AgentName, AgentManifest> = {
         id: 'linear.tutor',
         cmd: 'bash /workspace/extra/skills/linear/scripts/linear-router.sh tutor list --json',
       },
+      {
+        id: 'transcript-search.presets',
+        cmd: 'node /workspace/extra/skills/transcript-search/scripts/transcript-search.mjs presets',
+      },
     ],
     cleoOnly: true,
   },

@@ -149,6 +149,7 @@ Scripts mounted at `/workspace/extra/skills/`. Credentials at `/workspace/extra/
 | substack | `skills/substack/browserless.mjs` | `credentials/substack-username`, `credentials/browserless` |
 | voice-note | `skills/voice-note/bin/voice-note --voice-id 4tRn1lSkEn13EVTuqb0g --text-file <file>` | `credentials/elevenlabs` |
 | ganttsy-resume | `skills/ganttsy-resume/run-daily.sh` | `credentials/ganttsy-google-token.json` |
+| transcript-search | `skills/transcript-search/scripts/transcript-search.sh` | Shadow DB at `/workspace/extra/shadow/shadow.db` (read-only) |
 | delegate | `delegate <key> "<prompt>"` (see Orchestration above) | OpenCode Go via OneCLI |
 
 **Voice notes:** When Cian sends a voice note or the topic is personal/emotional, respond with a voice note when it fits. Write the spoken text yourself unless a bounded draft is useful, then synthesize with the `voice-note` skill. Voice: Serafina (`4tRn1lSkEn13EVTuqb0g`), stability 0.35, similarity 0.8, style 0.7, speed 1.2. Do not use `delegate speech` for Cleo voice notes.

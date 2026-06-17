@@ -90,9 +90,9 @@ export async function runCliScenarioChecks(ctx: RunContext): Promise<CheckResult
     await timedCheck('skills.catalog-cli', 2, async () => {
       const prompt =
         ctx.agent === 'cleo'
-          ? 'I need to sync meeting transcripts to Linear. Which skill handles that? Name it only.'
+          ? 'I need to search meeting transcripts from Shadow. Which skill handles that? Name it only.'
           : 'Show my grocery lists. Which skill or tool do you use? Name it only.';
-      const expected = ctx.agent === 'cleo' ? 'transcript' : 'anylist';
+      const expected = ctx.agent === 'cleo' ? 'transcript-search' : 'anylist';
       const r = runPnpmChat(prompt);
       const combined = `${r.stdout}\n${r.stderr}`.toLowerCase();
       if (combined.includes(expected)) {

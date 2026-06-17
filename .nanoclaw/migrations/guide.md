@@ -56,6 +56,7 @@ Not part of the agent container image; lived in git under `skills/`.
 |-------|-------|---------|
 | `skills/anylist/` | Silas | AnyList grocery/task list integration |
 | `skills/transcript-sync/` | Cleo | Meeting transcript → Linear + Ganttsy sync |
+| `skills/transcript-search/` | Cleo | Search/grep/extract meeting transcripts from Shadow SQLite |
 | `skills/invoice-generator/` | Cleo | Xero invoice generation + Toggl time tracking |
 | `skills/ganttsy-resume/` | Cleo | Resume parsing + Ganttsy ATS integration |
 | `skills/linear/` | Cleo | Linear project management CLI |

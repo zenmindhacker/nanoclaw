@@ -133,14 +133,14 @@ export async function runMemoryChecks(ctx: RunContext): Promise<CheckResult[]> {
 
   checks.push(
     syncTimedCheck('skills.catalog', 1, () => {
-      const query = ctx.agent === 'cleo' ? 'sync meeting transcripts to linear' : 'show my grocery lists';
+      const query = ctx.agent === 'cleo' ? 'find meeting transcripts about ganttsy planning' : 'show my grocery lists';
       const skills = [
-        { name: 'transcript-sync', description: 'Meeting transcript sync to Linear', source: 'human' },
+        { name: 'transcript-search', description: 'Search meeting transcripts from Shadow SQLite', source: 'human' },
         { name: 'anylist', description: 'AnyList grocery lists', source: 'human' },
         { name: 'todoist', description: 'Todoist tasks', source: 'human' },
       ];
       const result = buildCatalogForQuery(skills, query, 3);
-      const expected = ctx.agent === 'cleo' ? 'transcript-sync' : 'anylist';
+      const expected = ctx.agent === 'cleo' ? 'transcript-search' : 'anylist';
       const hit =
         result.inlined.some(({ skill }) => skill.name === expected) ||
         result.compact.some((s) => s.name === expected);

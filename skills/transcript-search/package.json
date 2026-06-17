@@ -1,0 +1,7 @@
+{
+  "name": "transcript-search",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "description": "Search meeting transcripts via node:sqlite (no npm install required)"
+}
