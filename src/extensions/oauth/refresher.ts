@@ -169,8 +169,17 @@ function postForm(url: string, body: string, headers: Record<string, string>): P
 }
 
 function getExpiresAtSec(token: OAuthTokenFile): number {
-  if (token.expires_at) return token.expires_at;
-  if (token.expiry_date) return Math.floor(token.expiry_date / 1000);
+  const nowSec = Math.floor(Date.now() / 1000);
+  // Ignore garbage expires_at values (e.g. expires_in written as epoch, → 1970 dates).
+  const MIN_VALID = 978307200; // 2001-01-01
+  if (token.expires_at && token.expires_at >= MIN_VALID) return token.expires_at;
+  if (token.expiry_date) {
+    const fromMs = Math.floor(token.expiry_date / 1000);
+    if (fromMs >= MIN_VALID) return fromMs;
+  }
+  if (token.expires_at && token.expires_at > 0) {
+    log.warn('OAuth token has invalid expires_at; treating as expired', { expires_at: token.expires_at });
+  }
   return 0;
 }
 
@@ -234,6 +243,9 @@ async function refreshToken(
 
   if (entry.provider === 'google') {
     updated.expiry_date = expiresAt * 1000;
+  } else if (entry.provider === 'xero') {
+    // Xero uses expires_at only; drop stale expiry_date from old in-container auth flows.
+    delete updated.expiry_date;
   }
   if (json.id_token) {
     updated.id_token = json.id_token;

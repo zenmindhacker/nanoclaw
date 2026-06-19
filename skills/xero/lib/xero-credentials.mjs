@@ -73,8 +73,15 @@ export function isXeroTokenExpired(tokens) {
   const expiresAt =
     tokens.expires_at ??
     (tokens.expiry_date ? Math.floor(tokens.expiry_date / 1000) : 0);
-  if (!expiresAt) return false;
-  return expiresAt <= now + 300;
+  const MIN_VALID = 978307200; // 2001-01-01 — reject garbage epoch values
+  const effective =
+    expiresAt >= MIN_VALID
+      ? expiresAt
+      : tokens.expiry_date && Math.floor(tokens.expiry_date / 1000) >= MIN_VALID
+        ? Math.floor(tokens.expiry_date / 1000)
+        : 0;
+  if (!effective) return true;
+  return effective <= now + 300;
 }
 
 /**

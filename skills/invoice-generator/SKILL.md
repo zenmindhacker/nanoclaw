@@ -37,6 +37,15 @@ Runs daily at 11am via scheduled task.
 - Xero: `~/.config/nanoclaw/credentials/services/xero-tokens.json`
 - Gmail: `~/.openclaw/credentials/google-gmail-token.json`
 
+### Xero OAuth (host-owned)
+
+The **host** refreshes `xero-tokens.json` every 15 minutes via `src/extensions/oauth/refresher.ts`.
+
+- Before NVS runs: `ncl oauth-health` — if xero is `expired`/`error`, run `ncl oauth-refresh-one --id xero` on the host.
+- **Do not** run `xero-auth.mjs` inside containers (read-only mount; wrong redirect URI).
+- **Do not** patch scheduled tasks with `HTTPS_PROXY=''` — Xero API hosts are in `NO_PROXY` for OpenCode containers.
+- Re-auth on the host only; update `oauth-registry.json` if paths change.
+
 ## Config
 
 `scripts/config.json` — client rates, retainer hours, tax types, account codes, NVS processing rules.

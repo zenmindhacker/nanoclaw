@@ -36,6 +36,13 @@
       "script": "bash /workspace/extra/skills/ganttsy-resume/scripts/run-daily.sh"
     },
     {
+      "id": "nvs-email-processor",
+      "agentFolder": "slack_scheduled",
+      "recurrence": "0 11 * * *",
+      "prompt": "Run the NVS email processor to check for new AR and AP emails from New Value Solutions and create corresponding Xero bills/invoices.\n\nExecute:\n```bash\ncd /workspace/extra/skills/invoice-generator && node scripts/nvs-processor.mjs --flow all\n```\n\nAfter running, inspect the output for a `PENDING_DECISIONS_START` ... `PENDING_DECISIONS_END` JSON block. If present, the script found emails it couldn't auto-process. Do NOT ignore them — post a message to #sysops (slack:C07F195GB96) listing each one (id, subject, date, reason) and ask Cian whether to skip them or retry.\n\nOther outcomes:\n- If new bills or invoices were created, post a summary to #sysops.\n- If there were errors, post the error details to #sysops.\n- If no new emails AND no pending decisions, post a one-line \"NVS: no new emails\" to #sysops.",
+      "script": null
+    },
+    {
       "id": "cycle-daily-briefing",
       "agentFolder": "dm-with-christina",
       "recurrence": "0 11 * * *",

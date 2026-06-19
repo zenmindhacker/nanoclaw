@@ -1,6 +1,23 @@
+/**
+ * Operator-only Xero OAuth (host terminal). Do NOT run inside agent containers —
+ * credentials mount is read-only and tokens must be written on the host.
+ *
+ * Prefer: ncl oauth-refresh-one --id xero  (host refresher)
+ * Or operator re-auth on the host with redirect URI registered in Xero console.
+ */
 import { createServer } from 'http';
 import https from 'https';
+import { existsSync } from 'fs';
 import { loadXeroClientConfig, writeXeroTokens } from '../../xero/lib/xero-credentials.mjs';
+
+if (existsSync('/workspace/extra/credentials') && process.env.NANOCLAW_OPERATOR_REAUTH !== '1') {
+  console.error(
+    'Refusing to run xero-auth.mjs inside a container. Token files are host-managed.\n' +
+      '  Host: ncl oauth-refresh-one --id xero\n' +
+      '  Or: NANOCLAW_OPERATOR_REAUTH=1 on the host (not in container)',
+  );
+  process.exit(1);
+}
 
 const { client_id: clientId, client_secret: clientSecret } = loadXeroClientConfig();
 
