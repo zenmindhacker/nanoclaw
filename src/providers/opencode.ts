@@ -40,7 +40,7 @@ registerProviderContainerConfig('opencode', (ctx) => {
     NO_PROXY: mergeNoProxy(ctx.hostEnv.NO_PROXY, NO_PROXY_ADDITIONS),
     no_proxy: mergeNoProxy(ctx.hostEnv.no_proxy, NO_PROXY_ADDITIONS),
   };
-  for (const key of ['OPENCODE_PROVIDER', 'OPENCODE_MODEL', 'OPENCODE_SMALL_MODEL'] as const) {
+  for (const key of ['OPENCODE_PROVIDER', 'OPENCODE_MODEL', 'OPENCODE_SMALL_MODEL', 'OPENCODE_LONG_MODEL'] as const) {
     const value = ctx.hostEnv[key];
     if (value) env[key] = value;
   }

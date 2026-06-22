@@ -249,9 +249,15 @@ print(f'Poll status: GET {\"$OR_BASE\"}/video/generations/{gen_id}')
 fi
 
 # ── TEXT: delegation via OpenCode Go (OneCLI-proxied) ─────────────────
-if [[ "$MODEL_ID" == *kimi* ]]; then
-  echo "delegate: refusing Kimi — you are already the Kimi orchestrator (opencode-go/kimi-k2.6)." >&2
-  echo "  Use: delegate summarize / delegate draft / delegate code-cheap / delegate deepseek-flash" >&2
+ORCH_ID=$(python3 -c "
+import json, sys
+d = json.load(open(sys.argv[1]))
+raw = d.get('_meta', {}).get('orchestrator', '')
+print(raw.split()[0] if raw else '')
+" "$CATALOG" 2>/dev/null || true)
+if [[ -n "$ORCH_ID" && "$MODEL_ID" == "$ORCH_ID" ]]; then
+  echo "delegate: refusing — you are already the orchestrator ($ORCH_ID)." >&2
+  echo "  Use: delegate list — pick a worker task key (summarize, draft, code-cheap, extract, …)" >&2
   exit 2
 fi
 

@@ -112,7 +112,7 @@ export const LLM_CLASSIFIER_CONFIDENCE_THRESHOLD = 0.6;
 
 // Linear action extraction (long transcripts, rich JSON)
 export const LLM_ACTIONS_MODEL =
-  process.env.TRANSCRIPT_ACTIONS_LLM_MODEL || process.env.OPENCODE_LONG_MODEL || 'opencode-go/deepseek-v4-pro';
+  process.env.TRANSCRIPT_ACTIONS_LLM_MODEL || process.env.OPENCODE_LONG_MODEL || 'opencode-go/qwen3.7-max';
 export const LLM_ACTIONS_MAX_TOKENS = 8192;
 
 // Confidentiality confirmation (binary classify)

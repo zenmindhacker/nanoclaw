@@ -96,5 +96,5 @@ Meetings are routed by attendee email domains:
 - **Calendar auth failure** → check `/workspace/extra/credentials/shadow-google-token.json`. May need re-auth via `auth-ctci-calendar.mjs`.
 - **Ganttsy Drive not fetching** → check `/workspace/extra/credentials/ganttsy-google-token.json`. May need re-auth via `auth-ganttsy-drive.mjs`.
 - **LLM classifier not working** → default model is `opencode-go/deepseek-v4-flash` via OneCLI-injected OpenCode Go credentials. Override with `TRANSCRIPT_SYNC_LLM_MODEL` or `OPENCODE_SMALL_MODEL`. OpenRouter fallback only applies when the model id is not `opencode-go/*`.
-- **Linear action extraction failing** → uses `opencode-go/deepseek-v4-pro` (`TRANSCRIPT_ACTIONS_LLM_MODEL` or `OPENCODE_LONG_MODEL`). Requires OpenCode Go proxy auth, not Claude CLI.
+- **Linear action extraction failing** → uses `opencode-go/qwen3.7-max` (`TRANSCRIPT_ACTIONS_LLM_MODEL` or `OPENCODE_LONG_MODEL`). Requires OpenCode Go proxy auth, not Claude CLI.
 - **Meetings stuck as unmatched** → widen window with `--calendar-window-minutes 60` or classify manually.

@@ -50,7 +50,7 @@ Missing files trigger automatic re-analysis.
 |------|---------------|--------------|
 | Calendar matcher (Stage 3) | `opencode-go/deepseek-v4-flash` | `TRANSCRIPT_SYNC_LLM_MODEL`, `OPENCODE_SMALL_MODEL` |
 | Confidentiality check | `opencode-go/deepseek-v4-flash` | `TRANSCRIPT_CONFIDENTIALITY_LLM_MODEL` |
-| Linear action extraction | `opencode-go/deepseek-v4-pro` | `TRANSCRIPT_ACTIONS_LLM_MODEL`, `OPENCODE_LONG_MODEL` |
+| Linear action extraction | `opencode-go/qwen3.7-max` | `TRANSCRIPT_ACTIONS_LLM_MODEL`, `OPENCODE_LONG_MODEL` |
 
 All use `https://opencode.ai/zen/go/v1/chat/completions` with OneCLI-injected credentials in production.
 

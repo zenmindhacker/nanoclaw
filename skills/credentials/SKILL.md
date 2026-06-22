@@ -147,7 +147,7 @@ env | grep -E '_KEY=|_TOKEN=|_SECRET=' | sed 's/=.*/=***/' | sort || true
 
 | Use case | Lane |
 |----------|------|
-| **Orchestrator** (you) | OpenCode Go via OneCLI — `OPENCODE_MODEL=opencode-go/kimi-k2.6` |
+| **Orchestrator** (you) | OpenCode Go via OneCLI — `OPENCODE_MODEL=opencode-go/deepseek-v4-pro` |
 | **Delegate text workers** | OpenCode Go via `delegate` + `opencode run` (same subscription) |
 | **Voice notes** | ElevenLabs key in `/workspace/extra/credentials/elevenlabs` for the `voice-note` skill |
 | **Images / video** | Legacy file `/workspace/extra/credentials/openrouter` (OpenRouter multimodal APIs only) |

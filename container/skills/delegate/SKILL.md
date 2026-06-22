@@ -1,23 +1,23 @@
 ---
 name: delegate
-description: Delegate bounded text work to OpenCode Go worker models. You are the Kimi orchestrator — delegate text to cheaper workers (DeepSeek, Qwen, GLM), not back to Kimi. Triggers on delegate, cheaper model, hand off, summarize with worker, draft with worker.
+description: Delegate bounded text work to OpenCode Go worker models. You are the orchestrator — delegate mechanical work to cheaper workers, not back to yourself. Triggers on delegate, cheaper model, hand off, summarize with worker, draft with worker.
 ---
 
 # Delegate (OpenCode Go)
 
-You run as **`opencode-go/kimi-k2.6`** — the smart orchestrator. Your job is to **plan, route, and respond**. Bounded work goes to **different** OpenCode Go models via `delegate`, so you save latency and subscription quota for judgment and conversation.
+You are the **orchestrator** (model from `$OPENCODE_MODEL`; see `models.json` `_meta.orchestrator`). Your job is to **plan, route, and respond**. Bounded work goes to **different** OpenCode Go models via `delegate`, so you save latency and subscription quota for judgment and conversation.
 
-> **You are Kimi. Do not delegate to Kimi.**
+> **Do not delegate back to the orchestrator model.**
 
 ## Mental model
 
-| Role | Model lane | Tool |
-|------|------------|------|
-| **You (orchestrator)** | `opencode-go/kimi-k2.6` | Main session — tools, memory, user chat |
-| **Workers (text)** | `opencode-go/deepseek-v4-flash`, `qwen3.6-plus`, `deepseek-v4-pro`, `glm-5`, … | `delegate <task> "..."` |
+| Role | Lane | Tool |
+|------|------|------|
+| **You (orchestrator)** | `$OPENCODE_MODEL` | Main session — tools, memory, user chat |
+| **Workers (text)** | Kimi K2.7, DeepSeek Flash, Qwen, GLM, … | `delegate <task> "..."` |
 | **Image / video** | OpenRouter (legacy file only) | `delegate image "..."`, `delegate video "..."` |
 
-Keeping Kimi as orchestrator is intentional: a strong orchestrator delegates more aggressively and keeps total cost down.
+Run `delegate list` for the live catalog — task keys map to workers; orchestrator ID is shown at the top.
 
 ## When to delegate (text)
 
@@ -48,11 +48,15 @@ delegate image "minimal zen garden at sunset"
 
 | Task | Worker | Notes |
 |------|--------|-------|
-| `summarize` | deepseek-v4-pro | Long docs — **not** Kimi |
+| `summarize` | kimi-k2.7 | Long docs / transcripts |
 | `summarize-fast` | deepseek-v4-flash | Short text |
+| `long-context`, `doc-synthesis` | kimi-k2.7 | Multi-doc |
+| `code-agentic` | kimi-k2.7 | Multi-step coding subagent |
 | `code-cheap` | qwen3.6-plus | Refactors, boilerplate |
 | `code-quick` | deepseek-v4-flash | Tiny edits |
-| `code-frontier` | glm-5 | Only if cheaper workers failed |
+| `code-frontier` | glm-5.2 | Only if cheaper workers failed |
+| `reasoning-max` | qwen3.7-max | Strategic planning — use sparingly |
+| `reasoning-cheap` | deepseek-v4-flash | Light analysis |
 | `draft` | qwen3.6-plus | Prose you'll polish |
 | `extract` | deepseek-v4-flash | JSON / structured output |
 | `translate` | qwen3.6-plus | Multilingual |
@@ -65,6 +69,7 @@ Run `delegate list` for the live catalog.
 delegate summarize-fast "Summarize in 3 bullets: ..."
 delegate extract "Return JSON array of action items: ..." --json
 delegate code-cheap "Refactor to async/await; return only the function body: ..."
+delegate reasoning-max "Compare three strategic options for Q3 hiring: ..."
 delegate draft "Warm short reply declining a meeting: ..."
 ```
 
@@ -78,4 +83,4 @@ ElevenLabs voice ID and settings from `/workspace/global/CLAUDE.md`.
 
 ## Updating the catalog
 
-Edit `models.json` next to this skill (host: `container/skills/delegate/models.json`). New containers pick it up on spawn.
+Edit `models.json` next to this skill (host: `container/skills/delegate/models.json`). New containers pick it up on spawn. After an orchestrator swap, update `_meta.orchestrator` and host `.env` `OPENCODE_MODEL` together.
