@@ -6,5 +6,5 @@
   { "name": "@cocal/google-calendar-mcp", "version": "2.6.1" },
   { "name": "@gongrzhe/server-gmail-autoauth-mcp", "version": "1.1.11" },
   { "name": "zod-to-json-schema", "version": "3.22.5" },
-  { "name": "@googleworkspace/cli", "version": "0.22.5" }
+  { "name": "@googleworkspace/cli", "version": "0.22.5", "onlyBuilt": true }
 ]

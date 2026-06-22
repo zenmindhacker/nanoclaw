@@ -12,9 +12,9 @@ REGISTRY="${HOME}/.config/nanoclaw/credentials/services/oauth-registry.json"
 
 echo "==> Phase 0: credentials mount read-only"
 if [[ -f "$ALLOWLIST" ]]; then
-  node - <<'NODE' "$ALLOWLIST"
+  ALLOWLIST_PATH="$ALLOWLIST" node - <<'NODE'
 const fs = require('fs');
-const path = process.argv[1];
+const path = process.env.ALLOWLIST_PATH;
 const data = JSON.parse(fs.readFileSync(path, 'utf8'));
 data.defaultMounts ??= [];
 let mount = data.defaultMounts.find((m) => m.containerName === 'credentials');
@@ -57,9 +57,9 @@ pnpm run ncl groups config add-mcp-server \
 
 echo "==> Phase 3: meridian-google registry entry (if client + token exist)"
 if [[ -f "${HOME}/.config/nanoclaw/credentials/services/google-oauth-client.json" ]]; then
-  node - <<'NODE' "$REGISTRY"
+  REGISTRY_PATH="$REGISTRY" node - <<'NODE'
 const fs = require('fs');
-const path = process.argv[1];
+const path = process.env.REGISTRY_PATH;
 if (!fs.existsSync(path)) {
   console.log('No oauth-registry.json — skip meridian entry');
   process.exit(0);
