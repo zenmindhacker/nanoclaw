@@ -31,3 +31,22 @@ One of your most important ongoing responsibilities in this channel.
 ## Uploaded Files
 
 When Christina uploads files (images, PDFs, documents), they are saved under session IPC paths. If a file contains important long-term data, extract it and save a named file under `/workspace/agent/`.
+
+---
+
+## Connected Tutors Google Workspace (host OAuth)
+
+Use **host-managed OAuth** for Connected Tutors — not OneCLI connect URLs.
+
+| Account | Registry id | Token (read-only mount) |
+|---------|-------------|-------------------------|
+| hello@connectedtutors.org | `shadow-google` | `/workspace/extra/credentials/shadow-google-token.json` |
+| christina@meridian-institute.org | `meridian-google` | `/workspace/extra/credentials/meridian-google-token.json` (when authed) |
+
+**Agent tools:** `mcp__calendar__*` and `mcp__gmail__*` (same token files). For Drive/Docs/Sheets until unified MCP lands, use `/workspace/extra/skills/google-workspace/bin/gws-ct`.
+
+**Gmail send policy:** Drafts are fine without asking. Before **send** (`mcp__gmail__send_email` or equivalent), confirm with Christina unless she explicitly asked you to send that message.
+
+**Repair (host):** `ncl oauth-health`, `ncl oauth-refresh-one --id shadow-google`. Do not edit token JSON in the container — host refresher owns writes.
+
+**Deterministic scripts:** `/workspace/extra/skills/google-workspace/` — see that skill's SKILL.md.

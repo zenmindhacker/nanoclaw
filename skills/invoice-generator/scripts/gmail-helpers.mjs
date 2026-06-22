@@ -1,87 +1,40 @@
 /**
  * Gmail API Helpers
- * Search, read, and manage emails via Gmail REST API
- * Uses OAuth token at ~/.config/nanoclaw/credentials/services/google-gmail-token.json
+ * Search, read, and manage emails via Gmail REST API.
+ * Uses host-managed OAuth (read-only) via skills/google-workspace lib.
  */
 
 import https from 'https';
-import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { existsSync } from 'fs';
 import { resolve } from 'path';
 import { homedir } from 'os';
 
+import { getAccessToken } from '../../google-workspace/lib/access-token.mjs';
+
 function resolveCredPath(filename) {
-  // Check services/ subdir first (new DO server layout)
   const servicesPath = `/workspace/extra/credentials/services/${filename}`;
   if (existsSync(servicesPath)) return servicesPath;
-  // Fall back to flat layout (old laptop layout)
   const containerPath = `/workspace/extra/credentials/${filename}`;
   if (existsSync(containerPath)) return containerPath;
   return resolve(homedir(), `.config/nanoclaw/credentials/services/${filename}`);
 }
 
-const TOKEN_PATH = resolveCredPath('google-gmail-token.json');
-const OAUTH_CLIENT_PATH = resolveCredPath('shadow-google-oauth-client.json');
-
-let cachedToken = null;
+const REGISTRY_ID =
+  process.env.GOOGLE_REGISTRY_ID ??
+  (existsSync(resolveCredPath('google-gmail-token.json')) ? 'google-gmail-legacy' : 'shadow-google');
 
 /**
- * Load and auto-refresh Gmail OAuth token
+ * Load access token from host-managed OAuth (no in-container refresh/write).
  */
-async function getAccessToken() {
-  if (!cachedToken) {
-    cachedToken = JSON.parse(readFileSync(TOKEN_PATH, 'utf8'));
-  }
-
-  const now = Math.floor(Date.now() / 1000);
-  if (cachedToken.expires_at && cachedToken.expires_at < now + 60) {
-    console.log('🔄 Gmail token expired, refreshing...');
-    const client = JSON.parse(readFileSync(OAUTH_CLIENT_PATH, 'utf8')).installed;
-
-    const body = new URLSearchParams({
-      grant_type: 'refresh_token',
-      refresh_token: cachedToken.refresh_token,
-      client_id: client.client_id,
-      client_secret: client.client_secret
-    }).toString();
-
-    const refreshed = await new Promise((resolve, reject) => {
-      const req = https.request({
-        hostname: 'oauth2.googleapis.com',
-        path: '/token',
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Content-Length': Buffer.byteLength(body)
-        }
-      }, (res) => {
-        let data = '';
-        res.on('data', c => data += c);
-        res.on('end', () => {
-          const parsed = JSON.parse(data);
-          if (parsed.error) return reject(new Error(`Gmail refresh failed: ${parsed.error}`));
-          resolve(parsed);
-        });
-      });
-      req.on('error', reject);
-      req.write(body);
-      req.end();
-    });
-
-    cachedToken.access_token = refreshed.access_token;
-    cachedToken.expires_at = now + (refreshed.expires_in || 3600);
-    if (refreshed.refresh_token) cachedToken.refresh_token = refreshed.refresh_token;
-    writeFileSync(TOKEN_PATH, JSON.stringify(cachedToken, null, 2));
-    console.log('✅ Gmail token refreshed');
-  }
-
-  return cachedToken.access_token;
+async function getGmailAccessToken() {
+  return getAccessToken(REGISTRY_ID);
 }
 
 /**
  * Make authenticated Gmail API request (JSON responses)
  */
 async function gmailRequest(path, method = 'GET', body = null) {
-  const accessToken = await getAccessToken();
+  const accessToken = await getGmailAccessToken();
   const url = new URL('https://gmail.googleapis.com/gmail/v1/users/me/' + path);
 
   return new Promise((resolve, reject) => {

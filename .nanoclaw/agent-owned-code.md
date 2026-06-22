@@ -79,6 +79,23 @@ Keep channel-specific state (e.g. Christina’s cycle dates) in the active group
 
 On each server: `git pull --ff-only`, `pnpm install --frozen-lockfile`, `pnpm run build`, restart `nanoclaw`, rebuild container image when Dockerfile changes. Post-upgrade smoke: [post-upgrade.md](post-upgrade.md).
 
+## Connected Tutors Google Workspace (Silas)
+
+Silas uses **host OAuth** (not OneCLI) for Connected Tutors and Meridian Google accounts.
+
+| Piece | Location |
+|-------|----------|
+| Skill + gws wrappers | `skills/google-workspace/` → `/workspace/extra/skills/google-workspace` |
+| Install skill | `.claude/skills/add-google-workspace-host/SKILL.md` |
+| Wire script (on server) | `scripts/silas/wire-google-workspace.sh` |
+| CT token | `shadow-google-token.json` / registry id `shadow-google` |
+| Meridian token | `meridian-google-token.json` / registry id `meridian-google` |
+| Agent policy | `agents/silas/groups/dm-with-christina/CLAUDE.local.md` (Gmail send confirm) |
+
+MCP: `calendar` + `gmail` on group `ag-1779225837260-j7xqo0`. Drive/Docs/Sheets via `gws-ct` until unified MCP spike passes (see `skills/google-workspace/docs/WORKSPACE-MCP-SPIKE.md`).
+
+Credentials mount on Silas must stay **read-only** (`allowReadWrite: false` for `credentials` in `mount-allowlist.json`).
+
 ## Shadow DB sync (macOS → Cleo)
 
 Shadow runs on Cian's Mac only. Cleo reads transcripts from `/home/cian/shadow-data/` (mounted as `/workspace/extra/shadow/` in containers).

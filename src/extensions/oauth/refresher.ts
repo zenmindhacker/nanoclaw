@@ -100,9 +100,26 @@ function loadRegistry(): OAuthRegistry | null {
   }
 }
 
+/** Unwrap OpenCode-style `{ normal: { access_token, ... } }` token files. */
+export function normalizeOAuthTokenShape(raw: OAuthTokenFile): OAuthTokenFile {
+  const nested = raw.normal;
+  if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
+    const inner = nested as OAuthTokenFile;
+    if (inner.access_token || inner.refresh_token) {
+      return { ...inner };
+    }
+  }
+  if (nested !== undefined) {
+    const { normal: _drop, ...rest } = raw;
+    return rest;
+  }
+  return raw;
+}
+
 function loadTokenFile(filename: string): OAuthTokenFile | null {
   try {
-    return JSON.parse(fs.readFileSync(path.join(CRED_DIR, filename), 'utf8')) as OAuthTokenFile;
+    const raw = JSON.parse(fs.readFileSync(path.join(CRED_DIR, filename), 'utf8')) as OAuthTokenFile;
+    return normalizeOAuthTokenShape(raw);
   } catch {
     return null;
   }
@@ -129,7 +146,9 @@ function loadClientCredentials(filename: string): OAuthClientCredentials | null 
 function saveTokenFile(filename: string, token: OAuthTokenFile): void {
   const filePath = path.join(CRED_DIR, filename);
   const tmpPath = `${filePath}.tmp-${process.pid}`;
-  fs.writeFileSync(tmpPath, JSON.stringify(token, null, 2));
+  const flat = normalizeOAuthTokenShape(token);
+  delete flat.normal;
+  fs.writeFileSync(tmpPath, `${JSON.stringify(flat, null, 2)}\n`);
   fs.renameSync(tmpPath, filePath);
 }
 
