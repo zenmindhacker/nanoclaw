@@ -8,6 +8,7 @@ Fork-specific runbooks for the `zenmindhacker/nanoclaw` install. Upstream archit
 |-----|------|
 | [post-upgrade.md](post-upgrade.md) | After deploy — `pnpm run post-upgrade` smoke harness |
 | [oauth-hybrid-repair.md](oauth-hybrid-repair.md) | OAuth token refresh, `#sysops` alerts, `ncl oauth-*` |
+| [google-workspace-host-oauth.md](google-workspace-host-oauth.md) | Silas / Connected Tutors Google — host OAuth, skills, MCP, replication |
 | [troubleshooting.md](../docs/troubleshooting.md) | Logs and common issues (upstream; links back here for OAuth/post-upgrade) |
 
 ## Fork layout
