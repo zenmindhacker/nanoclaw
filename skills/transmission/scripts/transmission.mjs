@@ -108,7 +108,14 @@ async function cmdList(cfg, json) {
 }
 
 async function cmdAdd(cfg, target) {
-  const args = target.startsWith("magnet:") ? { filename: target } : { filename: target };
+  let args;
+  if (target.startsWith("magnet:")) {
+    args = { filename: target };
+  } else if (target.endsWith(".torrent")) {
+    args = { metainfo: readFileSync(target).toString("base64") };
+  } else {
+    args = { filename: target };
+  }
   const data = await rpc(cfg, "torrent-add", args);
   const added = data.arguments?.["torrent-added"] || data.arguments?.["torrent-duplicate"];
   if (added?.name) console.log(`Added: ${added.name} (id ${added.id})`);
