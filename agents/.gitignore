@@ -1,0 +1,4 @@
+# Runtime movie-night state (rebuilt by library refresh / suggest)
+**/movie-library.json
+**/omdb-cache.json
+**/movie-night-last-suggest.json

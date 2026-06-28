@@ -1,0 +1,9 @@
+{
+  "name": "torrentday-skill",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@browserbasehq/sdk": "^2.6.0",
+    "playwright-core": "^1.52.0"
+  }
+}

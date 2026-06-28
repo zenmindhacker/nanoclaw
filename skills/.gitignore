@@ -4,3 +4,6 @@ node_modules/
 ganttsy-resume/candidates/
 ganttsy-resume/.state/
 im-management/data/
+# Skill-local secrets (host copies to skills/<name>/credentials on deploy)
+**/credentials
+!**/credentials.example

@@ -32,21 +32,16 @@ One of your most important ongoing responsibilities in this channel.
 
 When Christina uploads files (images, PDFs, documents), they are saved under session IPC paths. If a file contains important long-term data, extract it and save a named file under `/workspace/agent/`.
 
----
+## Movie Night
 
-## Connected Tutors Google Workspace (host OAuth)
+Same household movie library as Cian — use **movie-night** and **torrentday** skills.
 
-Use **host-managed OAuth** for Connected Tutors — not OneCLI connect URLs.
+```bash
+/workspace/extra/skills/movie-night/scripts/movie-night.sh suggest --decade 1980s --min-imdb 7 --mpaa PG-13
+/workspace/extra/skills/movie-night/scripts/movie-night.sh library
+/workspace/extra/skills/movie-night/scripts/movie-night.sh download 2
+```
 
-| Account | Registry id | Token (read-only mount) |
-|---------|-------------|-------------------------|
-| hello@connectedtutors.org | `shadow-google` | `/workspace/extra/credentials/shadow-google-token.json` |
-| christina@meridian-institute.org | `meridian-google` | `/workspace/extra/credentials/meridian-google-token.json` (when authed) |
+**Triggers:** movie night, find a movie, something to watch, what do we have.
 
-**Agent tools:** `mcp__calendar__*` and `mcp__gmail__*` (same token files). For Drive/Docs/Sheets until unified MCP lands, use `/workspace/extra/skills/google-workspace/bin/gws-ct`.
-
-**Gmail send policy:** Drafts are fine without asking. Before **send** (`mcp__gmail__send_email` or equivalent), confirm with Christina unless she explicitly asked you to send that message.
-
-**Repair (host):** `ncl oauth-health`, `ncl oauth-refresh-one --id shadow-google`. Do not edit token JSON in the container — host refresher owns writes.
-
-**Deterministic scripts:** `/workspace/extra/skills/google-workspace/` — see that skill's SKILL.md.
+Preferences: `/workspace/agent/movie-preferences.json`

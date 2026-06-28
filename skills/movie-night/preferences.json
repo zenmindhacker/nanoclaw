@@ -1,0 +1,11 @@
+{
+  "min_imdb": 7.0,
+  "preferred_quality": "movX265",
+  "preferred_resolution": "1080p",
+  "blocked_genres": ["Horror", "Adult"],
+  "blocked_mpaa": ["NC-17"],
+  "preferred_decades": [],
+  "max_size_gb": 15,
+  "language": "English",
+  "samba_base": "smb://remembrall/Movies"
+}
