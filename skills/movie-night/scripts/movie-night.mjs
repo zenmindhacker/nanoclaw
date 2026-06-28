@@ -14,10 +14,11 @@ const SKILL_DIR = join(__dirname, "..");
 const GROUP_DIR = "/workspace/group";
 function groupDir() {
   if (existsSync(GROUP_DIR)) return GROUP_DIR;
-  const fallbacks = [
-    join(process.env.HOME || "", "nanoclaw/agents/cleo/groups/dm-with-cian"),
-    join(SKILL_DIR, "data"),
-  ];
+  const home = process.env.HOME || "";
+  const agentGroup = home.includes("christina")
+    ? join(home, "nanoclaw/agents/silas/groups/dm-with-christina")
+    : join(home, "nanoclaw/agents/cleo/groups/dm-with-cian");
+  const fallbacks = [agentGroup, join(SKILL_DIR, "data")];
   for (const p of fallbacks) {
     try {
       mkdirSync(p, { recursive: true });
