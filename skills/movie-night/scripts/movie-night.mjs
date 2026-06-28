@@ -234,14 +234,18 @@ function isOwned(candidate, library) {
 
 function passesFilters(meta, filters, prefs) {
   const minImdb = filters.minImdb ?? prefs.min_imdb ?? 7;
-  if (meta.imdbRating != null && meta.imdbRating < minImdb) return false;
-  if (filters.mpaa && meta.rated && meta.rated !== filters.mpaa && meta.rated !== "N/A") {
+  if (minImdb != null) {
+    if (meta.imdbRating == null) return false;
+    if (meta.imdbRating < minImdb) return false;
+  }
+  if (filters.mpaa) {
+    if (!meta.rated || meta.rated === "N/A") return false;
     if (filters.mpaa === "PG-13" && !["PG", "PG-13", "G"].includes(meta.rated)) return false;
     else if (meta.rated !== filters.mpaa) return false;
   }
   if (filters.decade) {
     const y = meta.year || meta.parsed?.year;
-    if (y && (y < filters.decade.start || y > filters.decade.end)) return false;
+    if (!y || y < filters.decade.start || y > filters.decade.end) return false;
   }
   if (prefs.blocked_genres?.length && meta.genre) {
     for (const bg of prefs.blocked_genres) {
