@@ -109,8 +109,72 @@ function saveJson(path, data) {
 function normalizeTitle(s) {
   return (s || "")
     .toLowerCase()
+    .replace(/\bpoter\b/g, "potter")
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
+}
+
+const FRANCHISE_RULES = [
+  { id: "harry-potter", re: /harry\s*pot(?:ter|er)/i, label: "Harry Potter" },
+  { id: "star-wars", re: /star\s*war/i, label: "Star Wars" },
+  { id: "pirates", re: /pirates(?:\s*of\s*the\s*caribbean)?/i, label: "Pirates of the Caribbean" },
+  { id: "indiana-jones", re: /indiana\s*jones/i, label: "Indiana Jones" },
+  { id: "godfather", re: /godfather/i, label: "The Godfather" },
+  { id: "conjuring", re: /conjuring/i, label: "The Conjuring" },
+  { id: "crocodile-dundee", re: /crocodile\s*dundee/i, label: "Crocodile Dundee" },
+];
+
+function detectFranchise(...texts) {
+  for (const t of texts) {
+    if (!t) continue;
+    for (const rule of FRANCHISE_RULES) {
+      if (rule.re.test(String(t))) return { id: rule.id, label: rule.label };
+    }
+  }
+  return null;
+}
+
+function isCollectionName(name) {
+  return /collection|complete|anthology|trilogy|pack|box\s*set/i.test(name || "");
+}
+
+function filmKey(name) {
+  return normalizeTitle(name).replace(/\bcollection\b.*$/, "").trim();
+}
+
+function listRemembrallDiskFolders() {
+  const host = process.env.REMEMBRALL_SSH || "root@100.82.7.74";
+  try {
+    const out = execFileSync(
+      "ssh",
+      ["-o", "BatchMode=yes", "-o", "ConnectTimeout=8", "-o", "StrictHostKeyChecking=accept-new", host, "ls -1 /mnt/movies"],
+      { encoding: "utf8", maxBuffer: 8 * 1024 * 1024 },
+    );
+    return out.split("\n").map((l) => l.trim()).filter((n) => n && !n.startsWith("."));
+  } catch {
+    return [];
+  }
+}
+
+async function movieEntryFromName(name, source, cache) {
+  const parsed = parseReleaseName(name);
+  const franchise = detectFranchise(name, parsed.title);
+  const isCollection = isCollectionName(name) || isCollectionName(parsed.title);
+  let meta = {};
+  if (!isCollection || !franchise) {
+    meta = await omdbLookup(parsed.title || name, parsed.year, cache);
+  }
+  return {
+    source,
+    filename: name,
+    path: `smb://remembrall/Movies/${name}`,
+    parsed,
+    franchise: franchise?.id || null,
+    franchiseLabel: franchise?.label || null,
+    isCollection,
+    ...meta,
+    title: meta.title || (franchise?.label && isCollection ? `${franchise.label} Collection` : parsed.title),
+  };
 }
 
 function decadeOf(year) {
@@ -169,20 +233,31 @@ function runTransmissionList() {
 export async function refreshLibrary() {
   const torrents = runTransmissionList();
   const cache = loadJson(omdbFile(), {});
-  const movies = [];
+  const byFilename = new Map();
+
   for (const t of torrents) {
     if (t.percentDone < 0.95) continue;
-    const parsed = parseReleaseName(t.name);
-    const meta = await omdbLookup(parsed.title || t.name, parsed.year, cache);
-    movies.push({
-      id: `tx-${t.id}`,
-      source: "transmission",
-      filename: t.name,
-      path: `smb://remembrall/Movies/${t.name}`,
-      parsed,
-      ...meta,
-    });
+    const entry = await movieEntryFromName(t.name, "transmission", cache);
+    entry.id = `tx-${t.id}`;
+    byFilename.set(entry.filename, entry);
   }
+
+  for (const folder of listRemembrallDiskFolders()) {
+    if (byFilename.has(folder)) continue;
+    const entry = await movieEntryFromName(folder, "disk", cache);
+    entry.id = `disk-${filmKey(folder).replace(/\s+/g, "-")}`;
+    byFilename.set(folder, entry);
+  }
+
+  const manifest = loadJson(join(groupDir(), "library-disk-manifest.json"), { folders: [] });
+  for (const folder of manifest.folders || []) {
+    if (byFilename.has(folder)) continue;
+    const entry = await movieEntryFromName(folder, "manifest", cache);
+    entry.id = `manifest-${filmKey(folder).replace(/\s+/g, "-")}`;
+    byFilename.set(folder, entry);
+  }
+
+  const movies = [...byFilename.values()];
   saveJson(omdbFile(), cache);
   const tasteProfile = buildTasteProfile(movies);
   const lib = { updatedAt: new Date().toISOString(), movies, tasteProfile };
@@ -222,12 +297,30 @@ function buildTasteProfile(movies) {
 function isOwned(candidate, library) {
   const ct = normalizeTitle(candidate.parsed?.title || candidate.title || candidate.name);
   const cy = candidate.parsed?.year || candidate.year;
+  const cf = detectFranchise(candidate.title, candidate.parsed?.title, candidate.name);
+
   for (const m of library.movies) {
-    if (candidate.imdbId && m.imdbId && candidate.imdbId === m.imdbId) return { owned: true, match: m, confidence: "exact" };
-    const mt = normalizeTitle(m.title || m.parsed?.title);
+    if (candidate.imdbId && m.imdbId && candidate.imdbId === m.imdbId) {
+      return { owned: true, match: m, confidence: "exact" };
+    }
+
+    const mf = m.franchise
+      ? { id: m.franchise, label: m.franchiseLabel }
+      : detectFranchise(m.filename, m.title, m.parsed?.title);
+    if (cf && mf && cf.id === mf.id) {
+      return {
+        owned: true,
+        match: m,
+        confidence: m.isCollection ? "collection" : "franchise",
+      };
+    }
+
+    const mt = normalizeTitle(m.title || m.parsed?.title || m.filename);
     const my = m.year || m.parsed?.year;
     if (ct && mt && (ct === mt || ct.includes(mt) || mt.includes(ct))) {
-      if (!cy || !my || Math.abs(cy - my) <= 1) return { owned: true, match: m, confidence: "likely" };
+      if (!cy || !my || Math.abs(cy - my) <= 1) {
+        return { owned: true, match: m, confidence: "likely" };
+      }
     }
   }
   return { owned: false };
@@ -285,7 +378,10 @@ async function enrichTorrent(t, cache) {
 function matchesQuery(meta, query) {
   if (!query) return true;
   const q = query.toLowerCase();
-  const title = (meta.title || meta.parsed?.title || meta.filename || "").toLowerCase();
+  const title = [meta.title, meta.parsed?.title, meta.filename, meta.franchiseLabel]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
   return title.includes(q) || q.split(/\s+/).every((w) => title.includes(w));
 }
 
@@ -357,19 +453,38 @@ export async function suggest(opts = {}) {
   }
 
   const enriched = [];
+  const collectionOwned = [];
+  const seenOwnedFilms = new Set();
   for (const c of candidates) {
     const item = await enrichTorrent(c, cache);
     if (!passesFilters(item, filters, prefs)) continue;
     const own = isOwned(item, lib);
-    if (own.owned) continue;
+    if (own.owned) {
+      const filmId = item.imdbId || normalizeTitle(item.title || item.parsed?.title);
+      if ((own.confidence === "collection" || own.confidence === "franchise") && !seenOwnedFilms.has(filmId)) {
+        seenOwnedFilms.add(filmId);
+        collectionOwned.push({
+          ...item,
+          match: own.match,
+          viaCollection: own.confidence === "collection",
+          viaFranchise: own.confidence === "franchise",
+        });
+      }
+      continue;
+    }
     item.score = scoreCandidate(item, c, lib.tasteProfile, prefs);
     enriched.push(item);
   }
   saveJson(omdbFile(), cache);
   enriched.sort((a, b) => b.score - a.score);
   const newOptions = enriched.slice(0, opts.limit ?? 5);
+  const owned = [...ownedMatches];
+  for (const m of collectionOwned) {
+    if (owned.some((o) => normalizeTitle(o.title || o.filename) === normalizeTitle(m.title || m.filename))) continue;
+    owned.push(m);
+  }
   const result = {
-    owned: ownedMatches,
+    owned,
     newOptions,
     filters,
     generatedAt: new Date().toISOString(),
@@ -401,7 +516,13 @@ function formatSuggest(result) {
     lines.push("ALREADY OWN (matches your search):");
     for (const m of result.owned) {
       const r = m.imdbRating != null ? `IMDb ${m.imdbRating}/10` : "rating n/a";
-      lines.push(`  - ${m.title || m.parsed?.title} (${m.year || "?"}) — ${r}, on remembrall ✓  [no download needed]`);
+      let note = ", on remembrall ✓  [no download needed]";
+      if (m.viaCollection && m.match?.filename) {
+        note = ` — in ${m.match.filename} on remembrall ✓  [no download needed]`;
+      } else if (m.viaFranchise && m.match?.title) {
+        note = ` — (${m.match.title}) on remembrall ✓  [no download needed]`;
+      }
+      lines.push(`  - ${m.title || m.parsed?.title} (${m.year || "?"}) — ${r}${note}`);
     }
     lines.push("");
   }

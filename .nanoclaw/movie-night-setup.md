@@ -30,4 +30,8 @@ skills/movie-night/scripts/movie-night.sh library refresh
 skills/torrentday/scripts/torrentday.sh refresh-login   # if Browserbase session expired
 ```
 
+`library refresh` merges **Transmission** (complete torrents) with a **remembrall disk scan** (`ssh root@100.82.7.74 ls /mnt/movies`). Cleo needs its SSH key in remembrall’s `authorized_keys` (one-time). Override host with `REMEMBRALL_SSH` if needed.
+
+Collection packs (e.g. `Harry.Poter.Collection…`) match individual franchise films via franchise detection — no need to download sequels you already own on disk.
+
 Runtime cache (`movie-library.json`, `omdb-cache.json`) lives in the agent group folder and is gitignored via `agents/.gitignore`.

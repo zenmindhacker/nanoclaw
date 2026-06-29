@@ -27,7 +27,7 @@ Depends on: `torrentday`, `transmission` skills.
 
 ```bash
 movie-night.sh library                    # list owned movies
-movie-night.sh library refresh            # rebuild from transmission
+movie-night.sh library refresh            # rebuild from transmission + remembrall disk scan
 movie-night.sh library search --decade 1980s --mpaa PG-13 --min-imdb 7
 movie-night.sh taste                      # inferred genres/decades from library
 movie-night.sh suggest --decade 1980s --min-imdb 7 --mpaa PG-13 [--query "title"]
