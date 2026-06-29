@@ -54,7 +54,7 @@ function readYamlSimple(path) {
 
 function loadPreferences() {
   const paths = [
-    join(GROUP_DIR, "movie-preferences.json"),
+    join(groupDir(), "movie-preferences.json"),
     "/workspace/agent/movie-preferences.json",
     join(SKILL_DIR, "preferences.json"),
     join(SKILL_DIR, "preferences.yaml"),
@@ -241,8 +241,11 @@ function passesFilters(meta, filters, prefs) {
   }
   if (filters.mpaa) {
     if (!meta.rated || meta.rated === "N/A") return false;
-    if (filters.mpaa === "PG-13" && !["PG", "PG-13", "G"].includes(meta.rated)) return false;
-    else if (meta.rated !== filters.mpaa) return false;
+    if (filters.mpaa === "PG-13") {
+      if (!["PG", "PG-13", "G"].includes(meta.rated)) return false;
+    } else if (meta.rated !== filters.mpaa) {
+      return false;
+    }
   }
   if (filters.decade) {
     const y = meta.year || meta.parsed?.year;

@@ -24,10 +24,12 @@ torrentday.sh search-imdb tt0099685 --category movX265
 torrentday.sh download <torrent-id> -o /tmp/movie.torrent
 torrentday.sh parse "Goodfellas.1990.1080p.x265-LAMA"
 torrentday.sh health [--json]
-torrentday.sh browse movies --decade 1980s [--json]   # Browserbase
+torrentday.sh browse movies [--decade 1980s] [--query "Dune"] [--limit 25] [--json]
 torrentday.sh refresh-login                          # re-auth via Browserbase
 torrentday.sh bb-health [--json]
 ```
+
+Decade browse searches movX265 once per year in the range (e.g. 1980–1989), dedupes by torrent id, and keeps rows whose release name year matches. Query browse uses `t?48=1&q=...&cata=yes`.
 
 ## Categories
 

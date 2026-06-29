@@ -5,7 +5,7 @@ import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { chromium } from "playwright-core";
 import Browserbase from "@browserbasehq/sdk";
-import { loadTdConfig } from "./torrentday.mjs";
+import { loadTdConfig, parseReleaseName } from "./torrentday.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -96,16 +96,55 @@ async function scrapeSearchPage(page, url) {
   };
 }
 
+function decadeRange(decade) {
+  const m = String(decade || "").match(/(\d{4})s/);
+  if (!m) return null;
+  const start = parseInt(m[1], 10);
+  return { start, end: start + 9, label: `${start}s` };
+}
+
+function categoryUrl(query) {
+  return `https://www.torrentday.com/t?48=1&q=${encodeURIComponent(query)}&cata=yes`;
+}
+
+async function browseDecade(page, decade, limit = 40) {
+  const range = decadeRange(decade);
+  if (!range) throw new Error(`Unknown decade: ${decade}`);
+  const perYear = Math.max(8, Math.ceil(limit / 10));
+  const byId = new Map();
+  for (let year = range.start; year <= range.end; year++) {
+    const data = await scrapeSearchPage(page, categoryUrl(String(year)));
+    if (data.loginRequired) throw new Error("Session expired");
+    for (const row of data.rows) {
+      if (!row.id || byId.has(row.id)) continue;
+      const parsedYear = parseReleaseName(row.name).year;
+      if (parsedYear && (parsedYear < range.start || parsedYear > range.end)) continue;
+      byId.set(row.id, row);
+    }
+    if (byId.size >= limit * 2) break;
+  }
+  return [...byId.values()]
+    .sort((a, b) => b.seeds - a.seeds)
+    .slice(0, limit);
+}
+
 export async function browseMovies(opts = {}) {
   return withBrowser(async ({ page, tdCfg }) => {
     await ensureLoggedIn(page, tdCfg);
-    let url = "https://www.torrentday.com/movies";
-    if (opts.decade === "1980s") url = "https://www.torrentday.com/t?48=1&cata=yes";
-    if (opts.query) url = `https://www.torrentday.com/t?48=1&q=${encodeURIComponent(opts.query)}&cata=yes`;
-    const data = await scrapeSearchPage(page, url);
-    if (data.loginRequired) throw new Error("Session expired");
-    let rows = data.rows.sort((a, b) => b.seeds - a.seeds);
-    if (opts.limit) rows = rows.slice(0, opts.limit);
+    let rows;
+    if (opts.decade) {
+      rows = await browseDecade(page, opts.decade, opts.limit ?? 40);
+    } else if (opts.query) {
+      const data = await scrapeSearchPage(page, categoryUrl(opts.query));
+      if (data.loginRequired) throw new Error("Session expired");
+      rows = data.rows.sort((a, b) => b.seeds - a.seeds);
+      if (opts.limit) rows = rows.slice(0, opts.limit);
+    } else {
+      const data = await scrapeSearchPage(page, "https://www.torrentday.com/t?48=1&cata=yes");
+      if (data.loginRequired) throw new Error("Session expired");
+      rows = data.rows.sort((a, b) => b.seeds - a.seeds);
+      if (opts.limit) rows = rows.slice(0, opts.limit);
+    }
     return rows;
   });
 }
