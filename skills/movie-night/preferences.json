@@ -2,6 +2,7 @@
   "min_imdb": 7.0,
   "preferred_quality": "movX265",
   "preferred_resolution": "1080p",
+  "notes": "preferred_quality is the default category for single-film searches only; agent must use movPACKS for collection/boxset requests",
   "blocked_genres": ["Horror", "Adult"],
   "blocked_mpaa": ["NC-17"],
   "preferred_decades": [],

@@ -30,40 +30,53 @@ Tool research: `transmission-tools-research.md` in this folder (stig/tremc/torqu
 Use **movie-night** and **torrentday** skills. **Always use `--json`** for machine steps; prose is for the user only.
 
 ```bash
+/workspace/extra/skills/movie-night/scripts/movie-night.sh categories --json
 /workspace/extra/skills/movie-night/scripts/movie-night.sh library refresh --json
 /workspace/extra/skills/movie-night/scripts/movie-night.sh library status --json
 /workspace/extra/skills/movie-night/scripts/movie-night.sh library list --json
-/workspace/extra/skills/movie-night/scripts/movie-night.sh candidates --query "Inception" --json
+/workspace/extra/skills/movie-night/scripts/movie-night.sh candidates --query "star trek 1080p" --category movPACKS --json
+/workspace/extra/skills/movie-night/scripts/movie-night.sh candidates --query "Inception 1080p x265" --category movX265 --json
 /workspace/extra/skills/movie-night/scripts/movie-night.sh enrich --title "Inception" --year 2010 --json
-/workspace/extra/skills/movie-night/scripts/movie-night.sh download 2 --json   # only after user picks from current list
-/workspace/extra/skills/torrentday/scripts/torrentday.sh refresh-login  # if TD session expired
+/workspace/extra/skills/movie-night/scripts/movie-night.sh download 2 --json
+/workspace/extra/skills/torrentday/scripts/torrentday.sh refresh-login
 ```
+
+### You choose category + query (not code)
+
+Run `categories --json` when unsure. Key movie categories:
+
+| Intent | `--category` | Notes |
+|--------|--------------|-------|
+| Single film, x265 | `movX265` | Default; add `1080p x265` to query yourself |
+| Single film, x264/HDR | `movHD` | |
+| **Pack / collection / boxset** | **`movPACKS`** | **id 13** — site URL `t?13=on&q=...` |
+| Broad retry | `all` | When results are thin |
+
+**Never** say a pack doesn't exist after only searching `movX265`. Franchise/collection packs are in **`movPACKS`**. If wrong results, run another `candidates` with the right category before reporting empty.
 
 ### Workflow
 
-1. `library refresh --json` then `library status --json` — verify `entryCount` (~102), cite `groupDir` (`/workspace/agent`)
-2. `library list --json` when checking ownership
-3. `candidates --query "Title" --json` — code applies movX265 + 1080p + x265 + seeders; you pick the film title only
-4. For each candidate, check ownership by reading library **filenames** (no code regex)
-5. `enrich --title T [--year Y] --json` only for titles you're about to show (IMDb, MPAA, genre)
-6. Apply taste/content filters from `/workspace/agent/movie-preferences.json` (min IMDb, blocked genres, MPAA, decade) — **do not** override quality; `candidates` already enforces 1080p x265
-7. Among remaining options, **prefer ~2–4 GB** encodes when `sizeGb` is in the JSON (household target — your ranking call, not a code filter). Mention size when showing picks; note when unknown
-8. Present numbered list of **new** options only
-9. Wait for user to pick a number → `download N --json`
+1. `library refresh --json` → `library status --json`
+2. `library list --json` for ownership
+3. Pick **category from user intent** → `candidates --query "..." --category ... --json`
+4. Ownership check via filenames; `enrich` when IMDb/MPAA matters
+5. Apply taste from `movie-preferences.json`; prefer **~2–4 GB** and **1080p x265** when ranking (your judgment — code does not filter these)
+6. Present numbered **new** options only → user picks → `download N`
 
-### Ownership rules (your judgment, not code)
+If user pastes a torrent URL/ID: `torrentday.sh download <id>` then transmission add.
 
-- Before listing something as new, scan `library list --json` filenames
-- Collection folders (name contains `Collection`, or obvious series pack) count as owning all films in that series — e.g. `Harry.Poter.Collection…` covers Harry Potter even with the typo
-- When claiming owned, cite the exact `filename` from the library
-- If unsure, say so — never invent counts or infer from `diskFoldersCached` vs `entryCount`
+### Ownership rules
+
+- Cite exact library `filename` when claiming owned
+- Collection folders count as owning the series (`Harry.Poter.Collection…`, etc.)
+- If unsure, say so — never invent counts
 
 ### Never
 
-- Call `download` without the user picking a number from the **current** candidate list
-- Override quality (category, 1080p, x265) — that stays in `candidates`
+- `download` without user picking from the **current** candidate list
+- Assume `movX265` covers packs
 - Use removed commands: `suggest`, `library search`, `taste`
 
 **Triggers:** movie night, find a movie, something to watch, what do I have, do I already own.
 
-Preferences: `/workspace/agent/movie-preferences.json` (taste/content) + skill `preferences.json` (quality defaults).
+Preferences: `/workspace/agent/movie-preferences.json` + skill `preferences.json`.

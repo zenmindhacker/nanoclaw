@@ -8,17 +8,58 @@ import { Readable } from "stream";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const CATEGORIES = {
-  all: [],
-  movX265: [48],
-  movHD: [11],
-  movBD: [5],
-  mov4k: [96],
-  movSDx264: [44],
-  tvX265: [34],
-  tvHDx264: [7],
-  tv4k: [104],
+const CATEGORY_META = {
+  all: { ids: [], label: "All", group: "movies", useWhen: "Broad search when category is unknown" },
+  movX265: { ids: [48], label: "Movies x265/HEVC", group: "movies", useWhen: "Single films — efficient 1080p encodes (household default for one-offs)" },
+  movHD: { ids: [11], label: "Movies HD x264", group: "movies", useWhen: "Single films, remuxes, HDR, or when x265 search is thin" },
+  movPACKS: { ids: [13], label: "Movie Packs", group: "movies", useWhen: "Collection/boxset/franchise packs — REQUIRED for pack requests" },
+  mov4k: { ids: [96], label: "Movies 4K", group: "movies", useWhen: "2160p / UHD (usually large files)" },
+  movBD: { ids: [5], label: "Movies Blu-ray", group: "movies", useWhen: "Full Blu-ray rips" },
+  movDVD: { ids: [3], label: "Movies DVD", group: "movies", useWhen: "DVD sources" },
+  movSDx264: { ids: [44], label: "Movies SD x264", group: "movies", useWhen: "480p / smaller encodes" },
+  mov480p: { ids: [25], label: "Movies 480p", group: "movies", useWhen: "Low-res singles" },
+  movMP4: { ids: [21], label: "Movies MP4", group: "movies", useWhen: "MP4 container releases" },
+  movNonEnglish: { ids: [22], label: "Movies Non-English", group: "movies", useWhen: "Foreign-language films" },
+  movXVID: { ids: [1], label: "Movies XviD", group: "movies", useWhen: "Legacy XviD" },
+  tvX265: { ids: [34], label: "TV x265", group: "tv", useWhen: "TV episodes x265" },
+  tvHDx264: { ids: [7], label: "TV HD x264", group: "tv", useWhen: "TV episodes x264" },
+  tvPACKS: { ids: [14], label: "TV Packs", group: "tv", useWhen: "Full season / series packs" },
+  tv4k: { ids: [104], label: "TV 4K", group: "tv", useWhen: "TV 2160p" },
+  tv480p: { ids: [24], label: "TV 480p", group: "tv", useWhen: "TV SD" },
+  tvSDx264: { ids: [26], label: "TV SD x264", group: "tv", useWhen: "TV SD x264" },
 };
+
+/** @deprecated use CATEGORY_META — map name → id list for t.json */
+const CATEGORIES = Object.fromEntries(
+  Object.entries(CATEGORY_META).map(([k, v]) => [k, v.ids]),
+);
+
+export function listCategories() {
+  return Object.entries(CATEGORY_META).map(([name, meta]) => ({
+    name,
+    ids: meta.ids,
+    label: meta.label,
+    group: meta.group,
+    useWhen: meta.useWhen,
+  }));
+}
+
+/** Resolve category name(s), comma-separated names, or numeric id(s). */
+export function resolveCategories(spec) {
+  if (!spec || spec === "all") return [];
+  const parts = String(spec).split(",").map((s) => s.trim()).filter(Boolean);
+  const ids = new Set();
+  for (const part of parts) {
+    if (CATEGORY_META[part]) {
+      for (const id of CATEGORY_META[part].ids) ids.add(id);
+      continue;
+    }
+    const n = parseInt(part, 10);
+    if (!isNaN(n) && n > 0) ids.add(n);
+    else throw new Error(`Unknown TorrentDay category: ${part}`);
+  }
+  return [...ids];
+}
 
 function parseCredFile(paths) {
   const cfg = {};
@@ -81,7 +122,9 @@ function buildJsonUrl(cfg, { categories = [48], query = "", free = false, sort =
 }
 
 export async function searchTorrents(cfg, opts = {}) {
-  const categories = opts.categories ?? CATEGORIES[opts.category] ?? CATEGORIES.movX265;
+  const categories =
+    opts.categories ??
+    (opts.category != null ? resolveCategories(opts.category) : resolveCategories("movX265"));
   const url = buildJsonUrl(cfg, {
     categories,
     query: opts.query ?? "",
@@ -192,7 +235,7 @@ async function main() {
   const args = rest.filter((a) => a !== "--json");
 
   if (cmd === "categories") {
-    console.log(JSON.stringify(CATEGORIES, null, 2));
+    console.log(JSON.stringify(listCategories(), null, 2));
     return;
   }
 

@@ -19,21 +19,33 @@ Private tracker search and download for the household TorrentDay account.
 ## Commands
 
 ```bash
+torrentday.sh categories [--json]
 torrentday.sh search "Goodfellas" --category movX265 [--json] [--limit 10]
+torrentday.sh search "star trek" --category movPACKS [--json]
 torrentday.sh search-imdb tt0099685 --category movX265
 torrentday.sh download <torrent-id> -o /tmp/movie.torrent
 torrentday.sh parse "Goodfellas.1990.1080p.x265-LAMA"
 torrentday.sh health [--json]
-torrentday.sh browse movies [--decade 1980s] [--query "Dune"] [--limit 25] [--json]
-torrentday.sh refresh-login                          # re-auth via Browserbase
+torrentday.sh browse movies [--category movPACKS] [--query "Dune"] [--limit 25] [--json]
+torrentday.sh refresh-login
 torrentday.sh bb-health [--json]
 ```
 
-Decade browse searches movX265 once per year in the range (e.g. 1980–1989), dedupes by torrent id, and keeps rows whose release name year matches. Query browse uses `t?48=1&q=...&cata=yes`.
-
 ## Categories
 
-`movX265` (48), `movHD` (11), `tvX265` (34), `tvHDx264` (7), `mov4k` (96)
+Run `torrentday.sh categories --json` for the full list. Key movie categories:
+
+| Name | ID | Use when |
+|------|-----|----------|
+| `movX265` | 48 | Single films, x265/HEVC |
+| `movHD` | 11 | Single films x264, remuxes |
+| **`movPACKS`** | **13** | **Collection/boxset/franchise packs** |
+| `mov4k` | 96 | 4K/UHD |
+| `all` | — | Broad search |
+
+Comma-separated: `--category movX265,movHD`
+
+Browse/search URLs use `t?<id>=1&q=...&cata=yes` (packs: `t?13=1&q=...`).
 
 ## Chain to transmission
 

@@ -36,8 +36,10 @@ Inside agent containers there is no SSH client — the host writes `remembrall-d
 
 ## v2 architecture
 
-- **Code:** library index (filename only), `candidates` (1080p x265 movX265 + seeders), `omdb enrich`, `download N` from last search
-- **Agent (Cleo):** ownership by reading filenames, taste/MPAA/decade filters, presentation
+- **Code:** library index, `candidates --category` (raw TD results, seeders sort), `omdb enrich`, `download N` from last search
+- **Agent (Cleo):** picks TorrentDay category (`movPACKS` for boxsets, `movX265` for singles), quality/size filters, ownership, presentation
+
+**Important:** collection packs are category **`movPACKS` (id 13)**, not `movX265`. Cleo must pass `--category movPACKS` when the user asks for a pack/franchise collection.
 
 After upgrading from v1, run `library refresh` once — entry format changes from OMDB-enriched `movies` to slim `entries`.
 

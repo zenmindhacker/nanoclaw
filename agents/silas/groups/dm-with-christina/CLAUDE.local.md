@@ -37,14 +37,12 @@ When Christina uploads files (images, PDFs, documents), they are saved under ses
 Same household movie library as Cian — use **movie-night** and **torrentday** skills. **Always use `--json`** for machine steps.
 
 ```bash
-/workspace/extra/skills/movie-night/scripts/movie-night.sh library refresh --json
-/workspace/extra/skills/movie-night/scripts/movie-night.sh library status --json
-/workspace/extra/skills/movie-night/scripts/movie-night.sh library list --json
-/workspace/extra/skills/movie-night/scripts/movie-night.sh candidates --query "Title" --json
-/workspace/extra/skills/movie-night/scripts/movie-night.sh enrich --title "Title" --json
+/workspace/extra/skills/movie-night/scripts/movie-night.sh categories --json
+/workspace/extra/skills/movie-night/scripts/movie-night.sh candidates --query "Title 1080p x265" --category movX265 --json
+/workspace/extra/skills/movie-night/scripts/movie-night.sh candidates --query "franchise 1080p" --category movPACKS --json
 /workspace/extra/skills/movie-night/scripts/movie-night.sh download 2 --json
 ```
 
-Check ownership by reading library **filenames** (collection packs count as owning the series). Apply taste filters from `/workspace/agent/movie-preferences.json`; quality (1080p x265 movX265) is enforced in `candidates`. Prefer **~2–4 GB** releases when ranking (`sizeGb` in JSON when available) — agent judgment, not a hard filter. Never `download` without Christina picking a number from the current list.
+**You pick `--category`** from user intent: `movX265` for single films, **`movPACKS` for collection/boxset requests** (never assume movX265 finds packs). Put quality terms in `--query` yourself; code does not auto-filter x265. Prefer ~2–4 GB when ranking. Never `download` without Christina picking from the current list.
 
 **Triggers:** movie night, find a movie, something to watch, what do we have.

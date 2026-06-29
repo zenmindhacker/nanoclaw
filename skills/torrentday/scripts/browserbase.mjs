@@ -5,7 +5,7 @@ import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { chromium } from "playwright-core";
 import Browserbase from "@browserbasehq/sdk";
-import { loadTdConfig, parseReleaseName } from "./torrentday.mjs";
+import { loadTdConfig, parseReleaseName, resolveCategories } from "./torrentday.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -103,17 +103,23 @@ function decadeRange(decade) {
   return { start, end: start + 9, label: `${start}s` };
 }
 
-function categoryUrl(query) {
-  return `https://www.torrentday.com/t?48=1&q=${encodeURIComponent(query)}&cata=yes`;
+function categoryUrl(query, categoryIds = [48]) {
+  if (!categoryIds.length) {
+    const q = query ? `q=${encodeURIComponent(query)}&cata=yes` : "";
+    return `https://www.torrentday.com/t?${q}`;
+  }
+  const catPart = categoryIds.map((id) => `${id}=1`).join("&");
+  const q = query ? `&q=${encodeURIComponent(query)}&cata=yes` : "";
+  return `https://www.torrentday.com/t?${catPart}${q}`;
 }
 
-async function browseDecade(page, decade, limit = 40) {
+async function browseDecade(page, decade, limit = 40, categoryIds = [48]) {
   const range = decadeRange(decade);
   if (!range) throw new Error(`Unknown decade: ${decade}`);
   const perYear = Math.max(8, Math.ceil(limit / 10));
   const byId = new Map();
   for (let year = range.start; year <= range.end; year++) {
-    const data = await scrapeSearchPage(page, categoryUrl(String(year)));
+    const data = await scrapeSearchPage(page, categoryUrl(String(year), categoryIds));
     if (data.loginRequired) throw new Error("Session expired");
     for (const row of data.rows) {
       if (!row.id || byId.has(row.id)) continue;
@@ -129,18 +135,21 @@ async function browseDecade(page, decade, limit = 40) {
 }
 
 export async function browseMovies(opts = {}) {
+  const categoryIds =
+    opts.categoryIds ??
+    (opts.category != null ? resolveCategories(opts.category) : resolveCategories("movX265"));
   return withBrowser(async ({ page, tdCfg }) => {
     await ensureLoggedIn(page, tdCfg);
     let rows;
     if (opts.decade) {
-      rows = await browseDecade(page, opts.decade, opts.limit ?? 40);
+      rows = await browseDecade(page, opts.decade, opts.limit ?? 40, categoryIds);
     } else if (opts.query) {
-      const data = await scrapeSearchPage(page, categoryUrl(opts.query));
+      const data = await scrapeSearchPage(page, categoryUrl(opts.query, categoryIds));
       if (data.loginRequired) throw new Error("Session expired");
       rows = data.rows.sort((a, b) => b.seeds - a.seeds);
       if (opts.limit) rows = rows.slice(0, opts.limit);
     } else {
-      const data = await scrapeSearchPage(page, "https://www.torrentday.com/t?48=1&cata=yes");
+      const data = await scrapeSearchPage(page, categoryUrl("", categoryIds.length ? categoryIds : [48]));
       if (data.loginRequired) throw new Error("Session expired");
       rows = data.rows.sort((a, b) => b.seeds - a.seeds);
       if (opts.limit) rows = rows.slice(0, opts.limit);
@@ -191,7 +200,10 @@ async function main() {
     if (qIdx !== -1) query = args[qIdx + 1];
     const lIdx = args.indexOf("--limit");
     if (lIdx !== -1) limit = parseInt(args[lIdx + 1], 10);
-    const rows = await browseMovies({ decade, query, limit });
+    let category = "movX265";
+    const cIdx = args.indexOf("--category");
+    if (cIdx !== -1) category = args[cIdx + 1];
+    const rows = await browseMovies({ decade, query, limit, category });
     if (json) console.log(JSON.stringify(rows, null, 2));
     else for (const r of rows) console.log(`[${r.id}] ${r.seeds}s | ${r.name}`);
     return;

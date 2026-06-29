@@ -7,7 +7,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { execFileSync } from "child_process";
-import { loadTdConfig, parseReleaseName, searchTorrents, downloadTorrent } from "../../torrentday/scripts/torrentday.mjs";
+import { loadTdConfig, parseReleaseName, searchTorrents, downloadTorrent, listCategories, resolveCategories } from "../../torrentday/scripts/torrentday.mjs";
 import { browseMovies } from "../../torrentday/scripts/browserbase.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -90,33 +90,63 @@ function loadPreferences() {
   return prefs;
 }
 
-function qualityProfile() {
+function defaultCategory() {
   const prefs = loadPreferences();
+  return prefs.default_category || prefs.preferred_quality || "movX265";
+}
+
+function mapCandidate(row, source) {
+  const sizeBytes = typeof row.size === "number" ? row.size : null;
   return {
-    category: prefs.preferred_quality || "movX265",
-    resolution: prefs.preferred_resolution || "1080p",
-    codec: "x265",
+    id: row.id ?? row.t,
+    name: row.name,
+    seeders: row.seeders ?? row.seeds ?? 0,
+    sizeBytes,
+    sizeGb: sizeBytes != null ? Math.round((sizeBytes / 1e9) * 100) / 100 : null,
+    categoryId: row.category ?? null,
+    parsed: row.parsed || parseReleaseName(row.name),
+    source,
   };
 }
 
-function augmentSearchQuery(query, quality) {
-  const q = query.trim();
-  const lower = q.toLowerCase();
-  let out = q;
-  if (quality.resolution && !lower.includes(quality.resolution.toLowerCase())) {
-    out += ` ${quality.resolution}`;
-  }
-  if (quality.codec && !lower.includes("x265") && !lower.includes("hevc")) {
-    out += ` ${quality.codec}`;
-  }
-  return out.trim();
-}
+export async function findCandidates(query, { limit = 15, rawLimit = 30, category } = {}) {
+  if (!query?.trim()) throw new Error("candidates requires --query");
+  const categoryName = category || defaultCategory();
+  const categoryIds = resolveCategories(categoryName);
+  const searchQuery = query.trim();
+  const td = loadTdConfig();
+  let rows = [];
 
-function matchesQualityRelease(name, quality) {
-  const n = name.toLowerCase();
-  if (quality.resolution && !n.includes(quality.resolution.toLowerCase())) return false;
-  if (!n.includes("x265") && !n.includes("hevc")) return false;
-  return true;
+  try {
+    rows = await searchTorrents(td, { query: searchQuery, category: categoryName, sort: "seeders" });
+  } catch {}
+
+  if (!rows.length || rows[0]?.source === "rss") {
+    try {
+      const browsed = await browseMovies({ query: searchQuery, limit: rawLimit, category: categoryName });
+      rows = browsed.map((r) => mapCandidate(r, "browser"));
+    } catch (e) {
+      if (!rows.length) throw e;
+      rows = rows.map((r) => mapCandidate(r, r.source || "tjson"));
+    }
+  } else {
+    rows = rows.map((r) => mapCandidate(r, r.source || "tjson"));
+  }
+
+  const candidates = rows
+    .sort((a, b) => b.seeders - a.seeders)
+    .slice(0, limit);
+
+  const result = {
+    query: searchQuery,
+    searchQuery,
+    category: categoryName,
+    categoryIds,
+    candidates,
+    generatedAt: new Date().toISOString(),
+  };
+  saveJson(lastSearchPath(), result);
+  return result;
 }
 
 function loadDiskFolderCache() {
@@ -247,58 +277,6 @@ async function omdbLookup(title, year, cache) {
   return entry;
 }
 
-function mapCandidate(row, source) {
-  const sizeBytes = typeof row.size === "number" ? row.size : null;
-  return {
-    id: row.id ?? row.t,
-    name: row.name,
-    seeders: row.seeders ?? row.seeds ?? 0,
-    sizeBytes,
-    sizeGb: sizeBytes != null ? Math.round((sizeBytes / 1e9) * 100) / 100 : null,
-    parsed: row.parsed || parseReleaseName(row.name),
-    source,
-  };
-}
-
-export async function findCandidates(query, { limit = 15, rawLimit = 30 } = {}) {
-  if (!query?.trim()) throw new Error("candidates requires --query");
-  const quality = qualityProfile();
-  const searchQuery = augmentSearchQuery(query, quality);
-  const td = loadTdConfig();
-  let rows = [];
-
-  try {
-    rows = await searchTorrents(td, { query: searchQuery, category: quality.category, sort: "seeders" });
-  } catch {}
-
-  if (!rows.length || rows[0]?.source === "rss") {
-    try {
-      const browsed = await browseMovies({ query: searchQuery, limit: rawLimit });
-      rows = browsed.map((r) => mapCandidate(r, "browser"));
-    } catch (e) {
-      if (!rows.length) throw e;
-      rows = rows.map((r) => mapCandidate(r, r.source || "tjson"));
-    }
-  } else {
-    rows = rows.map((r) => mapCandidate(r, r.source || "tjson"));
-  }
-
-  const filtered = rows
-    .filter((r) => matchesQualityRelease(r.name, quality))
-    .sort((a, b) => b.seeders - a.seeders)
-    .slice(0, limit);
-
-  const result = {
-    query: query.trim(),
-    searchQuery,
-    quality: { category: quality.category, resolution: quality.resolution, codec: quality.codec },
-    candidates: filtered,
-    generatedAt: new Date().toISOString(),
-  };
-  saveJson(lastSearchPath(), result);
-  return result;
-}
-
 export async function downloadPick(n) {
   const last = loadJson(lastSearchPath(), null);
   if (!last?.candidates?.length) throw new Error("No prior candidates — run candidates first");
@@ -371,19 +349,28 @@ async function main() {
     return;
   }
 
+  if (cmd === "categories") {
+    const cats = listCategories();
+    if (json) console.log(JSON.stringify(cats, null, 2));
+    else {
+      for (const c of cats) console.log(`${c.name} (${c.ids.join(",")}) — ${c.label}: ${c.useWhen}`);
+    }
+    return;
+  }
+
   if (cmd === "candidates") {
     const query = args.query || args._[1];
     if (!query) {
-      console.error("Usage: movie-night.sh candidates --query \"Title\" [--limit N] [--json]");
+      console.error("Usage: movie-night.sh candidates --query \"Title\" [--category movX265|movPACKS|...] [--limit N] [--json]");
       process.exit(1);
     }
     const result = await findCandidates(query, {
       limit: args.limit ? parseInt(args.limit, 10) : 15,
+      category: args.category,
     });
     if (json) console.log(JSON.stringify(result, null, 2));
     else {
-      console.log(`Query: ${result.query} → ${result.searchQuery}`);
-      console.log(`Quality: ${result.quality.category} ${result.quality.resolution} ${result.quality.codec}`);
+      console.log(`Query: ${result.query} | Category: ${result.category}`);
       result.candidates.forEach((c, i) => {
         const sz = c.sizeGb != null ? ` ${c.sizeGb}GB` : "";
         console.log(`${i + 1}. [${c.id}] ${c.seeders}s${sz} | ${c.name}`);
@@ -412,7 +399,7 @@ async function main() {
     return;
   }
 
-  console.log(`Usage: movie-night.sh <library|library refresh|library status|candidates|download|enrich> [options]`);
+  console.log(`Usage: movie-night.sh <library|library refresh|library status|categories|candidates|download|enrich> [options]`);
   process.exit(1);
 }
 
