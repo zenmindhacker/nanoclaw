@@ -47,8 +47,9 @@ Use **movie-night** and **torrentday** skills. **Always use `--json`** for machi
 4. For each candidate, check ownership by reading library **filenames** (no code regex)
 5. `enrich --title T [--year Y] --json` only for titles you're about to show (IMDb, MPAA, genre)
 6. Apply taste/content filters from `/workspace/agent/movie-preferences.json` (min IMDb, blocked genres, MPAA, decade) — **do not** override quality; `candidates` already enforces 1080p x265
-7. Present numbered list of **new** options only
-8. Wait for user to pick a number → `download N --json`
+7. Among remaining options, **prefer ~2–4 GB** encodes when `sizeGb` is in the JSON (household target — your ranking call, not a code filter). Mention size when showing picks; note when unknown
+8. Present numbered list of **new** options only
+9. Wait for user to pick a number → `download N --json`
 
 ### Ownership rules (your judgment, not code)
 

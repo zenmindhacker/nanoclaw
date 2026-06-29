@@ -63,7 +63,7 @@ Searches TorrentDay with fixed quality profile:
   "query": "Inception",
   "searchQuery": "Inception 1080p x265",
   "quality": { "category": "movX265", "resolution": "1080p", "codec": "x265" },
-  "candidates": [{ "id", "name", "seeders", "parsed" }],
+  "candidates": [{ "id", "name", "seeders", "sizeGb", "parsed" }],
   "generatedAt": "..."
 }
 ```
@@ -92,6 +92,14 @@ On-demand OMDB lookup (cached in `omdb-cache.json`). Use before presenting optio
 - Collection folders (name contains `Collection`, or obvious series pack) count as owning all films in that series
 - When claiming owned, cite the exact `filename` from the library
 - If unsure, say so — never infer from folder counts vs entry counts
+
+## Size (agent policy)
+
+Household target: **~2–4 GB per movie** (`target_size_gb` in preferences). When ranking or presenting candidates:
+
+- Prefer releases in that range when `sizeGb` is present in candidate JSON
+- Deprioritize huge remuxes and suspiciously tiny encodes; say when size is unknown (common with browser fallback)
+- Do **not** expect code to filter by size — this is your judgment call, like MPAA/decade
 
 ## Trigger phrases
 

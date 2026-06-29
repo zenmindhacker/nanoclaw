@@ -5,6 +5,7 @@
   "blocked_genres": ["Horror", "Adult"],
   "blocked_mpaa": ["NC-17"],
   "preferred_decades": [],
+  "target_size_gb": { "min": 2, "max": 4 },
   "max_size_gb": 15,
   "language": "English",
   "samba_base": "smb://remembrall/Movies"

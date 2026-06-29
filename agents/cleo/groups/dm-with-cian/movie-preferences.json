@@ -1,5 +1,6 @@
 {
   "min_imdb": 7.0,
   "blocked_genres": ["Horror"],
-  "notes": "Cian prefers sci-fi and crime; ok with R when not specified"
+  "target_size_gb": { "min": 2, "max": 4 },
+  "notes": "Cian prefers sci-fi and crime; ok with R when not specified. Prefer ~2–4 GB encodes when picking among candidates (agent judgment, not a hard filter)."
 }

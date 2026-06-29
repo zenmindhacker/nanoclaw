@@ -248,10 +248,13 @@ async function omdbLookup(title, year, cache) {
 }
 
 function mapCandidate(row, source) {
+  const sizeBytes = typeof row.size === "number" ? row.size : null;
   return {
     id: row.id ?? row.t,
     name: row.name,
     seeders: row.seeders ?? row.seeds ?? 0,
+    sizeBytes,
+    sizeGb: sizeBytes != null ? Math.round((sizeBytes / 1e9) * 100) / 100 : null,
     parsed: row.parsed || parseReleaseName(row.name),
     source,
   };
@@ -382,7 +385,8 @@ async function main() {
       console.log(`Query: ${result.query} → ${result.searchQuery}`);
       console.log(`Quality: ${result.quality.category} ${result.quality.resolution} ${result.quality.codec}`);
       result.candidates.forEach((c, i) => {
-        console.log(`${i + 1}. [${c.id}] ${c.seeders}s | ${c.name}`);
+        const sz = c.sizeGb != null ? ` ${c.sizeGb}GB` : "";
+        console.log(`${i + 1}. [${c.id}] ${c.seeders}s${sz} | ${c.name}`);
       });
       console.log(`--- ${result.candidates.length} candidate(s)`);
     }

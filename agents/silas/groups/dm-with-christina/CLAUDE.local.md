@@ -45,6 +45,6 @@ Same household movie library as Cian — use **movie-night** and **torrentday** 
 /workspace/extra/skills/movie-night/scripts/movie-night.sh download 2 --json
 ```
 
-Check ownership by reading library **filenames** (collection packs count as owning the series). Apply taste filters from `/workspace/agent/movie-preferences.json`; quality (1080p x265 movX265) is enforced in `candidates`. Never `download` without Christina picking a number from the current list.
+Check ownership by reading library **filenames** (collection packs count as owning the series). Apply taste filters from `/workspace/agent/movie-preferences.json`; quality (1080p x265 movX265) is enforced in `candidates`. Prefer **~2–4 GB** releases when ranking (`sizeGb` in JSON when available) — agent judgment, not a hard filter. Never `download` without Christina picking a number from the current list.
 
 **Triggers:** movie night, find a movie, something to watch, what do we have.

@@ -1,5 +1,6 @@
 {
   "min_imdb": 7.0,
   "blocked_genres": ["Horror"],
-  "notes": "Christina prefers family-friendly when kids might watch"
+  "target_size_gb": { "min": 2, "max": 4 },
+  "notes": "Christina prefers family-friendly when kids might watch. Prefer ~2–4 GB encodes when picking among candidates (agent judgment, not a hard filter)."
 }
