@@ -588,6 +588,29 @@ async function main() {
       else console.log(`Library refreshed: ${lib.movies.length} titles`);
       return;
     }
+    if (sub === "status") {
+      const lib = loadLibrary();
+      const diskCache = loadDiskFolderCache();
+      const tx = runTransmissionList().filter((t) => t.percentDone >= 0.95);
+      const hp = lib.movies.find((m) => detectFranchise(m.filename, m.title)?.id === "harry-potter");
+      const status = {
+        groupDir: groupDir(),
+        libraryEntries: lib.movies.length,
+        transmissionComplete: tx.length,
+        diskFoldersCached: diskCache.length,
+        harryPotterInLibrary: !!hp,
+        harryPotterLabel: hp?.title || hp?.filename || null,
+        updatedAt: lib.updatedAt,
+      };
+      if (json) console.log(JSON.stringify(status, null, 2));
+      else {
+        console.log(`Library: ${status.libraryEntries} entries (${status.groupDir})`);
+        console.log(`Transmission: ${status.transmissionComplete} complete | Disk cache: ${status.diskFoldersCached} folders`);
+        console.log(`Harry Potter: ${status.harryPotterInLibrary ? "yes — " + status.harryPotterLabel : "no"}`);
+        if (status.updatedAt) console.log(`Updated: ${status.updatedAt}`);
+      }
+      return;
+    }
     if (sub === "search") {
       const filters = {
         minImdb: args["min-imdb"] ? parseFloat(args["min-imdb"]) : undefined,
@@ -650,7 +673,7 @@ async function main() {
     return;
   }
 
-  console.log(`Usage: movie-night.sh <library|library refresh|library search|taste|suggest|download|enrich> [options]`);
+  console.log(`Usage: movie-night.sh <library|library refresh|library status|library search|taste|suggest|download|enrich> [options]`);
   process.exit(1);
 }
 
