@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * Movie Night — library index, OMDB enrich, TorrentDay suggest, transmission download.
+ * Movie Night v2 — thin facts layer: library index, TD candidates, OMDB enrich, guarded download.
+ * Cleo handles ownership, taste filters, and presentation.
  */
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { dirname, join } from "path";
@@ -31,25 +32,23 @@ function groupDir() {
   return "/tmp/movie-night";
 }
 
-function diskFolderCachePath() {
-  return join(groupDir(), "remembrall-disk-folders.json");
-}
-
-function loadDiskFolderCache() {
-  const data = loadJson(diskFolderCachePath(), { folders: [] });
-  return data.folders || [];
-}
-
-function saveDiskFolderCache(folders) {
-  if (!folders.length) return;
-  saveJson(diskFolderCachePath(), {
-    updatedAt: new Date().toISOString(),
-    folders,
-  });
-}
 function libraryPath() { return join(groupDir(), "movie-library.json"); }
 function omdbCachePath() { return join(groupDir(), "omdb-cache.json"); }
-function lastSuggestPath() { return join(groupDir(), "movie-night-last-suggest.json"); }
+function lastSearchPath() { return join(groupDir(), "movie-night-last-search.json"); }
+function diskFolderCachePath() { return join(groupDir(), "remembrall-disk-folders.json"); }
+
+function loadJson(path, fallback) {
+  try {
+    return JSON.parse(readFileSync(path, "utf8"));
+  } catch {
+    return fallback;
+  }
+}
+
+function saveJson(path, data) {
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, JSON.stringify(data, null, 2));
+}
 
 function readYamlSimple(path) {
   const out = {};
@@ -91,74 +90,42 @@ function loadPreferences() {
   return prefs;
 }
 
-function loadOmdbKey() {
-  const paths = [
-    "/workspace/extra/credentials/omdb",
-    join(process.env.HOME || "", ".config/nanoclaw/credentials/services/omdb"),
-    join(SKILL_DIR, "credentials"),
-  ];
-  for (const p of paths) {
-    try {
-      const raw = readFileSync(p, "utf8").trim();
-      if (raw && !raw.startsWith("#") && !raw.includes("=")) return raw;
-      const m = raw.match(/API_KEY=(.+)/);
-      if (m) return m[1].trim();
-    } catch {}
+function qualityProfile() {
+  const prefs = loadPreferences();
+  return {
+    category: prefs.preferred_quality || "movX265",
+    resolution: prefs.preferred_resolution || "1080p",
+    codec: "x265",
+  };
+}
+
+function augmentSearchQuery(query, quality) {
+  const q = query.trim();
+  const lower = q.toLowerCase();
+  let out = q;
+  if (quality.resolution && !lower.includes(quality.resolution.toLowerCase())) {
+    out += ` ${quality.resolution}`;
   }
-  return process.env.OMDB_API_KEY || null;
-}
-
-function loadJson(path, fallback) {
-  try {
-    return JSON.parse(readFileSync(path, "utf8"));
-  } catch {
-    return fallback;
+  if (quality.codec && !lower.includes("x265") && !lower.includes("hevc")) {
+    out += ` ${quality.codec}`;
   }
+  return out.trim();
 }
 
-function libFile() { return libraryPath(); }
-function omdbFile() { return omdbCachePath(); }
-function suggestFile() { return lastSuggestPath(); }
-
-function saveJson(path, data) {
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, JSON.stringify(data, null, 2));
+function matchesQualityRelease(name, quality) {
+  const n = name.toLowerCase();
+  if (quality.resolution && !n.includes(quality.resolution.toLowerCase())) return false;
+  if (!n.includes("x265") && !n.includes("hevc")) return false;
+  return true;
 }
 
-function normalizeTitle(s) {
-  return (s || "")
-    .toLowerCase()
-    .replace(/\bpoter\b/g, "potter")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
+function loadDiskFolderCache() {
+  return loadJson(diskFolderCachePath(), { folders: [] }).folders || [];
 }
 
-const FRANCHISE_RULES = [
-  { id: "harry-potter", re: /harry\s*pot(?:ter|er)/i, label: "Harry Potter" },
-  { id: "star-wars", re: /star\s*war/i, label: "Star Wars" },
-  { id: "pirates", re: /pirates(?:\s*of\s*the\s*caribbean)?/i, label: "Pirates of the Caribbean" },
-  { id: "indiana-jones", re: /indiana\s*jones/i, label: "Indiana Jones" },
-  { id: "godfather", re: /godfather/i, label: "The Godfather" },
-  { id: "conjuring", re: /conjuring/i, label: "The Conjuring" },
-  { id: "crocodile-dundee", re: /crocodile\s*dundee/i, label: "Crocodile Dundee" },
-];
-
-function detectFranchise(...texts) {
-  for (const t of texts) {
-    if (!t) continue;
-    for (const rule of FRANCHISE_RULES) {
-      if (rule.re.test(String(t))) return { id: rule.id, label: rule.label };
-    }
-  }
-  return null;
-}
-
-function isCollectionName(name) {
-  return /collection|complete|anthology|trilogy|pack|box\s*set/i.test(name || "");
-}
-
-function filmKey(name) {
-  return normalizeTitle(name).replace(/\bcollection\b.*$/, "").trim();
+function saveDiskFolderCache(folders) {
+  if (!folders.length) return;
+  saveJson(diskFolderCachePath(), { updatedAt: new Date().toISOString(), folders });
 }
 
 function listRemembrallDiskFolders() {
@@ -177,43 +144,84 @@ function listRemembrallDiskFolders() {
   }
 }
 
-async function movieEntryFromName(name, source, cache) {
-  const parsed = parseReleaseName(name);
-  const franchise = detectFranchise(name, parsed.title);
-  const isCollection = isCollectionName(name) || isCollectionName(parsed.title);
-  let meta = {};
-  if (!isCollection || !franchise) {
-    meta = await omdbLookup(parsed.title || name, parsed.year, cache);
-  }
+function diskEntryId(filename) {
+  return `disk-${filename.replace(/[^a-zA-Z0-9]+/g, "-").slice(0, 60)}`;
+}
+
+function libraryEntry(filename, source, id) {
   return {
+    id,
     source,
-    filename: name,
-    path: `smb://remembrall/Movies/${name}`,
-    parsed,
-    franchise: franchise?.id || null,
-    franchiseLabel: franchise?.label || null,
-    isCollection,
-    ...meta,
-    title: meta.title || (franchise?.label && isCollection ? `${franchise.label} Collection` : parsed.title),
+    filename,
+    path: `smb://remembrall/Movies/${filename}`,
   };
 }
 
-function decadeOf(year) {
-  if (!year) return null;
-  return `${Math.floor(year / 10) * 10}s`;
+function runTransmissionList() {
+  const script = "/workspace/extra/skills/transmission/scripts/transmission.mjs";
+  const hostScript = join(process.env.HOME || "", "nanoclaw/skills/transmission/scripts/transmission.mjs");
+  const path = existsSync(script) ? script : hostScript;
+  try {
+    const out = execFileSync("node", [path, "list", "--json"], { encoding: "utf8", maxBuffer: 10 * 1024 * 1024 });
+    return JSON.parse(out);
+  } catch {
+    return [];
+  }
 }
 
-function parseDecadeArg(d) {
-  if (!d) return null;
-  const m = d.match(/(\d{4})s/);
-  if (!m) return null;
-  const start = parseInt(m[1], 10);
-  return { start, end: start + 9 };
+export async function refreshLibrary() {
+  const torrents = runTransmissionList();
+  const byFilename = new Map();
+
+  for (const t of torrents) {
+    if (t.percentDone < 0.95) continue;
+    byFilename.set(t.name, libraryEntry(t.name, "transmission", `tx-${t.id}`));
+  }
+
+  for (const folder of listRemembrallDiskFolders()) {
+    if (byFilename.has(folder)) continue;
+    byFilename.set(folder, libraryEntry(folder, "disk", diskEntryId(folder)));
+  }
+
+  const entries = [...byFilename.values()];
+  const lib = { updatedAt: new Date().toISOString(), entries };
+  saveJson(libraryPath(), lib);
+  return lib;
+}
+
+export function loadLibrary() {
+  const lib = loadJson(libraryPath(), { entries: [], updatedAt: null });
+  if (!lib.entries && lib.movies) {
+    lib.entries = lib.movies.map((m) => ({
+      id: m.id || diskEntryId(m.filename),
+      source: m.source || "unknown",
+      filename: m.filename,
+      path: m.path || `smb://remembrall/Movies/${m.filename}`,
+    }));
+  }
+  return lib;
+}
+
+function loadOmdbKey() {
+  const paths = [
+    "/workspace/extra/credentials/omdb",
+    join(process.env.HOME || "", ".config/nanoclaw/credentials/services/omdb"),
+    join(SKILL_DIR, "credentials"),
+  ];
+  for (const p of paths) {
+    try {
+      const raw = readFileSync(p, "utf8").trim();
+      if (raw && !raw.startsWith("#") && !raw.includes("=")) return raw;
+      const m = raw.match(/API_KEY=(.+)/);
+      if (m) return m[1].trim();
+    } catch {}
+  }
+  return process.env.OMDB_API_KEY || null;
 }
 
 async function omdbLookup(title, year, cache) {
   const key = loadOmdbKey();
-  const cacheKey = `${normalizeTitle(title)}|${year || ""}`;
+  const cacheKey = `${(title || "").toLowerCase()}|${year || ""}`;
   if (cache[cacheKey]) return cache[cacheKey];
   if (!key) {
     return { title, year, imdbRating: null, rated: null, genre: null, runtime: null, plot: null, imdbId: null, _missingKey: true };
@@ -239,287 +247,63 @@ async function omdbLookup(title, year, cache) {
   return entry;
 }
 
-function runTransmissionList() {
-  const script = "/workspace/extra/skills/transmission/scripts/transmission.mjs";
-  const hostScript = join(process.env.HOME || "", "nanoclaw/skills/transmission/scripts/transmission.mjs");
-  const path = existsSync(script) ? script : hostScript;
-  try {
-    const out = execFileSync("node", [path, "list", "--json"], { encoding: "utf8", maxBuffer: 10 * 1024 * 1024 });
-    return JSON.parse(out);
-  } catch {
-    return [];
-  }
-}
-
-export async function refreshLibrary() {
-  const torrents = runTransmissionList();
-  const cache = loadJson(omdbFile(), {});
-  const byFilename = new Map();
-
-  for (const t of torrents) {
-    if (t.percentDone < 0.95) continue;
-    const entry = await movieEntryFromName(t.name, "transmission", cache);
-    entry.id = `tx-${t.id}`;
-    byFilename.set(entry.filename, entry);
-  }
-
-  for (const folder of listRemembrallDiskFolders()) {
-    if (byFilename.has(folder)) continue;
-    const entry = await movieEntryFromName(folder, "disk", cache);
-    entry.id = `disk-${filmKey(folder).replace(/\s+/g, "-")}`;
-    byFilename.set(folder, entry);
-  }
-
-  const manifest = loadJson(join(groupDir(), "library-disk-manifest.json"), { folders: [] });
-  for (const folder of manifest.folders || []) {
-    if (byFilename.has(folder)) continue;
-    const entry = await movieEntryFromName(folder, "manifest", cache);
-    entry.id = `manifest-${filmKey(folder).replace(/\s+/g, "-")}`;
-    byFilename.set(folder, entry);
-  }
-
-  const movies = [...byFilename.values()];
-  saveJson(omdbFile(), cache);
-  const tasteProfile = buildTasteProfile(movies);
-  const lib = { updatedAt: new Date().toISOString(), movies, tasteProfile };
-  saveJson(libFile(), lib);
-  return lib;
-}
-
-export function loadLibrary() {
-  return loadJson(libFile(), { movies: [], tasteProfile: null, updatedAt: null });
-}
-
-function buildTasteProfile(movies) {
-  const genres = {};
-  const decades = {};
-  const ratings = [];
-  for (const m of movies) {
-    if (m.imdbRating) ratings.push(m.imdbRating);
-    if (m.genre) {
-      for (const g of m.genre.split(",").map((s) => s.trim())) {
-        genres[g] = (genres[g] || 0) + 1;
-      }
-    }
-    const d = decadeOf(m.year || m.parsed?.year);
-    if (d) decades[d] = (decades[d] || 0) + 1;
-  }
-  ratings.sort((a, b) => a - b);
-  const topGenres = Object.entries(genres).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([g]) => g);
-  const topDecades = Object.entries(decades).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([d]) => d);
+function mapCandidate(row, source) {
   return {
-    topGenres,
-    topDecades,
-    medianImdb: ratings.length ? ratings[Math.floor(ratings.length / 2)] : null,
-    count: movies.length,
+    id: row.id ?? row.t,
+    name: row.name,
+    seeders: row.seeders ?? row.seeds ?? 0,
+    parsed: row.parsed || parseReleaseName(row.name),
+    source,
   };
 }
 
-function isOwned(candidate, library) {
-  const ct = normalizeTitle(candidate.parsed?.title || candidate.title || candidate.name);
-  const cy = candidate.parsed?.year || candidate.year;
-  const cf = detectFranchise(candidate.title, candidate.parsed?.title, candidate.name);
+export async function findCandidates(query, { limit = 15, rawLimit = 30 } = {}) {
+  if (!query?.trim()) throw new Error("candidates requires --query");
+  const quality = qualityProfile();
+  const searchQuery = augmentSearchQuery(query, quality);
+  const td = loadTdConfig();
+  let rows = [];
 
-  for (const m of library.movies) {
-    if (candidate.imdbId && m.imdbId && candidate.imdbId === m.imdbId) {
-      return { owned: true, match: m, confidence: "exact" };
-    }
+  try {
+    rows = await searchTorrents(td, { query: searchQuery, category: quality.category, sort: "seeders" });
+  } catch {}
 
-    const mf = m.franchise
-      ? { id: m.franchise, label: m.franchiseLabel }
-      : detectFranchise(m.filename, m.title, m.parsed?.title);
-    if (cf && mf && cf.id === mf.id) {
-      return {
-        owned: true,
-        match: m,
-        confidence: m.isCollection ? "collection" : "franchise",
-      };
-    }
-
-    const mt = normalizeTitle(m.title || m.parsed?.title || m.filename);
-    const my = m.year || m.parsed?.year;
-    if (ct && mt && (ct === mt || ct.includes(mt) || mt.includes(ct))) {
-      if (!cy || !my || Math.abs(cy - my) <= 1) {
-        return { owned: true, match: m, confidence: "likely" };
-      }
-    }
-  }
-  return { owned: false };
-}
-
-function passesFilters(meta, filters, prefs) {
-  const minImdb = filters.minImdb ?? prefs.min_imdb ?? 7;
-  if (minImdb != null) {
-    if (meta.imdbRating == null) return false;
-    if (meta.imdbRating < minImdb) return false;
-  }
-  if (filters.mpaa) {
-    if (!meta.rated || meta.rated === "N/A") return false;
-    if (filters.mpaa === "PG-13") {
-      if (!["PG", "PG-13", "G"].includes(meta.rated)) return false;
-    } else if (meta.rated !== filters.mpaa) {
-      return false;
-    }
-  }
-  if (filters.decade) {
-    const y = meta.year || meta.parsed?.year;
-    if (!y || y < filters.decade.start || y > filters.decade.end) return false;
-  }
-  if (prefs.blocked_genres?.length && meta.genre) {
-    for (const bg of prefs.blocked_genres) {
-      if (meta.genre.toLowerCase().includes(bg.toLowerCase())) return false;
-    }
-  }
-  if (prefs.blocked_mpaa?.length && meta.rated) {
-    if (prefs.blocked_mpaa.includes(meta.rated)) return false;
-  }
-  return true;
-}
-
-function scoreCandidate(meta, torrent, taste, prefs) {
-  let score = (torrent.seeders || 0) * 10 + (meta.imdbRating || 0) * 5;
-  if (taste?.topGenres && meta.genre) {
-    for (const g of taste.topGenres.slice(0, 3)) {
-      if (meta.genre.includes(g)) score += 8;
-    }
-  }
-  if (taste?.topDecades && meta.year) {
-    const d = decadeOf(meta.year);
-    if (taste.topDecades.includes(d)) score += 5;
-  }
-  return score;
-}
-
-async function enrichTorrent(t, cache) {
-  const parsed = t.parsed || parseReleaseName(t.name);
-  const meta = await omdbLookup(parsed.title || t.name, parsed.year, cache);
-  return { ...t, parsed, ...meta, title: meta.title || parsed.title, year: meta.year || parsed.year };
-}
-
-function matchesQuery(meta, query) {
-  if (!query) return true;
-  const q = query.toLowerCase();
-  const title = [meta.title, meta.parsed?.title, meta.filename, meta.franchiseLabel]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-  return title.includes(q) || q.split(/\s+/).every((w) => title.includes(w));
-}
-
-export async function librarySearch(filters = {}) {
-  let lib = loadLibrary();
-  if (!lib.movies?.length || !lib.updatedAt) lib = await refreshLibrary();
-  const prefs = loadPreferences();
-  const out = [];
-  for (const m of lib.movies) {
-    const meta = { ...m, parsed: m.parsed || parseReleaseName(m.filename) };
-    if (!passesFilters(meta, filters, prefs)) continue;
-    if (!matchesQuery(meta, filters.query)) continue;
-    out.push(meta);
-  }
-  out.sort((a, b) => (b.imdbRating || 0) - (a.imdbRating || 0));
-  return out;
-}
-
-export async function suggest(opts = {}) {
-  const prefs = loadPreferences();
-  const filters = {
-    minImdb: opts.minImdb ?? prefs.min_imdb,
-    mpaa: opts.mpaa || null,
-    decade: parseDecadeArg(opts.decade),
-    query: opts.query || null,
-  };
-  let lib = loadLibrary();
-  const weekMs = 7 * 24 * 3600 * 1000;
-  if (!lib.updatedAt || Date.now() - new Date(lib.updatedAt).getTime() > weekMs) {
-    lib = await refreshLibrary();
-  }
-  const ownedMatches = (await librarySearch(filters)).slice(0, 5);
-  const cache = loadJson(omdbFile(), {});
-
-  let candidates = [];
-  if (opts.query) {
-    const td = loadTdConfig();
+  if (!rows.length || rows[0]?.source === "rss") {
     try {
-      candidates = await searchTorrents(td, { query: opts.query, category: "movX265", limit: 30 });
-    } catch {}
-    if (!candidates.length || candidates[0]?.source === "rss") {
-      try {
-        const rows = await browseMovies({ query: opts.query, limit: 30 });
-        candidates = rows.map((r) => ({
-          id: r.id,
-          name: r.name,
-          seeders: r.seeds,
-          parsed: parseReleaseName(r.name),
-          source: "browser",
-        }));
-      } catch (e) {
-        if (!candidates.length) throw e;
-      }
+      const browsed = await browseMovies({ query: searchQuery, limit: rawLimit });
+      rows = browsed.map((r) => mapCandidate(r, "browser"));
+    } catch (e) {
+      if (!rows.length) throw e;
+      rows = rows.map((r) => mapCandidate(r, r.source || "tjson"));
     }
   } else {
-    try {
-      const rows = await browseMovies({ decade: opts.decade, limit: 40 });
-      candidates = rows.map((r) => ({
-        id: r.id,
-        name: r.name,
-        seeders: r.seeds,
-        parsed: parseReleaseName(r.name),
-        source: "browser",
-      }));
-    } catch {
-      const td = loadTdConfig();
-      candidates = await searchTorrents(td, { query: "", category: "movX265", limit: 40 });
-    }
+    rows = rows.map((r) => mapCandidate(r, r.source || "tjson"));
   }
 
-  const enriched = [];
-  const collectionOwned = [];
-  const seenOwnedFilms = new Set();
-  for (const c of candidates) {
-    const item = await enrichTorrent(c, cache);
-    if (!passesFilters(item, filters, prefs)) continue;
-    const own = isOwned(item, lib);
-    if (own.owned) {
-      const filmId = item.imdbId || normalizeTitle(item.title || item.parsed?.title);
-      if ((own.confidence === "collection" || own.confidence === "franchise") && !seenOwnedFilms.has(filmId)) {
-        seenOwnedFilms.add(filmId);
-        collectionOwned.push({
-          ...item,
-          match: own.match,
-          viaCollection: own.confidence === "collection",
-          viaFranchise: own.confidence === "franchise",
-        });
-      }
-      continue;
-    }
-    item.score = scoreCandidate(item, c, lib.tasteProfile, prefs);
-    enriched.push(item);
-  }
-  saveJson(omdbFile(), cache);
-  enriched.sort((a, b) => b.score - a.score);
-  const newOptions = enriched.slice(0, opts.limit ?? 5);
-  const owned = [...ownedMatches];
-  for (const m of collectionOwned) {
-    if (owned.some((o) => normalizeTitle(o.title || o.filename) === normalizeTitle(m.title || m.filename))) continue;
-    owned.push(m);
-  }
+  const filtered = rows
+    .filter((r) => matchesQualityRelease(r.name, quality))
+    .sort((a, b) => b.seeders - a.seeders)
+    .slice(0, limit);
+
   const result = {
-    owned,
-    newOptions,
-    filters,
+    query: query.trim(),
+    searchQuery,
+    quality: { category: quality.category, resolution: quality.resolution, codec: quality.codec },
+    candidates: filtered,
     generatedAt: new Date().toISOString(),
   };
-  saveJson(suggestFile(), result);
+  saveJson(lastSearchPath(), result);
   return result;
 }
 
 export async function downloadPick(n) {
-  const last = loadJson(suggestFile(), null);
-  if (!last) throw new Error("No prior suggest — run suggest first");
+  const last = loadJson(lastSearchPath(), null);
+  if (!last?.candidates?.length) throw new Error("No prior candidates — run candidates first");
   const idx = parseInt(n, 10) - 1;
-  if (idx < 0 || idx >= last.newOptions.length) throw new Error(`Invalid pick ${n}; ${last.newOptions.length} new options`);
-  const pick = last.newOptions[idx];
+  if (idx < 0 || idx >= last.candidates.length) {
+    throw new Error(`Invalid pick ${n}; ${last.candidates.length} candidates in last search`);
+  }
+  const pick = last.candidates[idx];
   const td = loadTdConfig();
   const out = `/tmp/movie-${pick.id}.torrent`;
   await downloadTorrent(td, pick.id, out);
@@ -528,40 +312,20 @@ export async function downloadPick(n) {
     : join(process.env.HOME || "", "nanoclaw/skills/transmission/scripts/transmission.mjs");
   execFileSync("node", [txScript, "add", out], { encoding: "utf8" });
   await refreshLibrary();
-  return { pick, torrent: out, message: `Added to Transmission: ${pick.title || pick.name}` };
+  return { pick, torrent: out, message: `Added to Transmission: ${pick.parsed?.title || pick.name}` };
 }
 
-function formatSuggest(result) {
-  const lines = [];
-  if (result.owned.length) {
-    lines.push("ALREADY OWN (matches your search):");
-    for (const m of result.owned) {
-      const r = m.imdbRating != null ? `IMDb ${m.imdbRating}/10` : "rating n/a";
-      let note = ", on remembrall ✓  [no download needed]";
-      if (m.viaCollection && m.match?.filename) {
-        note = ` — in ${m.match.filename} on remembrall ✓  [no download needed]`;
-      } else if (m.viaFranchise && m.match?.title) {
-        note = ` — (${m.match.title}) on remembrall ✓  [no download needed]`;
-      }
-      lines.push(`  - ${m.title || m.parsed?.title} (${m.year || "?"}) — ${r}${note}`);
-    }
-    lines.push("");
-  }
-  if (result.newOptions.length) {
-    lines.push("NEW OPTIONS (TorrentDay):");
-    result.newOptions.forEach((m, i) => {
-      const r = m.imdbRating != null ? `IMDb ${m.imdbRating}/10` : "rating n/a";
-      const mpaa = m.rated || "?";
-      const genre = m.genre || "?";
-      const gb = m.size ? `${(m.size / 1e9).toFixed(1)} GB` : "?";
-      lines.push(`${i + 1}. ${m.title || m.name} (${m.year || "?"}) — ${r}, ${mpaa}, ${genre}`);
-      lines.push(`   TD: ${m.seeders || 0} seeders, ${gb}, x265`);
-      lines.push(`   [download-id: ${m.id}]`);
-    });
-  } else if (!result.owned.length) {
-    lines.push("No matches found. Try broader filters or refresh torrentday login.");
-  }
-  return lines.join("\n");
+function libraryStatus() {
+  const lib = loadLibrary();
+  const diskCache = loadDiskFolderCache();
+  const tx = runTransmissionList().filter((t) => t.percentDone >= 0.95);
+  return {
+    groupDir: groupDir(),
+    entryCount: lib.entries?.length ?? 0,
+    transmissionComplete: tx.length,
+    diskFoldersCached: diskCache.length,
+    updatedAt: lib.updatedAt,
+  };
 }
 
 function parseArgs(argv) {
@@ -585,74 +349,43 @@ async function main() {
     if (sub === "refresh") {
       const lib = await refreshLibrary();
       if (json) console.log(JSON.stringify(lib, null, 2));
-      else console.log(`Library refreshed: ${lib.movies.length} titles`);
+      else console.log(`Library refreshed: ${lib.entries.length} entries`);
       return;
     }
     if (sub === "status") {
-      const lib = loadLibrary();
-      const diskCache = loadDiskFolderCache();
-      const tx = runTransmissionList().filter((t) => t.percentDone >= 0.95);
-      const hp = lib.movies.find((m) => detectFranchise(m.filename, m.title)?.id === "harry-potter");
-      const status = {
-        groupDir: groupDir(),
-        libraryEntries: lib.movies.length,
-        transmissionComplete: tx.length,
-        diskFoldersCached: diskCache.length,
-        harryPotterInLibrary: !!hp,
-        harryPotterLabel: hp?.title || hp?.filename || null,
-        updatedAt: lib.updatedAt,
-      };
+      const status = libraryStatus();
       if (json) console.log(JSON.stringify(status, null, 2));
       else {
-        console.log(`Library: ${status.libraryEntries} entries (${status.groupDir})`);
+        console.log(`Library: ${status.entryCount} entries (${status.groupDir})`);
         console.log(`Transmission: ${status.transmissionComplete} complete | Disk cache: ${status.diskFoldersCached} folders`);
-        console.log(`Harry Potter: ${status.harryPotterInLibrary ? "yes — " + status.harryPotterLabel : "no"}`);
         if (status.updatedAt) console.log(`Updated: ${status.updatedAt}`);
       }
       return;
     }
-    if (sub === "search") {
-      const filters = {
-        minImdb: args["min-imdb"] ? parseFloat(args["min-imdb"]) : undefined,
-        mpaa: args.mpaa,
-        decade: parseDecadeArg(args.decade),
-        query: args.query || args._[2],
-      };
-      const rows = await librarySearch(filters);
-      if (json) console.log(JSON.stringify(rows, null, 2));
-      else for (const m of rows) console.log(`- ${m.title || m.filename} (${m.year}) ${m.imdbRating || ""}`);
-      return;
-    }
     const lib = loadLibrary();
-    if (json) console.log(JSON.stringify(lib.movies, null, 2));
-    else for (const m of lib.movies) console.log(`- ${m.title || m.filename} (${m.year || "?"})`);
+    if (json) console.log(JSON.stringify(lib.entries ?? [], null, 2));
+    else for (const e of lib.entries ?? []) console.log(`- ${e.filename} [${e.source}]`);
     return;
   }
 
-  if (cmd === "taste") {
-    let lib = loadLibrary();
-    if (!lib.tasteProfile) lib = await refreshLibrary();
-    if (json) console.log(JSON.stringify(lib.tasteProfile, null, 2));
-    else {
-      const t = lib.tasteProfile;
-      console.log(`Library: ${t.count} titles`);
-      console.log(`Top genres: ${t.topGenres.join(", ")}`);
-      console.log(`Top decades: ${t.topDecades.join(", ")}`);
-      console.log(`Median IMDb: ${t.medianImdb ?? "n/a"}`);
+  if (cmd === "candidates") {
+    const query = args.query || args._[1];
+    if (!query) {
+      console.error("Usage: movie-night.sh candidates --query \"Title\" [--limit N] [--json]");
+      process.exit(1);
     }
-    return;
-  }
-
-  if (cmd === "suggest") {
-    const result = await suggest({
-      decade: args.decade,
-      minImdb: args["min-imdb"] ? parseFloat(args["min-imdb"]) : undefined,
-      mpaa: args.mpaa,
-      query: args.query || args._[1],
-      limit: args.limit ? parseInt(args.limit, 10) : 5,
+    const result = await findCandidates(query, {
+      limit: args.limit ? parseInt(args.limit, 10) : 15,
     });
     if (json) console.log(JSON.stringify(result, null, 2));
-    else console.log(formatSuggest(result));
+    else {
+      console.log(`Query: ${result.query} → ${result.searchQuery}`);
+      console.log(`Quality: ${result.quality.category} ${result.quality.resolution} ${result.quality.codec}`);
+      result.candidates.forEach((c, i) => {
+        console.log(`${i + 1}. [${c.id}] ${c.seeders}s | ${c.name}`);
+      });
+      console.log(`--- ${result.candidates.length} candidate(s)`);
+    }
     return;
   }
 
@@ -664,16 +397,18 @@ async function main() {
   }
 
   if (cmd === "enrich") {
-    const cache = loadJson(omdbFile(), {});
+    const cache = loadJson(omdbCachePath(), {});
     const name = args._.slice(1).join(" ") || args.query;
     const parsed = parseReleaseName(name);
-    const meta = await omdbLookup(parsed.title, parsed.year, cache);
-    saveJson(omdbFile(), cache);
+    const title = args.title || parsed.title || name;
+    const year = args.year ? parseInt(args.year, 10) : parsed.year;
+    const meta = await omdbLookup(title, year, cache);
+    saveJson(omdbCachePath(), cache);
     console.log(JSON.stringify(meta, null, 2));
     return;
   }
 
-  console.log(`Usage: movie-night.sh <library|library refresh|library status|library search|taste|suggest|download|enrich> [options]`);
+  console.log(`Usage: movie-night.sh <library|library refresh|library status|candidates|download|enrich> [options]`);
   process.exit(1);
 }
 

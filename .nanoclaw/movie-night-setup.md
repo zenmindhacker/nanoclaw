@@ -26,7 +26,7 @@ cd skills/torrentday && npm install
 ## First run
 
 ```bash
-skills/movie-night/scripts/movie-night.sh library refresh
+skills/movie-night/scripts/movie-night.sh library refresh --json
 skills/torrentday/scripts/torrentday.sh refresh-login   # if Browserbase session expired
 ```
 
@@ -34,6 +34,11 @@ skills/torrentday/scripts/torrentday.sh refresh-login   # if Browserbase session
 
 Inside agent containers there is no SSH client — the host writes `remembrall-disk-folders.json` into the group folder when a host-side refresh succeeds; container refreshes reuse that cache. Run `library refresh` on the **host** after adding new disk-only folders, or rely on the cached folder list.
 
-Collection packs (e.g. `Harry.Poter.Collection…`) match individual franchise films via franchise detection — no need to download sequels you already own on disk.
+## v2 architecture
 
-Runtime cache (`movie-library.json`, `omdb-cache.json`) lives in the agent group folder and is gitignored via `agents/.gitignore`.
+- **Code:** library index (filename only), `candidates` (1080p x265 movX265 + seeders), `omdb enrich`, `download N` from last search
+- **Agent (Cleo):** ownership by reading filenames, taste/MPAA/decade filters, presentation
+
+After upgrading from v1, run `library refresh` once — entry format changes from OMDB-enriched `movies` to slim `entries`.
+
+Runtime cache (`movie-library.json`, `omdb-cache.json`, `movie-night-last-search.json`, `remembrall-disk-folders.json`) lives in the agent group folder and is gitignored via `agents/.gitignore`.

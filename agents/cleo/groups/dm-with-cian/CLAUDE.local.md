@@ -25,25 +25,44 @@ RPC: `100.82.7.74:9091` (Tailscale IP — not hostname). Web UI: http://remembra
 
 Tool research: `transmission-tools-research.md` in this folder (stig/tremc/torque URLs).
 
-## Movie Night
+## Movie Night (v2)
 
-Use **movie-night** and **torrentday** skills for finding and downloading films.
+Use **movie-night** and **torrentday** skills. **Always use `--json`** for machine steps; prose is for the user only.
 
 ```bash
-/workspace/extra/skills/movie-night/scripts/movie-night.sh library refresh   # rebuild index — run before ownership checks
-/workspace/extra/skills/movie-night/scripts/movie-night.sh library status     # verify count (~102) + Harry Potter yes/no
-/workspace/extra/skills/movie-night/scripts/movie-night.sh library search --query "Harry Potter"
-/workspace/extra/skills/movie-night/scripts/movie-night.sh suggest --decade 1980s --min-imdb 7 --mpaa PG-13
-/workspace/extra/skills/movie-night/scripts/movie-night.sh download 2   # after suggest
+/workspace/extra/skills/movie-night/scripts/movie-night.sh library refresh --json
+/workspace/extra/skills/movie-night/scripts/movie-night.sh library status --json
+/workspace/extra/skills/movie-night/scripts/movie-night.sh library list --json
+/workspace/extra/skills/movie-night/scripts/movie-night.sh candidates --query "Inception" --json
+/workspace/extra/skills/movie-night/scripts/movie-night.sh enrich --title "Inception" --year 2010 --json
+/workspace/extra/skills/movie-night/scripts/movie-night.sh download 2 --json   # only after user picks from current list
 /workspace/extra/skills/torrentday/scripts/torrentday.sh refresh-login  # if TD session expired
 ```
 
-**Library refresh:** Always use the script above (writes to `/workspace/agent/`). After refresh, `library status` should show **~102 entries** and **Harry Potter: yes**. If you only see ~25, the refresh failed — run again; do not guess from raw folder counts.
+### Workflow
 
-**Owned collections:** Franchise packs on remembrall (e.g. `Harry.Poter.Collection…`) count as owning all films in that series — use `suggest` / `library search`, not title-only matching.
+1. `library refresh --json` then `library status --json` — verify `entryCount` (~102), cite `groupDir` (`/workspace/agent`)
+2. `library list --json` when checking ownership
+3. `candidates --query "Title" --json` — code applies movX265 + 1080p + x265 + seeders; you pick the film title only
+4. For each candidate, check ownership by reading library **filenames** (no code regex)
+5. `enrich --title T [--year Y] --json` only for titles you're about to show (IMDb, MPAA, genre)
+6. Apply taste/content filters from `/workspace/agent/movie-preferences.json` (min IMDb, blocked genres, MPAA, decade) — **do not** override quality; `candidates` already enforces 1080p x265
+7. Present numbered list of **new** options only
+8. Wait for user to pick a number → `download N --json`
 
-**Flow:** suggest shows owned matches first (no download needed), then new TorrentDay options. Always wait for user to pick before `download`.
+### Ownership rules (your judgment, not code)
+
+- Before listing something as new, scan `library list --json` filenames
+- Collection folders (name contains `Collection`, or obvious series pack) count as owning all films in that series — e.g. `Harry.Poter.Collection…` covers Harry Potter even with the typo
+- When claiming owned, cite the exact `filename` from the library
+- If unsure, say so — never invent counts or infer from `diskFoldersCached` vs `entryCount`
+
+### Never
+
+- Call `download` without the user picking a number from the **current** candidate list
+- Override quality (category, 1080p, x265) — that stays in `candidates`
+- Use removed commands: `suggest`, `library search`, `taste`
 
 **Triggers:** movie night, find a movie, something to watch, what do I have, do I already own.
 
-Preferences: `/workspace/agent/movie-preferences.json` + skill defaults.
+Preferences: `/workspace/agent/movie-preferences.json` (taste/content) + skill `preferences.json` (quality defaults).

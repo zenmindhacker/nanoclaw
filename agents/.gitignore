@@ -1,6 +1,7 @@
-# Runtime movie-night state (rebuilt by library refresh / suggest)
+# Runtime movie-night state (rebuilt by library refresh / candidates)
 **/movie-library.json
 **/omdb-cache.json
+**/movie-night-last-search.json
 **/movie-night-last-suggest.json
 **/library-disk-manifest.json
 **/remembrall-disk-folders.json

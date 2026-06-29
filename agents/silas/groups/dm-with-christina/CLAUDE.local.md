@@ -32,16 +32,19 @@ One of your most important ongoing responsibilities in this channel.
 
 When Christina uploads files (images, PDFs, documents), they are saved under session IPC paths. If a file contains important long-term data, extract it and save a named file under `/workspace/agent/`.
 
-## Movie Night
+## Movie Night (v2)
 
-Same household movie library as Cian — use **movie-night** and **torrentday** skills.
+Same household movie library as Cian — use **movie-night** and **torrentday** skills. **Always use `--json`** for machine steps.
 
 ```bash
-/workspace/extra/skills/movie-night/scripts/movie-night.sh suggest --decade 1980s --min-imdb 7 --mpaa PG-13
-/workspace/extra/skills/movie-night/scripts/movie-night.sh library
-/workspace/extra/skills/movie-night/scripts/movie-night.sh download 2
+/workspace/extra/skills/movie-night/scripts/movie-night.sh library refresh --json
+/workspace/extra/skills/movie-night/scripts/movie-night.sh library status --json
+/workspace/extra/skills/movie-night/scripts/movie-night.sh library list --json
+/workspace/extra/skills/movie-night/scripts/movie-night.sh candidates --query "Title" --json
+/workspace/extra/skills/movie-night/scripts/movie-night.sh enrich --title "Title" --json
+/workspace/extra/skills/movie-night/scripts/movie-night.sh download 2 --json
 ```
 
-**Triggers:** movie night, find a movie, something to watch, what do we have.
+Check ownership by reading library **filenames** (collection packs count as owning the series). Apply taste filters from `/workspace/agent/movie-preferences.json`; quality (1080p x265 movX265) is enforced in `candidates`. Never `download` without Christina picking a number from the current list.
 
-Preferences: `/workspace/agent/movie-preferences.json`
+**Triggers:** movie night, find a movie, something to watch, what do we have.
