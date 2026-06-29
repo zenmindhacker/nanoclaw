@@ -32,6 +32,8 @@ skills/torrentday/scripts/torrentday.sh refresh-login   # if Browserbase session
 
 `library refresh` merges **Transmission** (complete torrents) with a **remembrall disk scan** (`ssh root@100.82.7.74 ls /mnt/movies`). Cleo needs its SSH key in remembrall’s `authorized_keys` (one-time). Override host with `REMEMBRALL_SSH` if needed.
 
+Inside agent containers there is no SSH client — the host writes `remembrall-disk-folders.json` into the group folder when a host-side refresh succeeds; container refreshes reuse that cache. Run `library refresh` on the **host** after adding new disk-only folders, or rely on the cached folder list.
+
 Collection packs (e.g. `Harry.Poter.Collection…`) match individual franchise films via franchise detection — no need to download sequels you already own on disk.
 
 Runtime cache (`movie-library.json`, `omdb-cache.json`) lives in the agent group folder and is gitignored via `agents/.gitignore`.

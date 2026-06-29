@@ -12,7 +12,10 @@ import { browseMovies } from "../../torrentday/scripts/browserbase.mjs";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SKILL_DIR = join(__dirname, "..");
 const GROUP_DIR = "/workspace/group";
+const AGENT_DIR = "/workspace/agent";
+
 function groupDir() {
+  if (existsSync(AGENT_DIR)) return AGENT_DIR;
   if (existsSync(GROUP_DIR)) return GROUP_DIR;
   const home = process.env.HOME || "";
   const agentGroup = home.includes("christina")
@@ -26,6 +29,23 @@ function groupDir() {
     } catch {}
   }
   return "/tmp/movie-night";
+}
+
+function diskFolderCachePath() {
+  return join(groupDir(), "remembrall-disk-folders.json");
+}
+
+function loadDiskFolderCache() {
+  const data = loadJson(diskFolderCachePath(), { folders: [] });
+  return data.folders || [];
+}
+
+function saveDiskFolderCache(folders) {
+  if (!folders.length) return;
+  saveJson(diskFolderCachePath(), {
+    updatedAt: new Date().toISOString(),
+    folders,
+  });
 }
 function libraryPath() { return join(groupDir(), "movie-library.json"); }
 function omdbCachePath() { return join(groupDir(), "omdb-cache.json"); }
@@ -55,7 +75,6 @@ function readYamlSimple(path) {
 function loadPreferences() {
   const paths = [
     join(groupDir(), "movie-preferences.json"),
-    "/workspace/agent/movie-preferences.json",
     join(SKILL_DIR, "preferences.json"),
     join(SKILL_DIR, "preferences.yaml"),
   ];
@@ -150,9 +169,11 @@ function listRemembrallDiskFolders() {
       ["-o", "BatchMode=yes", "-o", "ConnectTimeout=8", "-o", "StrictHostKeyChecking=accept-new", host, "ls -1 /mnt/movies"],
       { encoding: "utf8", maxBuffer: 8 * 1024 * 1024 },
     );
-    return out.split("\n").map((l) => l.trim()).filter((n) => n && !n.startsWith("."));
+    const folders = out.split("\n").map((l) => l.trim()).filter((n) => n && !n.startsWith("."));
+    saveDiskFolderCache(folders);
+    return folders;
   } catch {
-    return [];
+    return loadDiskFolderCache();
   }
 }
 
