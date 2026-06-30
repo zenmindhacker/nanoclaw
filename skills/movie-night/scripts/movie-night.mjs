@@ -8,7 +8,6 @@ import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { execFileSync } from "child_process";
 import { loadTdConfig, parseReleaseName, searchTorrents, downloadTorrent, listCategories, resolveCategories } from "../../torrentday/scripts/torrentday.mjs";
-import { browseMovies } from "../../torrentday/scripts/browserbase.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SKILL_DIR = join(__dirname, "..");
@@ -121,17 +120,21 @@ export async function findCandidates(query, { limit = 15, rawLimit = 30, categor
     rows = await searchTorrents(td, { query: searchQuery, category: categoryName, sort: "seeders" });
   } catch {}
 
-  if (!rows.length || rows[0]?.source === "rss") {
-    try {
-      const browsed = await browseMovies({ query: searchQuery, limit: rawLimit, category: categoryName });
-      rows = browsed.map((r) => mapCandidate(r, "browser"));
-    } catch (e) {
-      if (!rows.length) throw e;
-      rows = rows.map((r) => mapCandidate(r, r.source || "tjson"));
-    }
-  } else {
-    rows = rows.map((r) => mapCandidate(r, r.source || "tjson"));
+  const tjsonOk = rows.length > 0 && rows[0]?.source !== "rss";
+  if (!tjsonOk) {
+    return {
+      query: searchQuery,
+      searchQuery,
+      category: categoryName,
+      categoryIds,
+      candidates: [],
+      authRequired: true,
+      recommendation: "torrentday.sh refresh-login",
+      generatedAt: new Date().toISOString(),
+    };
   }
+
+  rows = rows.map((r) => mapCandidate(r, r.source || "tjson"));
 
   const candidates = rows
     .sort((a, b) => b.seeders - a.seeders)

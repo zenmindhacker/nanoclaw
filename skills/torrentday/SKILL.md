@@ -25,9 +25,9 @@ torrentday.sh search "star trek" --category movPACKS [--json]
 torrentday.sh search-imdb tt0099685 --category movX265
 torrentday.sh download <torrent-id> -o /tmp/movie.torrent
 torrentday.sh parse "Goodfellas.1990.1080p.x265-LAMA"
-torrentday.sh health [--json]
-torrentday.sh browse movies [--category movPACKS] [--query "Dune"] [--limit 25] [--json]
-torrentday.sh refresh-login
+torrentday.sh health [--json]          # unified tjson + browser + download probe
+torrentday.sh refresh-login [--json]   # login + scrape passkey from profile
+torrentday.sh apply-credential-refresh # host helper — see scripts/apply-credential-refresh.mjs
 torrentday.sh bb-health [--json]
 ```
 
@@ -47,7 +47,19 @@ Comma-separated: `--category movX265,movHD`
 
 Browse/search URLs use `t?<id>=1&q=...&cata=yes` (packs: `t?13=1&q=...`).
 
-## Chain to transmission
+## Auth recovery
+
+When `health --json` returns `recommendation: "refresh-login"`:
+
+```bash
+torrentday.sh refresh-login --json
+# If hostUpdateRequired:
+node skills/torrentday/scripts/apply-credential-refresh.mjs --user cian --file /tmp/td-refresh.json
+node skills/torrentday/scripts/apply-credential-refresh.mjs --user christina --file /tmp/td-refresh.json
+torrentday.sh health --json
+```
+
+Never ask the user to paste a passkey manually.
 
 ```bash
 torrentday.sh download 7721138 -o /tmp/movie.torrent

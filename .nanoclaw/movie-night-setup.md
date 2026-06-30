@@ -23,6 +23,19 @@ cd skills/torrentday && npm install
 # Ensure host credentials exist (see table above)
 ```
 
+## Auth recovery (stale passkey)
+
+When `torrentday.sh health --json` returns `recommendation: "refresh-login"`:
+
+```bash
+skills/torrentday/scripts/torrentday.sh refresh-login --json > /tmp/td-refresh.json
+node skills/torrentday/scripts/apply-credential-refresh.mjs --user cian --file /tmp/td-refresh.json
+node skills/torrentday/scripts/apply-credential-refresh.mjs --user christina --file /tmp/td-refresh.json
+skills/torrentday/scripts/torrentday.sh health --json
+```
+
+`movie-night candidates` returns `{ authRequired: true }` when t.json fails — run refresh-login before browsing via Browserbase.
+
 ## First run
 
 ```bash

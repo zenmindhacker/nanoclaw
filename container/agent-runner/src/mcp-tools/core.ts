@@ -62,6 +62,34 @@ function resolveInReplyTo(channelType: string, platformId: string): string | nul
 }
 
 /**
+ * Resolve latest inbound thread_id for a channel when session routing has none.
+ */
+function resolveLatestInboundThread(channelType: string, platformId: string): string | null {
+  try {
+    const row = getInboundDb()
+      .prepare(
+        `SELECT thread_id FROM messages_in
+         WHERE channel_type = ? AND platform_id = ?
+           AND thread_id IS NOT NULL AND thread_id != ''
+         ORDER BY seq DESC LIMIT 1`,
+      )
+      .get(channelType, platformId) as { thread_id: string } | undefined;
+    return row?.thread_id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function inheritThreadId(
+  channelType: string,
+  platformId: string,
+  sessionThreadId: string | null,
+): string | null {
+  if (sessionThreadId) return sessionThreadId;
+  return resolveLatestInboundThread(channelType, platformId);
+}
+
+/**
  * Resolve a destination name to routing fields.
  *
  * If `to` is omitted, use the session's default reply routing (channel +
@@ -82,7 +110,7 @@ function resolveRouting(
       return {
         channel_type: session.channel_type,
         platform_id: session.platform_id,
-        thread_id: session.thread_id,
+        thread_id: inheritThreadId(session.channel_type, session.platform_id, session.thread_id),
         resolvedName: '(current conversation)',
       };
     }
@@ -103,8 +131,13 @@ function resolveRouting(
     // If the destination is the same channel the session is bound to,
     // preserve the thread_id so replies land in the correct thread.
     const session = getSessionRouting();
-    const threadId =
-      session.channel_type === dest.channelType && session.platform_id === dest.platformId ? session.thread_id : null;
+    const threadId = inheritThreadId(
+      dest.channelType!,
+      dest.platformId!,
+      session.channel_type === dest.channelType && session.platform_id === dest.platformId
+        ? session.thread_id
+        : null,
+    );
     return {
       channel_type: dest.channelType!,
       platform_id: dest.platformId!,

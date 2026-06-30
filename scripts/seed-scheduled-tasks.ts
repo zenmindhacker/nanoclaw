@@ -5,6 +5,7 @@
  * Usage:
  *   pnpm exec tsx scripts/seed-scheduled-tasks.ts
  *   pnpm exec tsx scripts/seed-scheduled-tasks.ts --dry-run
+ *   pnpm exec tsx scripts/seed-scheduled-tasks.ts --session sess-1782170556889-ydslvi
  */
 import fs from 'fs';
 import path from 'path';
@@ -26,8 +27,23 @@ interface ManifestTask {
   script?: string | null;
 }
 
+/** Preferred messaging group per agent folder (Silas Christina DM). */
+const PREFERRED_MESSAGING_GROUP: Record<string, string> = {
+  'dm-with-christina': 'mg-1779388264578-jk5zho',
+};
+
+function parseSessionOverride(argv: string[]): string | null {
+  const idx = argv.indexOf('--session');
+  if (idx === -1) return null;
+  const id = argv[idx + 1];
+  if (!id) {
+    console.error('--session requires a session id');
+    process.exit(1);
+  }
+  return id;
+}
+
 function nextCronRunUtc(cron: string): string {
-  // Daily at HH:MM UTC — manifest uses "0 11 * * *" style (minute hour dom month dow)
   const parts = cron.trim().split(/\s+/);
   if (parts.length < 5) return new Date().toISOString();
   const minute = parseInt(parts[0], 10);
@@ -44,14 +60,48 @@ function nextCronRunUtc(cron: string): string {
   return next.toISOString();
 }
 
-function findSessionForAgent(agentGroupId: string): string | null {
+/**
+ * Pick the best active session for seeding — not first alphabetically.
+ * 1. Prefer active session on canonical messaging group for this agent folder.
+ * 2. Fallback: most recently active session (last_active DESC).
+ */
+export function findSessionForAgent(
+  agentGroupId: string,
+  agentFolder: string,
+  v2Db: Database.Database,
+): string | null {
   const root = path.join(DATA_DIR, 'v2-sessions', agentGroupId);
   if (!fs.existsSync(root)) return null;
-  const sessions = fs.readdirSync(root).filter((name) => {
-    const p = path.join(root, name, 'inbound.db');
-    return fs.existsSync(p);
-  });
-  return sessions[0] ?? null;
+
+  const onDisk = new Set(
+    fs.readdirSync(root).filter((name) => fs.existsSync(path.join(root, name, 'inbound.db'))),
+  );
+  if (onDisk.size === 0) return null;
+
+  const preferredMg = PREFERRED_MESSAGING_GROUP[agentFolder];
+  const rows = v2Db
+    .prepare(
+      `SELECT id, messaging_group_id, last_active, created_at
+       FROM sessions
+       WHERE agent_group_id = ? AND status = 'active'
+       ORDER BY last_active DESC, created_at DESC`,
+    )
+    .all(agentGroupId) as Array<{
+    id: string;
+    messaging_group_id: string | null;
+    last_active: string | null;
+    created_at: string;
+  }>;
+
+  const active = rows.filter((r) => onDisk.has(r.id));
+  if (active.length === 0) return [...onDisk].sort()[0] ?? null;
+
+  if (preferredMg) {
+    const canonical = active.find((r) => r.messaging_group_id === preferredMg);
+    if (canonical) return canonical.id;
+  }
+
+  return active[0]!.id;
 }
 
 function loadManifest(): ManifestTask[] {
@@ -62,6 +112,7 @@ function loadManifest(): ManifestTask[] {
 
 function main(): void {
   const dryRun = process.argv.includes('--dry-run');
+  const sessionOverride = parseSessionOverride(process.argv);
   const v2DbPath = path.join(DATA_DIR, 'v2.db');
   if (!fs.existsSync(v2DbPath)) {
     console.error('v2.db not found — set DATA_DIR or run from install root');
@@ -84,7 +135,18 @@ function main(): void {
         continue;
       }
 
-      const sessionId = findSessionForAgent(ag.id);
+      let sessionId = sessionOverride;
+      if (sessionId) {
+        const inboundPath = path.join(DATA_DIR, 'v2-sessions', ag.id, sessionId, 'inbound.db');
+        if (!fs.existsSync(inboundPath)) {
+          console.error(`SKIP:session not found folder=${task.agentFolder} session=${sessionId}`);
+          skipped++;
+          continue;
+        }
+      } else {
+        sessionId = findSessionForAgent(ag.id, task.agentFolder, db);
+      }
+
       if (!sessionId) {
         console.error(`SKIP:no session for folder=${task.agentFolder}`);
         skipped++;

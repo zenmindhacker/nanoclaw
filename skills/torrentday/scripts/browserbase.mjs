@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /** Browserbase wrapper for TorrentDay login + browse. */
-import { readFileSync } from "fs";
+import { readFileSync, writeFileSync, accessSync, constants } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { chromium } from "playwright-core";
@@ -158,6 +158,108 @@ export async function browseMovies(opts = {}) {
   });
 }
 
+async function scrapeProfileCredentials(page) {
+  await page.goto("https://www.torrentday.com/user.php", {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
+  await page.waitForTimeout(2500);
+  const scraped = await page.evaluate(() => {
+    const html = document.documentElement.innerHTML;
+    const passkey =
+      html.match(/torrent_pass=([a-f0-9]{32})/i)?.[1] ||
+      html.match(/passkey=([a-f0-9]{32})/i)?.[1] ||
+      null;
+    const rssHref =
+      [...document.querySelectorAll("a[href*='rss'], input[value*='rss']")].map(
+        (el) => el.getAttribute("href") || el.getAttribute("value"),
+      ).find((h) => h && /rss/i.test(h)) || null;
+    const rssFromHtml = html.match(/(https:\/\/[^"'\s<>]+rss[^"'\s<>]*)/i)?.[1]?.replace(/&amp;/g, "&");
+    return { passkey, rss: rssHref || rssFromHtml || null };
+  });
+  const cookies = await page.context().cookies();
+  const uid = cookies.find((c) => c.name === "uid")?.value || null;
+  return {
+    passkey: scraped.passkey,
+    uid,
+    rssMovX265: scraped.rss,
+  };
+}
+
+const CRED_PATHS = [
+  "/workspace/extra/credentials/torrentday",
+  join(process.env.HOME || "", ".config/nanoclaw/credentials/services/torrentday"),
+  join(__dirname, "..", "credentials"),
+];
+
+function findWritableCredPath() {
+  for (const p of CRED_PATHS) {
+    try {
+      accessSync(p, constants.W_OK);
+      return p;
+    } catch {
+      try {
+        accessSync(dirname(p), constants.W_OK);
+        return p;
+      } catch {}
+    }
+  }
+  return null;
+}
+
+function updateCredFile(filePath, updates) {
+  let lines = [];
+  try {
+    lines = readFileSync(filePath, "utf8").split("\n");
+  } catch {}
+  const keys = new Set(Object.keys(updates));
+  const kept = lines.filter((line) => {
+    const t = line.trim();
+    if (!t || t.startsWith("#")) return true;
+    const i = t.indexOf("=");
+    if (i === -1) return true;
+    return !keys.has(t.slice(0, i).trim());
+  });
+  for (const [k, v] of Object.entries(updates)) {
+    if (v) kept.push(`${k}=${v}`);
+  }
+  writeFileSync(filePath, kept.filter(Boolean).join("\n") + "\n");
+}
+
+export async function refreshLoginAndScrape() {
+  return withBrowser(async ({ page, tdCfg, session }) => {
+    await ensureLoggedIn(page, tdCfg);
+    const scraped = await scrapeProfileCredentials(page);
+    const updates = {};
+    if (scraped.passkey) updates.PASSKEY = scraped.passkey;
+    if (scraped.uid) updates.UID = scraped.uid;
+    if (scraped.rssMovX265) updates.RSS_MOVX265 = scraped.rssMovX265;
+
+    const writable = findWritableCredPath();
+    if (writable && Object.keys(updates).length) {
+      updateCredFile(writable, updates);
+      return {
+        ok: true,
+        hostUpdateRequired: false,
+        sessionId: session.id,
+        replay: `https://browserbase.com/sessions/${session.id}`,
+        updated: Object.keys(updates),
+        ...scraped,
+      };
+    }
+
+    return {
+      ok: true,
+      hostUpdateRequired: true,
+      sessionId: session.id,
+      replay: `https://browserbase.com/sessions/${session.id}`,
+      passkey: scraped.passkey,
+      uid: scraped.uid,
+      rssMovX265: scraped.rssMovX265,
+    };
+  });
+}
+
 export async function browserHealth() {
   return withBrowser(async ({ page, tdCfg, session }) => {
     await ensureLoggedIn(page, tdCfg);
@@ -184,8 +286,9 @@ async function main() {
   }
 
   if (cmd === "refresh-login") {
-    const h = await browserHealth();
-    console.log(json ? JSON.stringify({ ok: true, ...h }, null, 2) : `Login OK — ${h.replay}`);
+    const h = await refreshLoginAndScrape();
+    if (json) console.log(JSON.stringify(h, null, 2));
+    else console.log(h.hostUpdateRequired ? `Login OK — host update required (${h.replay})` : `Login OK — credentials updated (${h.replay})`);
     return;
   }
 

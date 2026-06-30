@@ -80,3 +80,13 @@ If user pastes a torrent URL/ID: `torrentday.sh download <id>` then transmission
 **Triggers:** movie night, find a movie, something to watch, what do I have, do I already own.
 
 Preferences: `/workspace/agent/movie-preferences.json` + skill `preferences.json`.
+
+### TorrentDay auth recovery (never ask user to paste a passkey)
+
+1. `torrentday.sh health --json`
+2. If `tjson` or `downloadProbe` fail → `torrentday.sh refresh-login --json`
+3. If `hostUpdateRequired` → refresh credentials on cleo host (`apply-credential-refresh` for cian + christina)
+4. `torrentday.sh health --json` again
+5. Then movie-night candidates / download
+
+Do not use Browserbase browse when t.json works (slow, expensive). Do not claim "TorrentDay down" when only t.json is broken — run refresh-login first.

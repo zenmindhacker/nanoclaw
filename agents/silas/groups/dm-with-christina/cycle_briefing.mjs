@@ -384,13 +384,19 @@ ${(() => { const q = getDailyQuote(b.date); return `_"${q.text}"_ — ${q.author
 _${getDailySutra(b.date)}_`;
 }
 
+function todayEastern() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date());
+}
+
 function resolveDateArg(argv) {
-  const flagIdx = argv.indexOf('--task-json');
+  const flagIdx = argv.indexOf("--task-json");
   if (flagIdx !== -1) {
-    return argv[flagIdx + 1] || new Date().toISOString().split('T')[0];
+    const next = argv[flagIdx + 1];
+    if (next && /^\d{4}-\d{2}-\d{2}$/.test(next)) return next;
+    return todayEastern();
   }
   const positional = argv.find((a) => /^\d{4}-\d{2}-\d{2}$/.test(a));
-  return positional || new Date().toISOString().split('T')[0];
+  return positional || todayEastern();
 }
 
 // Scheduled-task pre-script: last stdout line must be JSON with wakeAgent + data.
@@ -404,7 +410,7 @@ if (process.argv.includes('--task-json')) {
     }),
   );
 } else {
-  const dateArg = process.argv[2] || new Date().toISOString().split('T')[0];
+  const dateArg = process.argv[2] || todayEastern();
   const briefing = getDailyBriefing(dateArg);
   console.log(formatBriefing(briefing));
 }

@@ -150,8 +150,32 @@ Shared repos are mounted at `/workspace/extra/repos/` (read-write for all groups
 
 **Standing rule:** Whenever you write or edit files inside any repo, always commit and push immediately after — silently, without asking. Use a sensible commit message. Christina should never need to think about git.
 
+**Never** create or write to `lane-family-ops` — that path is retired. Use `family` instead.
+
 Available repos:
+- `/workspace/extra/repos/family` — household content (chore-quest, movie-night profiles, family protocols)
+- `/workspace/extra/repos/coaching` — coaching notes and transcripts (`christina/`, `kevin/`)
 - `/workspace/extra/repos/connected-tutoring` — Connected Tutoring business
+
+### Git push (christina@cleo host)
+
+`gh` is not installed on the host. Do not rely on it.
+
+Before push, verify the remote has no placeholder token:
+```bash
+git remote get-url origin   # must be https://github.com/zenmindhacker/....git — no "placeholder"
+```
+
+Push using the credentials file (mounted at `/workspace/extra/credentials/github-transcript-token`):
+```bash
+git pull --rebase origin main
+export GITHUB_TOKEN_FILE=/workspace/extra/credentials/github-transcript-token
+export GIT_ASKPASS=/tmp/git-askpass.sh
+# GIT_ASKPASS script: Username → x-access-token, Password → contents of GITHUB_TOKEN_FILE
+git push origin main
+```
+
+Always `git pull --rebase` before push.
 
 ---
 
@@ -173,8 +197,7 @@ Do not use `delegate speech` for Silas voice notes. Keep any future voice tuning
 
 ## Credentials in Environment
 
-The following are available as environment variables (`$VAR_NAME`) in your shell:
-- `GITHUB_TOKEN` / `GH_TOKEN` — GitHub Personal Access Token (use with `gh` CLI or API calls)
+Git auth for repo pushes uses `/workspace/extra/credentials/github-transcript-token` via GIT_ASKPASS (see Git Repos above). Do not embed tokens in remote URLs.
 
 ## Security
 

@@ -5,6 +5,7 @@ import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { pipeline } from "stream/promises";
 import { Readable } from "stream";
+import { execFileSync } from "child_process";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -204,17 +205,67 @@ export async function downloadTorrent(cfg, torrentId, outputPath) {
   return { path: outputPath, size: buf.length };
 }
 
+export async function probeDownload(cfg) {
+  try {
+    const rows = await searchTorrents(cfg, { query: "the", categories: [48], limit: 1 });
+    const id = rows.find((r) => r.id && r.source !== "rss")?.id;
+    if (!id) return { ok: false, error: "no torrent id for probe" };
+    const url = `${cfg.baseUrl}/download.php/${id}/download.torrent?torrent_pass=${cfg.passkey}`;
+    const res = await fetch(url, {
+      method: "GET",
+      headers: { Cookie: `uid=${cfg.uid}; pass=${cfg.passkey}` },
+    });
+    if (!res.ok) return { ok: false, error: `download HTTP ${res.status}` };
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf[0] !== 0x64) return { ok: false, error: "response is not a torrent file" };
+    return { ok: true, torrentId: id };
+  } catch (e) {
+    return { ok: false, error: e.message || String(e) };
+  }
+}
+
+function runBrowserHealthJson() {
+  try {
+    const out = execFileSync("node", [join(__dirname, "browserbase.mjs"), "health", "--json"], {
+      encoding: "utf8",
+      timeout: 120_000,
+    });
+    return JSON.parse(out.trim());
+  } catch (e) {
+    const msg = e.stderr?.toString?.() || e.stdout?.toString?.() || e.message || String(e);
+    return { ok: false, error: msg.slice(0, 500) };
+  }
+}
+
 export async function healthCheck(cfg) {
-  const results = { tjson: false, rss: false, download: null, error: null };
+  let tjsonOk = false;
+  let sampleCount = 0;
+  let tjsonError = null;
   try {
     const rows = await searchTorrents(cfg, { query: "test", categories: [48], limit: 5 });
-    results.tjson = rows.length > 0 && rows[0]?.source !== "rss";
-    results.rss = rows.some((r) => r.source === "rss") || rows.length > 0;
-    results.sampleCount = rows.length;
+    tjsonOk = rows.length > 0 && rows[0]?.source !== "rss";
+    sampleCount = rows.length;
+    if (!tjsonOk && rows.length === 0) tjsonError = "t.json returned no results";
+    else if (!tjsonOk) tjsonError = "rss fallback only";
   } catch (e) {
-    results.error = e.message;
+    tjsonError = e.message;
   }
-  return results;
+
+  const browser = runBrowserHealthJson();
+  const downloadProbe = await probeDownload(cfg);
+
+  let recommendation = "ok";
+  if (!tjsonOk || !downloadProbe.ok) recommendation = "refresh-login";
+  else if (!browser.ok && /402|limit|minutes/i.test(String(browser.error || ""))) {
+    recommendation = "upgrade-browserbase";
+  }
+
+  return {
+    tjson: { ok: tjsonOk, sampleCount, error: tjsonError },
+    browser: { ok: !!browser.ok, error: browser.error || null, sessionId: browser.sessionId || null },
+    downloadProbe,
+    recommendation,
+  };
 }
 
 function usage() {
@@ -249,8 +300,8 @@ async function main() {
   if (cmd === "health") {
     const h = await healthCheck(cfg);
     if (json) console.log(JSON.stringify(h, null, 2));
-    else console.log(h.tjson ? `OK (${h.sampleCount} results in probe)` : `FAIL: ${h.error}`);
-    process.exit(h.tjson ? 0 : 1);
+    else console.log(h.recommendation === "ok" ? "OK" : `NEEDS: ${h.recommendation}`);
+    process.exit(h.recommendation === "ok" ? 0 : 1);
   }
 
   if (cmd === "search" || cmd === "search-imdb") {

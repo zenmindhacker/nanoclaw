@@ -58,7 +58,7 @@ ssh cian@cleo-lc.cognitivetech.net \
 | Tier | Where | What it checks |
 |------|-------|----------------|
 | **0** | Local / CI | `pnpm test`, `pnpm run typecheck`, `bun test` in agent-runner |
-| **1** | Server | Host service, Docker image, OAuth health (Cleo), mnemon/wiki structure, skill audit, read-only skill scripts, Slack wiring, **CLAUDE composition** |
+| **1** | Server | Host service, Docker image, OAuth health (Cleo), mnemon/wiki structure, skill audit, read-only skill scripts, Slack wiring, **CLAUDE composition**, **Silas infra** (family repo, cycle task, git token, torrentday health) |
 | **2** | Server | CLI ping, **memory recall** (mnemon / wiki / local / thread fixtures), skill catalog prompts, synthetic Slack inbound → outbound.db |
 
 Tier 2 is skipped automatically if Tier 1 has failures (use `--force-tier2` to override).
@@ -106,3 +106,36 @@ Tier 2 CLI turns allow up to 3 minutes per question (`CHAT_TIMEOUT_MS=180000`). 
 | `scripts/post-upgrade/checks/slack-synthetic.ts` | Synthetic Slack inject |
 
 Fork replay inventory: [migrations/guide.md](migrations/guide.md).
+
+## Silas post-upgrade checklist (christina@cleo)
+
+After deploy or major upgrade:
+
+```bash
+cd ~/nanoclaw && pnpm exec tsx scripts/audit-scheduled-tasks.ts | grep -E "cycle|pending"
+skills/torrentday/scripts/torrentday.sh health --json
+test -d ~/repos/family && git -C ~/repos/family remote get-url origin
+```
+
+**OpenCode timeout recovery** — when logs show repeated `OpenCode event timeout (300000ms)`:
+
+```bash
+systemctl --user restart nanoclaw
+```
+
+**Cycle briefing** is Silas-only (`cycle-daily-briefing` → `dm-with-christina`). Expect exactly one pending task at `0 11 * * *` UTC on canonical session `sess-1782170556889-ydslvi`.
+
+### Silas Tier 1 infra checks (added 2026-06)
+
+| Check ID | Validates |
+|----------|-----------|
+| `host.github-transcript-token` | `~/.config/nanoclaw/credentials/services/github-transcript-token` exists and non-empty |
+| `host.no-lane-family-ops` | `~/repos/lane-family-ops` absent (canonical path is `~/repos/family`) |
+| `host.coaching-repo` | `~/repos/coaching` clone present |
+| `host.family-repo` | `~/repos/family` exists; remote URL has no `placeholder` |
+| `host.cycle-task-audit` | Exactly one pending `cycle-daily-briefing` |
+| `host.cycle-canonical-session` | Pending task on `sess-1782170556889-ydslvi` at 11:00 UTC |
+| `host.cycle-no-0600-pending` | No duplicate 06:00 UTC cycle briefing |
+| `host.torrentday-health-json` | Unified health JSON parses; warn if `recommendation !== ok` |
+| `composition.silas-no-legacy-groups` | No `christina_dm`, `slack_christina-dm`, etc. under `agents/silas/groups/` |
+| `composition.silas-family-repo-docs` | Global CLAUDE.md documents `/workspace/extra/repos/family`; no `lane-family-ops` refs |

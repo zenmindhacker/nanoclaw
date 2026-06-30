@@ -64,6 +64,39 @@ export async function runHostChecks(ctx: RunContext): Promise<CheckResult[]> {
     }),
   );
 
+  if (ctx.agent === 'silas') {
+    checks.push(
+      syncTimedCheck('host.family-repo', 1, () => {
+        const familyPath = path.join(process.env.HOME || '', 'repos', 'family');
+        if (!fs.existsSync(familyPath)) {
+          return { status: 'fail', message: `Missing ~/repos/family at ${familyPath}` };
+        }
+        const r = runCommand(`git -C "${familyPath}" remote get-url origin`, { timeoutMs: 5000 });
+        if (/placeholder/i.test(r.stdout)) {
+          return { status: 'fail', message: 'family repo remote still has placeholder token', detail: r.stdout };
+        }
+        return { status: 'pass', message: familyPath };
+      }),
+    );
+
+    checks.push(
+      syncTimedCheck('host.cycle-task-audit', 1, () => {
+        const r = runCommand('pnpm exec tsx scripts/audit-scheduled-tasks.ts 2>&1 | grep -c "cycle-daily-briefing.*pending"', {
+          timeoutMs: 30_000,
+          cwd: process.cwd(),
+        });
+        const count = parseInt(r.stdout.trim(), 10);
+        if (Number.isNaN(count) || count === 0) {
+          return { status: 'fail', message: 'No pending cycle-daily-briefing task found', detail: r.stdout.slice(0, 300) };
+        }
+        if (count > 1) {
+          return { status: 'fail', message: `${count} pending cycle-daily-briefing tasks (expected 1)`, detail: r.stdout.slice(0, 300) };
+        }
+        return { status: 'pass', message: 'One pending cycle-daily-briefing task' };
+      }),
+    );
+  }
+
   if (ctx.agent === 'cleo') {
     checks.push(
       syncTimedCheck('host.oauth-health', 1, () => {

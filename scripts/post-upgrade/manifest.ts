@@ -44,6 +44,14 @@ const MANIFESTS: Record<AgentName, AgentManifest> = {
         cwd: '/workspace/agent',
       },
       {
+        id: 'torrentday.health',
+        cmd: '/workspace/extra/skills/torrentday/scripts/torrentday.sh health --json',
+      },
+      {
+        id: 'family.mount-write',
+        cmd: 'touch /workspace/extra/repos/family/.mount-ok && rm -f /workspace/extra/repos/family/.mount-ok && echo ok',
+      },
+      {
         id: 'linear.list',
         cmd: 'bash /workspace/extra/skills/linear/scripts/linear-router.sh tutor list --json',
       },

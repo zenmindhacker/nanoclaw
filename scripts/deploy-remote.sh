@@ -48,5 +48,17 @@ if [[ "$NO_RESTART" != "true" ]]; then
 fi
 REMOTE
 
+if [[ "$AGENT" == "silas" ]]; then
+  echo "==> Silas: torrentday npm install + cycle task cleanup"
+  ssh "$HOST" bash -s -- "$REMOTE_DIR" <<'SILAS'
+set -euo pipefail
+DIR="${1/#\~/$HOME}"
+cd "$DIR/skills/torrentday" && npm install --silent
+cd "$DIR"
+pnpm exec tsx scripts/fix-silas-cycle-tasks.ts || true
+pnpm exec tsx scripts/seed-scheduled-tasks.ts || true
+SILAS
+fi
+
 echo "==> Post-upgrade smoke (tier $TIER)"
 ssh "$HOST" "cd $REMOTE_DIR && pnpm run post-upgrade -- --agent $AGENT --tier $TIER --json-out /tmp/upgrade-report.json && cat /tmp/upgrade-report.json"

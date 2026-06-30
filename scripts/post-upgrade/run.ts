@@ -20,6 +20,7 @@ import { findSessionByAgentGroup } from '../../src/db/sessions.js';
 import { runCliScenarioChecks } from './checks/cli-scenarios.js';
 import { runCompositionChecks } from './checks/composition.js';
 import { runHostChecks } from './checks/host.js';
+import { runSilasInfraChecks } from './checks/silas-infra.js';
 import { runMemoryChecks } from './checks/memory.js';
 import { runSkillsReadonlyChecks } from './checks/skills-readonly.js';
 import { runSlackSyntheticChecks } from './checks/slack-synthetic.js';
@@ -109,6 +110,7 @@ async function main(): Promise<void> {
 
   if (args.tiers.has(1)) {
     checks.push(...(await runHostChecks(ctx)));
+    checks.push(...runSilasInfraChecks(ctx));
     checks.push(...runCompositionChecks(ctx));
     checks.push(...(await runMemoryChecks(ctx)));
     checks.push(...(await runSkillsReadonlyChecks(ctx)));
