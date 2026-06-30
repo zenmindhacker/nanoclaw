@@ -11,7 +11,7 @@ import path from 'path';
 
 import Database from 'better-sqlite3';
 
-import { DATA_DIR } from '../src/config.js';
+import { DATA_DIR, GROUPS_DIR } from '../src/config.js';
 import { initDb, closeDb } from '../src/db/connection.js';
 import { getAgentGroupByFolder } from '../src/db/agent-groups.js';
 import { runMigrations } from '../src/db/migrations/index.js';
@@ -20,6 +20,14 @@ import { openInboundDb } from '../src/session-manager.js';
 
 const CANONICAL_SESSION = 'sess-1782170556889-ydslvi';
 const CANONICAL_MG = 'mg-1779388264578-jk5zho';
+
+const LEGACY_SILAS_GROUPS = [
+  'christina_dm',
+  'christina-dm',
+  'slack_christina-dm',
+  'main',
+  'scheduled-tasks',
+];
 
 /** Pending cycle tasks to cancel (confirmed duplicates). */
 const CANCEL_TASKS: Array<{ sessionId: string; taskId: string }> = [
@@ -108,6 +116,17 @@ function main(): void {
     } else {
       db.prepare("UPDATE sessions SET status = 'closed' WHERE id = ?").run(s.id);
       console.log(`OK:retired ${s.id}`);
+    }
+  }
+
+  for (const folder of LEGACY_SILAS_GROUPS) {
+    const dir = path.join(GROUPS_DIR, folder);
+    if (!fs.existsSync(dir)) continue;
+    if (dryRun) {
+      console.log(`DRY:remove legacy group ${dir}`);
+    } else {
+      fs.rmSync(dir, { recursive: true, force: true });
+      console.log(`OK:removed legacy group ${folder}`);
     }
   }
 

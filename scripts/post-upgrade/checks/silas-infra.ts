@@ -51,6 +51,23 @@ export function runSilasInfraChecks(ctx: RunContext): CheckResult[] {
   );
 
   checks.push(
+    syncTimedCheck('host.family-repo-writable', 1, () => {
+      const familyPath = path.join(home, 'repos', 'family');
+      if (!fs.existsSync(familyPath)) {
+        return { status: 'fail', message: 'Missing ~/repos/family', detail: familyPath };
+      }
+      const probe = path.join(familyPath, '.post-upgrade-mount-ok');
+      try {
+        fs.writeFileSync(probe, 'ok');
+        fs.unlinkSync(probe);
+        return { status: 'pass', message: `${familyPath} writable on host` };
+      } catch (err) {
+        return { status: 'fail', message: 'Cannot write to ~/repos/family on host', detail: String(err) };
+      }
+    }),
+  );
+
+  checks.push(
     syncTimedCheck('host.coaching-repo', 1, () => {
       const coaching = path.join(home, 'repos', 'coaching');
       if (!fs.existsSync(coaching)) {
@@ -156,8 +173,8 @@ export function runSilasInfraChecks(ctx: RunContext): CheckResult[] {
       if (!content.includes('/workspace/extra/repos/family')) {
         return { status: 'fail', message: 'Silas global CLAUDE.md missing family repo path' };
       }
-      if (content.includes('lane-family-ops')) {
-        return { status: 'fail', message: 'Silas global CLAUDE.md still references lane-family-ops' };
+      if (/(?:repos\/lane-family-ops|\/lane-family-ops(?:\/|$))/.test(content)) {
+        return { status: 'fail', message: 'Silas global CLAUDE.md still uses lane-family-ops as an active path' };
       }
       return { status: 'pass' };
     }),

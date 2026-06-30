@@ -20,6 +20,22 @@ export async function runSkillsReadonlyChecks(ctx: RunContext): Promise<CheckRes
           return { status: 'fail', message: `${skill.id} failed in container`, detail: r.stderr || r.stdout };
         }
 
+        if (skill.id === 'family.mount-write' && ctx.agent === 'silas') {
+          const familyPath = path.join(process.env.HOME || '', 'repos', 'family');
+          const probe = path.join(familyPath, '.mount-ok');
+          const r = runCommand(`touch "${probe}" && rm -f "${probe}" && echo ok`, {
+            timeoutMs: 10_000,
+          });
+          if (r.ok) {
+            return { status: 'pass', message: 'family repo writable on host (no container)', detail: familyPath };
+          }
+          return {
+            status: 'fail',
+            message: 'family repo not writable on host',
+            detail: r.stderr || r.stdout,
+          };
+        }
+
         // Fallback: host paths for repo-local skills / group scripts
         const hostCmd = skill.cmd
           .replace('/workspace/extra/skills/', 'skills/')

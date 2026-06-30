@@ -133,6 +133,7 @@ systemctl --user restart nanoclaw
 | `host.no-lane-family-ops` | `~/repos/lane-family-ops` absent (canonical path is `~/repos/family`) |
 | `host.coaching-repo` | `~/repos/coaching` clone present |
 | `host.family-repo` | `~/repos/family` exists; remote URL has no `placeholder` |
+| `host.family-repo-writable` | Host can create/delete a probe file in `~/repos/family` |
 | `host.cycle-task-audit` | Exactly one pending `cycle-daily-briefing` |
 | `host.cycle-canonical-session` | Pending task on `sess-1782170556889-ydslvi` at 11:00 UTC |
 | `host.cycle-no-0600-pending` | No duplicate 06:00 UTC cycle briefing |
