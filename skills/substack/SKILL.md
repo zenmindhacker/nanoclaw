@@ -5,7 +5,7 @@ description: "Publish notes and posts to Substack via browser automation. Use wh
 
 # substack-publisher
 
-Publishes notes to Substack via Browserless (cloud browser with stealth mode).
+Publishes notes to Substack via local Stagehand running against the container's Chromium.
 
 ## Trigger phrases
 - "publish a note to Substack"
@@ -16,7 +16,7 @@ Publishes notes to Substack via Browserless (cloud browser with stealth mode).
 ## Usage
 
 ```bash
-node /Users/cian/.openclaw/workspace/skills/substack-publisher/scripts/browserless.mjs post-note "Your note text here"
+node /workspace/extra/skills/substack/scripts/stagehand.mjs post-note "Your note text here"
 ```
 
 Returns JSON:
@@ -30,7 +30,7 @@ The `step` field indicates where it failed (1-6) for debugging.
 Use atomic commands to diagnose:
 
 ```bash
-BL="/Users/cian/.openclaw/workspace/skills/substack-publisher/scripts/browserless.mjs"
+BL="/workspace/extra/skills/substack/scripts/stagehand.mjs"
 
 node $BL login substack           # Test login separately
 node $BL open "https://substack.com"
@@ -51,7 +51,7 @@ node $BL close                      # Cleanup
 
 ## Credentials
 
-Auto-loaded from `~/.openclaw/credentials/`:
+Auto-loaded from `/workspace/extra/credentials/` or `~/.config/nanoclaw/credentials/services/`:
 - `substack-username`
 - `substack-password`
-- `browserless` (API token)
+- `stagehand` (`ANTHROPIC_API_KEY`)

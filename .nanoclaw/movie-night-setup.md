@@ -1,6 +1,6 @@
 # Movie Night + TorrentDay setup
 
-Skills live in git under `skills/movie-night/` and `skills/torrentday/`. After deploy or `git pull`, run `npm install` in `skills/torrentday/` (Browserbase deps).
+Skills live in git under `skills/movie-night/`, `skills/torrentday/`, and `skills/substack/`. After deploy or `git pull`, run `npm install` in `skills/torrentday/` and `skills/substack/` (Stagehand deps).
 
 ## Host credentials (not in git)
 
@@ -9,7 +9,8 @@ Create files under `~/.config/nanoclaw/credentials/services/` on **each** Linux 
 | File | Contents |
 |------|----------|
 | `torrentday` | `USERNAME`, `PASSWORD`, `UID`, `PASSKEY`, `RSS_MOVX265` |
-| `browserbase` | `API_KEY`, `PROJECT_ID`, `CONTEXT_ID` |
+| `stagehand` | `ANTHROPIC_API_KEY` |
+| `captcha-solver` | `API_KEY` for 2Captcha Turnstile solving |
 | `omdb` | raw API key (one line) from [omdbapi.com](https://www.omdbapi.com/apikey.aspx) |
 
 Copy `skills/transmission/credentials.example` → `skills/transmission/credentials` on the host (or use defaults in SKILL.md).
@@ -20,6 +21,7 @@ Copy `skills/transmission/credentials.example` → `skills/transmission/credenti
 cd ~/nanoclaw
 git pull origin main
 cd skills/torrentday && npm install
+cd ../substack && npm install
 # Ensure host credentials exist (see table above)
 ```
 
@@ -34,13 +36,13 @@ node skills/torrentday/scripts/apply-credential-refresh.mjs --user christina --f
 skills/torrentday/scripts/torrentday.sh health --json
 ```
 
-`movie-night candidates` returns `{ authRequired: true }` when t.json fails — run refresh-login before browsing via Browserbase.
+`movie-night candidates` returns `{ authRequired: true }` when t.json fails — run refresh-login before browsing via local Stagehand.
 
 ## First run
 
 ```bash
 skills/movie-night/scripts/movie-night.sh library refresh --json
-skills/torrentday/scripts/torrentday.sh refresh-login   # if Browserbase session expired
+skills/torrentday/scripts/torrentday.sh refresh-login   # if local Stagehand session expired
 ```
 
 `library refresh` merges **Transmission** (complete torrents) with a **remembrall disk scan** (`ssh root@100.82.7.74 ls /mnt/movies`). Cleo needs its SSH key in remembrall’s `authorized_keys` (one-time). Override host with `REMEMBRALL_SSH` if needed.

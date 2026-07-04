@@ -5,7 +5,7 @@ CMD="${1:-}"
 shift || true
 case "$CMD" in
   browse|refresh-login|bb-health)
-    exec node "$DIR/browserbase.mjs" "${CMD/bb-/}" "$@"
+    exec node "$DIR/stagehand.mjs" "${CMD/bb-/}" "$@"
     ;;
   *)
     exec node "$DIR/torrentday.mjs" "$CMD" "$@"

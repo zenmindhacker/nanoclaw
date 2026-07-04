@@ -205,10 +205,13 @@ export async function downloadTorrent(cfg, torrentId, outputPath) {
   return { path: outputPath, size: buf.length };
 }
 
-export async function probeDownload(cfg) {
+export async function probeDownload(cfg, probeTorrentId = null) {
   try {
-    const rows = await searchTorrents(cfg, { query: "the", categories: [48], limit: 1 });
-    const id = rows.find((r) => r.id && r.source !== "rss")?.id;
+    let id = probeTorrentId;
+    if (!id) {
+      const rows = await searchTorrents(cfg, { query: "", categories: [48], limit: 3, sort: "seeders" });
+      id = rows.find((r) => r.id && r.source !== "rss")?.id;
+    }
     if (!id) return { ok: false, error: "no torrent id for probe" };
     const url = `${cfg.baseUrl}/download.php/${id}/download.torrent?torrent_pass=${cfg.passkey}`;
     const res = await fetch(url, {
@@ -226,7 +229,7 @@ export async function probeDownload(cfg) {
 
 function runBrowserHealthJson() {
   try {
-    const out = execFileSync("node", [join(__dirname, "browserbase.mjs"), "health", "--json"], {
+    const out = execFileSync("node", [join(__dirname, "stagehand.mjs"), "health", "--json"], {
       encoding: "utf8",
       timeout: 120_000,
     });
@@ -241,10 +244,12 @@ export async function healthCheck(cfg) {
   let tjsonOk = false;
   let sampleCount = 0;
   let tjsonError = null;
+  let probeTorrentId = null;
   try {
     const rows = await searchTorrents(cfg, { query: "test", categories: [48], limit: 5 });
     tjsonOk = rows.length > 0 && rows[0]?.source !== "rss";
     sampleCount = rows.length;
+    probeTorrentId = rows.find((r) => r.id && r.source !== "rss")?.id || null;
     if (!tjsonOk && rows.length === 0) tjsonError = "t.json returned no results";
     else if (!tjsonOk) tjsonError = "rss fallback only";
   } catch (e) {
@@ -252,13 +257,10 @@ export async function healthCheck(cfg) {
   }
 
   const browser = runBrowserHealthJson();
-  const downloadProbe = await probeDownload(cfg);
+  const downloadProbe = await probeDownload(cfg, probeTorrentId);
 
   let recommendation = "ok";
-  if (!tjsonOk || !downloadProbe.ok) recommendation = "refresh-login";
-  else if (!browser.ok && /402|limit|minutes/i.test(String(browser.error || ""))) {
-    recommendation = "upgrade-browserbase";
-  }
+  if (!tjsonOk || !downloadProbe.ok || !browser.ok) recommendation = "refresh-login";
 
   return {
     tjson: { ok: tjsonOk, sampleCount, error: tjsonError },

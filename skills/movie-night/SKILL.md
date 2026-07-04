@@ -16,7 +16,7 @@ Depends on: `torrentday`, `transmission` skills.
 ## Credentials
 
 - `/workspace/extra/credentials/omdb` — OMDB API key (free at omdbapi.com)
-- torrentday + browserbase (see torrentday skill)
+- torrentday + stagehand + captcha-solver (see torrentday skill)
 
 ## Preferences
 

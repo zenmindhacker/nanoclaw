@@ -1,6 +1,6 @@
 ---
 name: torrentday
-description: Search and download torrents from TorrentDay (private tracker). Uses t.json API and Browserbase for browse/login.
+description: Search and download torrents from TorrentDay (private tracker). Uses t.json API and local Stagehand for browse/login.
 homepage: https://www.torrentday.com
 metadata: {"clawdis":{"emoji":"📀","requires":{}}}
 ---
@@ -14,7 +14,8 @@ Private tracker search and download for the household TorrentDay account.
 ## Credentials
 
 - `{baseDir}/../credentials` or `/workspace/extra/credentials/torrentday` — UID, PASSKEY, USERNAME, PASSWORD
-- `/workspace/extra/credentials/browserbase` — API_KEY, PROJECT_ID, CONTEXT_ID (for browse/login)
+- `/workspace/extra/credentials/stagehand` — `ANTHROPIC_API_KEY` for Stagehand's local browser runtime
+- `/workspace/extra/credentials/captcha-solver` — `API_KEY` for 2Captcha Turnstile solves
 
 ## Commands
 

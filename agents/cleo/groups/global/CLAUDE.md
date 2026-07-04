@@ -144,7 +144,7 @@ Scripts mounted at `/workspace/extra/skills/`. Credentials at `/workspace/extra/
 | invoice-generator | `skills/invoice-generator/invoice-generator.mjs` | `credentials/toggl`, `credentials/xero-tokens.json` |
 | xero | `skills/xero/` | `credentials/xero-tokens.json`, `credentials/xero-client-id` |
 | neondb | `skills/neondb/` (needs `neonctl auth`) | NEON_API_KEY env |
-| substack | `skills/substack/browserless.mjs` | `credentials/substack-username`, `credentials/browserless` |
+| substack | `skills/substack/scripts/stagehand.mjs` | `credentials/substack-username`, `credentials/substack-password`, `credentials/stagehand` |
 | voice-note | `skills/voice-note/bin/voice-note --voice-id 4tRn1lSkEn13EVTuqb0g --text-file <file>` | `credentials/elevenlabs` |
 | ganttsy-resume | `skills/ganttsy-resume/run-daily.sh` | `credentials/ganttsy-google-token.json` |
 | transcript-search | `skills/transcript-search/scripts/transcript-search.sh` | Shadow DB at `/workspace/extra/shadow/shadow.db` (read-only) |
