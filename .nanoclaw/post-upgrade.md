@@ -134,6 +134,7 @@ systemctl --user restart nanoclaw
 | `host.coaching-repo` | `~/repos/coaching` clone present |
 | `host.family-repo` | `~/repos/family` exists; remote URL has no `placeholder` |
 | `host.family-repo-writable` | Host can create/delete a probe file in `~/repos/family` |
+| `git.family-repo-auth` | `git ls-remote` against `zenmindhacker/family` succeeds through the live OneCLI gateway proxy (catches wrong auth scheme / expired or revoked GitHub secret) |
 | `host.cycle-task-audit` | Exactly one pending `cycle-daily-briefing` |
 | `host.cycle-canonical-session` | Pending task on `sess-1782170556889-ydslvi` at 11:00 UTC |
 | `host.cycle-no-0600-pending` | No duplicate 06:00 UTC cycle briefing |

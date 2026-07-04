@@ -79,6 +79,20 @@ Keep channel-specific state (e.g. Christina’s cycle dates) in the active group
 
 On each server: `git pull --ff-only`, `pnpm install --frozen-lockfile`, `pnpm run build`, restart `nanoclaw`, rebuild container image when Dockerfile changes. Post-upgrade smoke: [post-upgrade.md](post-upgrade.md).
 
+## Credential lanes
+
+Three lanes, pick the right one — don't default to OneCLI for everything:
+
+| Lane | Use for | Where |
+|------|---------|-------|
+| Host-owned OAuth refresher | Long-lived refresh tokens (Google, Xero) | Refreshed on the host outside any container; container reads the live access token from a mounted file. See [google-workspace-host-oauth.md](google-workspace-host-oauth.md), [oauth-hybrid-repair.md](oauth-hybrid-repair.md). Do not route through OneCLI. |
+| Host-owned static files | Most simple API keys/tokens (TorrentDay, Browserbase, etc.) | `~/.config/nanoclaw/credentials/services/<name>` on the server, mounted read-only at `/workspace/extra/credentials/` per `mount-allowlist.json`. This is the default lane — reach for it first. |
+| OneCLI vault | LLM provider auth (Anthropic) and APIs where **Bearer-in-header is the correct scheme** (`api.github.com`, `opencode.ai`) | `onecli secrets` / `onecli agents`, injected via the gateway into container `HTTPS_PROXY` traffic. |
+
+**Gotcha that broke Silas's git for weeks:** GitHub's git-over-HTTPS endpoints (`info/refs`, `git-upload-pack`, `git-receive-pack` — i.e. `git clone`/`fetch`/`push` against `github.com`) reject `Authorization: Bearer <token>` and require **Basic** auth (`x-access-token:<token>`, base64-encoded). `api.github.com` (the REST/GraphQL API) is fine with Bearer — only the git smart-HTTP host isn't. If you ever touch the OneCLI secret for `github.com`, its `injectionConfig.valueFormat` must be `"Basic {value}"` with a pre-base64-encoded `value`, not `"Bearer {value}"`. The regression check `git.family-repo-auth` in [scripts/post-upgrade/checks/silas-infra.ts](../scripts/post-upgrade/checks/silas-infra.ts) catches this on every post-upgrade run.
+
+Also note: as of the older `onecli-cli` builds installed on both hosts (`2.0.1` / `1.1.0`, vs. `2.2.5` pinned in [versions.json](../versions.json)), `onecli secrets update --value-format ...` silently drops the flag — use `--json '{"value": "...", "injectionConfig": {"headerName": "Authorization", "valueFormat": "Basic {value}"}}'` instead, and verify with `onecli secrets list` afterward.
+
 ## Connected Tutors Google Workspace (Silas)
 
 Silas uses **host OAuth** (not OneCLI) for Connected Tutors and Meridian Google accounts.

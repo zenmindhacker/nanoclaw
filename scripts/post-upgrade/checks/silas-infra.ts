@@ -1,11 +1,18 @@
+import crypto from 'crypto';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 
-import { GROUPS_DIR } from '../../../src/config.js';
+import { GROUPS_DIR, ONECLI_URL } from '../../../src/config.js';
 import type { RunContext } from '../types.js';
 import { syncTimedCheck } from '../report.js';
 import type { CheckResult } from '../types.js';
 import { runCommand } from '../utils/exec.js';
+
+/** Strip embedded proxy credentials (user:pass@host) before surfacing any string in a check result. */
+function redactProxyAuth(s: string): string {
+  return s.replace(/:\/\/[^/@\s]+@/g, '://<redacted>@');
+}
 
 const CANONICAL_CYCLE_SESSION = 'sess-1782170556889-ydslvi';
 const LEGACY_SILAS_GROUPS = [
@@ -63,6 +70,63 @@ export function runSilasInfraChecks(ctx: RunContext): CheckResult[] {
         return { status: 'pass', message: `${familyPath} writable on host` };
       } catch (err) {
         return { status: 'fail', message: 'Cannot write to ~/repos/family on host', detail: String(err) };
+      }
+    }),
+  );
+
+  checks.push(
+    syncTimedCheck('git.family-repo-auth', 1, () => {
+      if (!ONECLI_URL) {
+        return { status: 'skip', message: 'ONECLI_URL not configured' };
+      }
+      const cc = runCommand(`curl -s "${ONECLI_URL}/v1/container-config?agent=${ctx.agentGroupId}"`, {
+        timeoutMs: 10_000,
+      });
+      if (!cc.ok || !cc.stdout) {
+        return {
+          status: 'fail',
+          message: 'Could not fetch OneCLI container-config for git auth check',
+          detail: redactProxyAuth(cc.stderr),
+        };
+      }
+      let config: { env?: Record<string, string>; caCertificate?: string };
+      try {
+        config = JSON.parse(cc.stdout);
+      } catch {
+        return { status: 'fail', message: 'OneCLI container-config returned invalid JSON' };
+      }
+      const proxyRaw = config.env?.HTTPS_PROXY;
+      const caCert = config.caCertificate;
+      if (!proxyRaw || !caCert) {
+        return { status: 'fail', message: 'OneCLI container-config missing HTTPS_PROXY or CA cert for Silas agent' };
+      }
+      // The gateway returns proxy URLs using the container-only hostname; substitute the
+      // real gateway host (same one ONECLI_URL already points at) to reach it from the host.
+      const gatewayHost = new URL(ONECLI_URL).hostname;
+      const proxy = proxyRaw.replace('host.docker.internal', gatewayHost);
+      const caPath = path.join(os.tmpdir(), `post-upgrade-onecli-ca-${crypto.randomUUID()}.pem`);
+      fs.writeFileSync(caPath, caCert, { mode: 0o600 });
+      try {
+        const r = runCommand('git ls-remote https://github.com/zenmindhacker/family.git HEAD', {
+          timeoutMs: 20_000,
+          env: {
+            HTTPS_PROXY: proxy,
+            GIT_SSL_CAINFO: caPath,
+            GIT_HTTP_PROXY_AUTHMETHOD: 'basic',
+            GIT_TERMINAL_PROMPT: '0',
+          },
+        });
+        if (!r.ok || !r.stdout) {
+          return {
+            status: 'fail',
+            message:
+              'git ls-remote through the OneCLI gateway failed — check the "GitHub HTTPS" secret\'s auth scheme (git-over-HTTPS requires Basic, not Bearer)',
+            detail: redactProxyAuth(r.stderr).slice(0, 300),
+          };
+        }
+        return { status: 'pass', message: 'git ls-remote through OneCLI gateway succeeded' };
+      } finally {
+        fs.rmSync(caPath, { force: true });
       }
     }),
   );
@@ -133,13 +197,17 @@ export function runSilasInfraChecks(ctx: RunContext): CheckResult[] {
         if (parsed.recommendation === 'ok') {
           return { status: 'pass', message: 'torrentday health ok' };
         }
-        const bb402 = /402|minutes limit/i.test(String(parsed.browser?.error || r.stderr));
+        const browserError = String(parsed.browser?.error || r.stderr);
+        const missingCreds = /Missing torrentday credentials|stagehand credentials|captcha-solver credentials/i.test(browserError);
+        const turnstileBlocked = /Turnstile|manual re-auth|required/i.test(browserError);
         return {
           status: 'warn',
           message: `torrentday needs attention: ${parsed.recommendation}`,
-          detail: bb402
-            ? 'Browserbase plan limit — run refresh-login after upgrade or when minutes reset'
-            : r.stdout.slice(0, 300),
+          detail: missingCreds
+            ? 'Missing torrentday, stagehand, or captcha-solver credentials on host'
+            : turnstileBlocked
+              ? 'TorrentDay login still needs a Turnstile solve or manual re-auth'
+              : r.stdout.slice(0, 300),
         };
       } catch {
         return { status: 'fail', message: 'torrentday health --json returned invalid JSON', detail: r.stderr || r.stdout };
