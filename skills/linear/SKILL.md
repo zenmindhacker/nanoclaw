@@ -220,13 +220,15 @@ linear-router cog milestones list --json
 
 ## Adding a New Org
 
-1. Add API key to `~/.openclaw/.env`: `LINEAR_API_KEY_MYORG=lin_api_...`
+1. Add the API key as a host-owned credential file: `~/.config/nanoclaw/credentials/services/linear-api-key-myorg` (mounted read-only into every container at `/workspace/extra/credentials/`).
 2. Add entry to `ORG_CONFIGS` in `linear.ts`:
    ```typescript
-   myorg: { apiKeyEnv: 'LINEAR_API_KEY_MYORG', teamKey: 'MYO', defaultProject: 'My Project' },
+   myorg: { apiKeyEnv: 'LINEAR_API_KEY_MYORG', credentialFile: 'linear-api-key-myorg', teamKey: 'MYO', defaultProject: 'My Project' },
    ```
 3. Add aliases in `ORG_ALIASES` and the `linear-router.sh` case statement.
 4. Run `linear-router myorg init` to build the cache.
+
+(`LINEAR_API_KEY_MYORG` as a real env var still works too — useful for local runs outside a container.)
 
 ## Notes
 

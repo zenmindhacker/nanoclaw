@@ -15,7 +15,6 @@ import {
   CONTAINER_INSTALL_LABEL,
   DATA_DIR,
   GROUPS_DIR,
-  LINEAR_CONTAINER_ENV,
   ONECLI_API_KEY,
   ONECLI_URL,
   TIMEZONE,
@@ -455,9 +454,11 @@ async function buildContainerArgs(
   // Unified mnemon graph for this agent install (all groups share one store).
   args.push('-e', `MNEMON_DATA_DIR=${GLOBAL_MNEMON_CONTAINER_PATH}`);
 
-  for (const [key, value] of Object.entries(LINEAR_CONTAINER_ENV)) {
-    args.push('-e', `${key}=${value}`);
-  }
+  // Linear API keys are NOT injected as env vars here — they live in the
+  // mounted credentials dir (~/.config/nanoclaw/credentials/services/linear-api-key-*)
+  // like every other service credential; skills/linear/scripts/linear.ts reads them
+  // from there directly. See LINEAR_CONTAINER_ENV in config.ts for the one exception
+  // (post-upgrade's host-side skill smoke test, which has no container to mount into).
 
   // Provider-contributed env vars (e.g. XDG_DATA_HOME, OPENCODE_*, NO_PROXY).
   if (providerContribution.env) {

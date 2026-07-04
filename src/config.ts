@@ -1,3 +1,4 @@
+import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
@@ -78,19 +79,30 @@ function resolveConfigTimezone(): string {
 }
 export const TIMEZONE = resolveConfigTimezone();
 
-/** Per-org Linear API keys injected into agent containers for skills/linear. */
-export const LINEAR_ENV_KEYS = [
-  'LINEAR_API_KEY_COGNITIVE',
-  'LINEAR_API_KEY_CT',
-  'LINEAR_API_KEY_GANTTSY',
-  'LINEAR_API_KEY_TUTORING',
-] as const;
+/**
+ * Per-org Linear API keys, one host-owned credential file per org (mounted
+ * read-only into containers alongside every other service credential —
+ * skills/linear/scripts/linear.ts reads them from there directly). This
+ * export exists only so post-upgrade's host-side skill smoke test
+ * (scripts/post-upgrade/checks/skills-readonly.ts) can exercise the same
+ * skill script without a container.
+ */
+const LINEAR_CREDENTIAL_FILES: Record<string, string> = {
+  LINEAR_API_KEY_COGNITIVE: 'linear-api-key-cognitive',
+  LINEAR_API_KEY_CT: 'linear-api-key-ct',
+  LINEAR_API_KEY_GANTTSY: 'linear-api-key-ganttsy',
+  LINEAR_API_KEY_TUTORING: 'linear-api-key-tutoring',
+};
 
-const linearEnvFile = readEnvFile([...LINEAR_ENV_KEYS]);
+const CREDENTIALS_DIR = path.join(HOME_DIR, '.config', 'nanoclaw', 'credentials', 'services');
 
 export const LINEAR_CONTAINER_ENV: Record<string, string> = Object.fromEntries(
-  LINEAR_ENV_KEYS.flatMap((key) => {
-    const value = process.env[key] || linearEnvFile[key];
-    return value ? [[key, value]] : [];
+  Object.entries(LINEAR_CREDENTIAL_FILES).flatMap(([envKey, filename]) => {
+    try {
+      const value = fs.readFileSync(path.join(CREDENTIALS_DIR, filename), 'utf8').trim();
+      return value ? [[envKey, value]] : [];
+    } catch {
+      return [];
+    }
   }),
 );

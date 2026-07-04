@@ -16,12 +16,14 @@ import { Command } from 'commander';
 import { homedir } from 'os';
 
 // ── Org configuration ────────────────────────────────────────────────────────
-const ORG_CONFIGS: Record<string, { apiKeyEnv: string; teamKey: string; defaultProject: string }> = {
-  cog: { apiKeyEnv: 'LINEAR_API_KEY_COGNITIVE', teamKey: 'COG', defaultProject: 'OpenClaw' },
-  ct:  { apiKeyEnv: 'LINEAR_API_KEY_CT',        teamKey: 'KOR', defaultProject: 'Kora Voice Integration' },
-  gan: { apiKeyEnv: 'LINEAR_API_KEY_GANTTSY',   teamKey: 'GAN', defaultProject: 'Ganttsy MVP' },
-  tutor: { apiKeyEnv: 'LINEAR_API_KEY_TUTORING', teamKey: 'CON', defaultProject: 'Administration' },
+const ORG_CONFIGS: Record<string, { apiKeyEnv: string; credentialFile: string; teamKey: string; defaultProject: string }> = {
+  cog: { apiKeyEnv: 'LINEAR_API_KEY_COGNITIVE', credentialFile: 'linear-api-key-cognitive', teamKey: 'COG', defaultProject: 'OpenClaw' },
+  ct:  { apiKeyEnv: 'LINEAR_API_KEY_CT',        credentialFile: 'linear-api-key-ct',        teamKey: 'KOR', defaultProject: 'Kora Voice Integration' },
+  gan: { apiKeyEnv: 'LINEAR_API_KEY_GANTTSY',   credentialFile: 'linear-api-key-ganttsy',   teamKey: 'GAN', defaultProject: 'Ganttsy MVP' },
+  tutor: { apiKeyEnv: 'LINEAR_API_KEY_TUTORING', credentialFile: 'linear-api-key-tutoring', teamKey: 'CON', defaultProject: 'Administration' },
 };
+
+const CREDENTIALS_DIR = '/workspace/extra/credentials';
 
 const ORG_ALIASES: Record<string, string> = {
   cognitive: 'cog', cognitivetech: 'cog', 'cognitive-tech': 'cog',
@@ -30,7 +32,17 @@ const ORG_ALIASES: Record<string, string> = {
   tutoring: 'tutor', 'connected-tutors': 'tutor', 'connected-tutoring': 'tutor', con: 'tutor',
 };
 
-// Linear API keys are injected via NC container environment
+// Linear API keys live in the mounted credentials dir (one file per org),
+// same as every other service credential. Env var still wins if set, so
+// LINEAR_ORG-style local overrides keep working.
+function loadApiKey(config: { apiKeyEnv: string; credentialFile: string }): string {
+  if (process.env[config.apiKeyEnv]) return process.env[config.apiKeyEnv]!;
+  try {
+    return readFileSync(join(CREDENTIALS_DIR, config.credentialFile), 'utf8').trim();
+  } catch {
+    return '';
+  }
+}
 
 // Pre-parse --org before Commander takes over
 function preParseOrg(): string {
@@ -52,9 +64,12 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const CURRENT_ORG = preParseOrg();
 const orgConfig = ORG_CONFIGS[CURRENT_ORG];
 
-const LINEAR_API_KEY = process.env[orgConfig.apiKeyEnv]!;
+const LINEAR_API_KEY = loadApiKey(orgConfig);
 if (!LINEAR_API_KEY) {
-  console.error(`\nMissing env var: ${orgConfig.apiKeyEnv}\n`);
+  console.error(
+    `\nMissing Linear API key for org "${CURRENT_ORG}": set ${orgConfig.apiKeyEnv} or add ` +
+      `${orgConfig.credentialFile} to the mounted credentials dir.\n`,
+  );
   process.exit(1);
 }
 
