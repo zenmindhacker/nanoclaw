@@ -99,9 +99,9 @@ function resolveSlackDmThreadFallback(
   // DM root — do not reattach them to the latest chat thread.
   // writeSessionRouting forces session_routing.thread_id null for these wakes
   // even when the session itself is still bound to an old Slack thread.
-  const routing = inDb
-    .prepare('SELECT thread_id FROM session_routing WHERE id = 1')
-    .get() as { thread_id: string | null } | undefined;
+  const routing = inDb.prepare('SELECT thread_id FROM session_routing WHERE id = 1').get() as
+    | { thread_id: string | null }
+    | undefined;
   if (
     routing?.thread_id == null &&
     (session.thread_id != null || hasProcessingTopLevelTask(inDb) || hasDueTopLevelTask(inDb))
