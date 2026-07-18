@@ -220,6 +220,70 @@ describe('deliverSessionMessages — retry and permanent failure', () => {
   });
 });
 
+describe('deliverSessionMessages — Slack DM top-level task notify', () => {
+  it('keeps null thread_id for top-level task replies instead of filling from inbound', async () => {
+    createAgentGroup({
+      id: 'ag-1',
+      name: 'Test Agent',
+      folder: 'test-agent',
+      agent_provider: null,
+      created_at: now(),
+    });
+    createMessagingGroup({
+      id: 'mg-1',
+      channel_type: 'slack',
+      platform_id: 'slack:D1',
+      name: 'DM',
+      is_group: 0,
+      unknown_sender_policy: 'public',
+      created_at: now(),
+    });
+
+    const { session } = resolveSession('ag-1', 'mg-1', 'slack:D1:111.222', 'per-thread');
+    const inDb = openInboundDb('ag-1', session.id);
+    inDb
+      .prepare(
+        `INSERT INTO messages_in (id, seq, kind, timestamp, status, platform_id, channel_type, thread_id, content, process_after, trigger)
+         VALUES ('task-1', 2, 'task', datetime('now'), 'processing', NULL, NULL, NULL, '{}', datetime('now', '-1 minute'), 1)`,
+      )
+      .run();
+    inDb
+      .prepare(
+        `INSERT INTO messages_in (id, seq, kind, timestamp, status, platform_id, channel_type, thread_id, content, trigger)
+         VALUES ('chat-1', 4, 'chat-sdk', datetime('now'), 'completed', 'slack:D1', 'slack', 'slack:D1:111.222', '{}', 1)`,
+      )
+      .run();
+    inDb
+      .prepare(
+        `INSERT INTO session_routing (id, channel_type, platform_id, thread_id)
+         VALUES (1, 'slack', 'slack:D1', NULL)
+         ON CONFLICT(id) DO UPDATE SET thread_id = NULL`,
+      )
+      .run();
+    inDb.close();
+
+    const outDb = new Database(outboundDbPath('ag-1', session.id));
+    outDb
+      .prepare(
+        `INSERT INTO messages_out (id, timestamp, kind, platform_id, channel_type, thread_id, content)
+         VALUES ('out-notify', datetime('now'), 'chat', 'slack:D1', 'slack', NULL, ?)`,
+      )
+      .run(JSON.stringify({ text: 'briefing' }));
+    outDb.close();
+
+    const threadIds: Array<string | null> = [];
+    setDeliveryAdapter({
+      async deliver(_ct, _pid, tid) {
+        threadIds.push(tid);
+        return 'plat-1';
+      },
+    });
+
+    await deliverSessionMessages(session);
+    expect(threadIds).toEqual([null]);
+  });
+});
+
 describe('deliverSessionMessages — instance resolution', () => {
   it('delivers via the origin session instance when sibling rows share (channel_type, platform_id)', async () => {
     createAgentGroup({

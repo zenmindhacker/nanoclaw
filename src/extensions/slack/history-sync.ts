@@ -103,6 +103,25 @@ function sessionHasMessage(agentGroupId: string, sessionId: string, id: string):
   }
 }
 
+/** True if this Slack ts already exists as a live or synced inbound row. */
+function sessionHasSlackTs(agentGroupId: string, sessionId: string, ts: string): boolean {
+  const dbPath = inboundDbPath(agentGroupId, sessionId);
+  if (!fs.existsSync(dbPath)) return false;
+  const db = openInboundDb(agentGroupId, sessionId);
+  try {
+    const row = db
+      .prepare(
+        `SELECT 1 FROM messages_in
+         WHERE id = ? OR content LIKE ?
+         LIMIT 1`,
+      )
+      .get(historyMessageId(ts), `%"slackTs":"${ts}"%`);
+    return row !== undefined;
+  } finally {
+    db.close();
+  }
+}
+
 function buildHistoryContent(msg: SlackMessage, isBot: boolean, channelIsGroup: boolean): string {
   return JSON.stringify({
     text: msg.text ?? '',
@@ -125,6 +144,9 @@ async function insertHistoryMessage(
   if (!msg.ts || !msg.text?.trim()) return false;
   const id = historyMessageId(msg.ts);
   if (sessionHasMessage(session.agent_group_id, session.id, id)) return false;
+  // Pre-route sync can land before deliverToAgent writes the live row;
+  // also skip when a live Chat SDK row already carries this slackTs.
+  if (sessionHasSlackTs(session.agent_group_id, session.id, msg.ts)) return false;
 
   writeSessionMessage(session.agent_group_id, session.id, {
     id,

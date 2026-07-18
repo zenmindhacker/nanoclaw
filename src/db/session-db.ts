@@ -146,6 +146,40 @@ export function countDueMessages(db: Database.Database): number {
   ).count;
 }
 
+/**
+ * True when a due pending task intentionally has no thread_id — these should
+ * post as top-level channel/DM pings, not replies into an old thread the
+ * session happens to be bound to.
+ */
+export function hasDueTopLevelTask(db: Database.Database): boolean {
+  const row = db
+    .prepare(
+      `SELECT 1 AS ok FROM messages_in
+       WHERE kind = 'task'
+         AND status = 'pending'
+         AND trigger = 1
+         AND (process_after IS NULL OR datetime(process_after) <= datetime('now'))
+         AND (thread_id IS NULL OR thread_id = '')
+       LIMIT 1`,
+    )
+    .get() as { ok: number } | undefined;
+  return row !== undefined;
+}
+
+/** True while a null-thread task is currently being processed by the container. */
+export function hasProcessingTopLevelTask(db: Database.Database): boolean {
+  const row = db
+    .prepare(
+      `SELECT 1 AS ok FROM messages_in
+       WHERE kind = 'task'
+         AND status = 'processing'
+         AND (thread_id IS NULL OR thread_id = '')
+       LIMIT 1`,
+    )
+    .get() as { ok: number } | undefined;
+  return row !== undefined;
+}
+
 export function markMessageFailed(db: Database.Database, messageId: string): void {
   db.prepare("UPDATE messages_in SET status = 'failed' WHERE id = ?").run(messageId);
 }

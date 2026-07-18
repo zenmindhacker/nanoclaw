@@ -81,7 +81,7 @@ export function findSessionForAgent(
   const preferredMg = PREFERRED_MESSAGING_GROUP[agentFolder];
   const rows = v2Db
     .prepare(
-      `SELECT id, messaging_group_id, last_active, created_at
+      `SELECT id, messaging_group_id, thread_id, last_active, created_at
        FROM sessions
        WHERE agent_group_id = ? AND status = 'active'
        ORDER BY last_active DESC, created_at DESC`,
@@ -89,6 +89,7 @@ export function findSessionForAgent(
     .all(agentGroupId) as Array<{
     id: string;
     messaging_group_id: string | null;
+    thread_id: string | null;
     last_active: string | null;
     created_at: string;
   }>;
@@ -97,8 +98,12 @@ export function findSessionForAgent(
   if (active.length === 0) return [...onDisk].sort()[0] ?? null;
 
   if (preferredMg) {
-    const canonical = active.find((r) => r.messaging_group_id === preferredMg);
-    if (canonical) return canonical.id;
+    // Prefer the null-thread session on the canonical MG — that is the
+    // top-level notify inbox for per-thread Slack DMs (cron/briefings).
+    const onCanonical = active.filter((r) => r.messaging_group_id === preferredMg);
+    const topLevel = onCanonical.find((r) => r.thread_id == null || r.thread_id === '');
+    if (topLevel) return topLevel.id;
+    if (onCanonical[0]) return onCanonical[0].id;
   }
 
   return active[0]!.id;

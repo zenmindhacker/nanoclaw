@@ -19,6 +19,8 @@ import {
   markDelivered,
   markDeliveryFailed,
   migrateDeliveredTable,
+  hasDueTopLevelTask,
+  hasProcessingTopLevelTask,
 } from './db/session-db.js';
 import { log } from './log.js';
 import { normalizeOptions } from './channels/ask-question.js';
@@ -91,6 +93,20 @@ function resolveSlackDmThreadFallback(
 ): string | null {
   if (msg.thread_id || msg.channel_type !== 'slack' || !msg.platform_id) {
     return msg.thread_id;
+  }
+
+  // Top-level task wakes (cron/briefings with null thread_id) must ping the
+  // DM root — do not reattach them to the latest chat thread.
+  // writeSessionRouting forces session_routing.thread_id null for these wakes
+  // even when the session itself is still bound to an old Slack thread.
+  const routing = inDb
+    .prepare('SELECT thread_id FROM session_routing WHERE id = 1')
+    .get() as { thread_id: string | null } | undefined;
+  if (
+    routing?.thread_id == null &&
+    (session.thread_id != null || hasProcessingTopLevelTask(inDb) || hasDueTopLevelTask(inDb))
+  ) {
+    return null;
   }
 
   const mg = getMessagingGroupByPlatform(msg.channel_type, msg.platform_id);

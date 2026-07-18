@@ -953,6 +953,44 @@ describe('writeSessionRouting', () => {
     expect(row!.thread_id).toBeNull();
   });
 
+  it('nulls thread_id when a due top-level task is pending', () => {
+    createAgentGroup({
+      id: 'ag-1',
+      name: 'Agent',
+      folder: 'agent',
+      agent_provider: null,
+      created_at: now(),
+    });
+    createMessagingGroup({
+      id: 'mg-1',
+      channel_type: 'slack',
+      platform_id: 'slack:D1',
+      name: 'DM',
+      is_group: 0,
+      unknown_sender_policy: 'public',
+      created_at: now(),
+    });
+
+    const { session } = resolveSession('ag-1', 'mg-1', 'slack:D1:111.222', 'per-thread');
+    const inDb = new Database(inboundDbPath('ag-1', session.id));
+    inDb
+      .prepare(
+        `INSERT INTO messages_in (id, seq, kind, timestamp, status, platform_id, channel_type, thread_id, content, process_after, trigger)
+         VALUES ('task-1', 2, 'task', datetime('now'), 'pending', NULL, NULL, NULL, '{}', datetime('now', '-1 minute'), 1)`,
+      )
+      .run();
+    inDb.close();
+
+    writeSessionRouting('ag-1', session.id);
+
+    const db = new Database(inboundDbPath('ag-1', session.id));
+    const row = db.prepare('SELECT thread_id FROM session_routing WHERE id = 1').get() as {
+      thread_id: string | null;
+    };
+    db.close();
+    expect(row.thread_id).toBeNull();
+  });
+
   it('includes thread_id from per-thread session', () => {
     createAgentGroup({
       id: 'ag-1',

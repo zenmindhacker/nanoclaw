@@ -14,6 +14,7 @@ import { findByName, getAllDestinations } from '../destinations.js';
 import { getInboundDb } from '../db/connection.js';
 import { getMessageIdBySeq, getRoutingBySeq, writeMessageOut } from '../db/messages-out.js';
 import { getSessionRouting } from '../db/session-routing.js';
+import { isTopLevelNotifyTurn } from '../top-level-notify.js';
 import { registerTools } from './server.js';
 import type { McpToolDefinition } from './types.js';
 
@@ -85,6 +86,9 @@ function inheritThreadId(
   platformId: string,
   sessionThreadId: string | null,
 ): string | null {
+  // Proactive tasks with null thread_id must ping top-level — do not fill
+  // from the latest chat thread in this session.
+  if (isTopLevelNotifyTurn()) return null;
   if (sessionThreadId) return sessionThreadId;
   return resolveLatestInboundThread(channelType, platformId);
 }

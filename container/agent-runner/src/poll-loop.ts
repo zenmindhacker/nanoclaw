@@ -13,6 +13,7 @@ import {
   stripInternalTags,
   type RoutingContext,
 } from './formatter.js';
+import { isTopLevelNotifyTurn } from './top-level-notify.js';
 import { isUploadTraceCommand, uploadTrace } from './upload-trace.js';
 import type { AgentProvider, AgentQuery, ProviderEvent, ProviderExchange } from './providers/types.js';
 
@@ -388,6 +389,11 @@ export async function processQuery(
         const newMessages = pending.filter((m) => m.kind !== 'system');
         if (newMessages.length === 0) return;
 
+        // Same accumulate gate as the outer loop: trigger=0 history-sync /
+        // ignored_message_policy rows must ride along with a real wake, not
+        // mid-turn query.push on their own.
+        if (!newMessages.some((m) => m.trigger === 1)) return;
+
         const newIds = newMessages.map((m) => m.id);
         markProcessing(newIds);
 
@@ -674,6 +680,9 @@ function resolveDestinationThread(
   platformId: string,
 ): { threadId: string | null; inReplyTo: string | null } | null {
   try {
+    if (isTopLevelNotifyTurn()) {
+      return { threadId: null, inReplyTo: null };
+    }
     const db = getInboundDb();
     const row = db
       .prepare(

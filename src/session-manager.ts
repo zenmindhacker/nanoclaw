@@ -34,6 +34,7 @@ import {
   upsertSessionRouting,
   insertMessage,
   migrateMessagesInTable,
+  hasDueTopLevelTask,
 } from './db/session-db.js';
 import { log } from './log.js';
 import type { Session } from './types.js';
@@ -172,15 +173,19 @@ export function writeSessionRouting(agentGroupId: string, sessionId: string): vo
 
   const db = openInboundDb(agentGroupId, sessionId);
   try {
+    // Null-thread tasks are proactive pings (cron/briefings). Force default
+    // reply routing to top-level so send_message does not inherit the
+    // session's stale Slack thread_id.
+    const threadId = hasDueTopLevelTask(db) ? null : session.thread_id;
     upsertSessionRouting(db, {
       channel_type: channelType,
       platform_id: platformId,
-      thread_id: session.thread_id,
+      thread_id: threadId,
     });
+    log.debug('Session routing written', { sessionId, channelType, platformId, threadId });
   } finally {
     db.close();
   }
-  log.debug('Session routing written', { sessionId, channelType, platformId, threadId: session.thread_id });
 }
 
 /**
