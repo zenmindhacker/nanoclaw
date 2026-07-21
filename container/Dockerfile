@@ -99,6 +99,10 @@ RUN --mount=type=cache,target=/root/.bun/install/cache \
 #     the SDK fails at spawn time with "native binary not found".
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
+# Global packages from `pnpm install -g` / install_packages live here. Node's
+# default module paths do not include PNPM_HOME, so without NODE_PATH
+# `require('pkg')` fails and agents mis-read `npm list -g` as "not installed".
+ENV NODE_PATH="/pnpm/global/5/node_modules"
 # Pin pnpm to match the host (package.json packageManager). pnpm 11 stopped
 # honoring `only-built-dependencies[]=` in .npmrc for global installs, which
 # silently skips claude-code's native-binary postinstall and agent-browser's

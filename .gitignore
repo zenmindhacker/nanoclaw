@@ -42,3 +42,6 @@ agents-sdk-docs
 docs/maintainer-guide.md
 docs/drafts/
 forks.md
+
+# graphify — local only; regenerate with `graphify update .`
+graphify-out/

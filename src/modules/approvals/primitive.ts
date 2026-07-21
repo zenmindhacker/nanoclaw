@@ -22,6 +22,7 @@
  * if either module becomes genuinely optional (see REFACTOR_PLAN open q #3).
  */
 import { normalizeOptions, type RawOption } from '../../channels/ask-question.js';
+import { getDb } from '../../db/connection.js';
 import { getMessagingGroup } from '../../db/messaging-groups.js';
 import { createPendingApproval, getSession } from '../../db/sessions.js';
 import { getDeliveryAdapter } from '../../delivery.js';
@@ -30,6 +31,7 @@ import { log } from '../../log.js';
 import { writeSessionMessage } from '../../session-manager.js';
 import type { MessagingGroup, PendingApproval, Session } from '../../types.js';
 import { getAdminsOfAgentGroup, getGlobalAdmins, getOwners } from '../permissions/db/user-roles.js';
+import { getUserDm } from '../permissions/db/user-dms.js';
 import { ensureUserDm } from '../permissions/user-dm.js';
 
 /** Two-button approval UI — the only options the primitive supports today. */
@@ -140,14 +142,31 @@ export function pickApprover(agentGroupId: string | null): string[] {
  * Walk the approver list and return the first (approverId, messagingGroup)
  * pair we can actually deliver to. Returns null if nobody is reachable.
  *
- * Tie-break: prefer approvers reachable on the same channel kind as the
- * origin; else first in list. Resolution uses ensureUserDm, which may
- * trigger a platform openDM call on cache miss.
+ * Preference order:
+ *   1. Origin messaging group when it is already an eligible approver's DM
+ *      (so the human talking to the agent sees the card in that chat).
+ *   2. Approvers reachable on the same channel kind as the origin.
+ *   3. First reachable approver via ensureUserDm (may openDM on cache miss).
  */
 export async function pickApprovalDelivery(
   approvers: string[],
   originChannelType: string,
+  originMessagingGroupId?: string | null,
 ): Promise<{ userId: string; messagingGroup: MessagingGroup } | null> {
+  if (originMessagingGroupId) {
+    const originMg = getMessagingGroup(originMessagingGroupId);
+    if (originMg && originMg.is_group === 0) {
+      for (const userId of approvers) {
+        const channelType = originChannelType || channelTypeOf(userId);
+        if (!channelType) continue;
+        const cached = getUserDm(userId, channelType);
+        if (cached?.messaging_group_id === originMessagingGroupId) {
+          return { userId, messagingGroup: originMg };
+        }
+      }
+    }
+  }
+
   if (originChannelType) {
     for (const userId of approvers) {
       if (channelTypeOf(userId) !== originChannelType) continue;
@@ -214,11 +233,10 @@ export async function requestApproval(opts: RequestApprovalOptions): Promise<voi
     return;
   }
 
-  const originChannelType = session.messaging_group_id
-    ? (getMessagingGroup(session.messaging_group_id)?.channel_type ?? '')
-    : '';
+  const originMg = session.messaging_group_id ? getMessagingGroup(session.messaging_group_id) : undefined;
+  const originChannelType = originMg?.channel_type ?? '';
 
-  const target = await pickApprovalDelivery(approvers, originChannelType);
+  const target = await pickApprovalDelivery(approvers, originChannelType, session.messaging_group_id);
   if (!target) {
     notifyAgent(session, `${action} failed: no DM channel found for any eligible approver.`);
     return;
@@ -233,6 +251,9 @@ export async function requestApproval(opts: RequestApprovalOptions): Promise<voi
     action,
     payload: JSON.stringify(payload),
     created_at: new Date().toISOString(),
+    agent_group_id: session.agent_group_id,
+    channel_type: target.messagingGroup.channel_type,
+    platform_id: target.messagingGroup.platform_id,
     title,
     options_json: JSON.stringify(normalizedOptions),
   });
@@ -240,7 +261,7 @@ export async function requestApproval(opts: RequestApprovalOptions): Promise<voi
   const adapter = getDeliveryAdapter();
   if (adapter) {
     try {
-      await adapter.deliver(
+      const platformMessageId = await adapter.deliver(
         target.messagingGroup.channel_type,
         target.messagingGroup.platform_id,
         null,
@@ -253,6 +274,11 @@ export async function requestApproval(opts: RequestApprovalOptions): Promise<voi
           options: APPROVAL_OPTIONS,
         }),
       );
+      if (platformMessageId) {
+        getDb()
+          .prepare('UPDATE pending_approvals SET platform_message_id = ? WHERE approval_id = ?')
+          .run(platformMessageId, approvalId);
+      }
     } catch (err) {
       log.error('Failed to deliver approval card', { action, approvalId, err });
       notifyAgent(session, `${action} failed: could not deliver approval request to ${target.userId}.`);
@@ -260,5 +286,11 @@ export async function requestApproval(opts: RequestApprovalOptions): Promise<voi
     }
   }
 
-  log.info('Approval requested', { action, approvalId, agentName, approver: target.userId });
+  log.info('Approval requested', {
+    action,
+    approvalId,
+    agentName,
+    approver: target.userId,
+    deliverTo: target.messagingGroup.platform_id,
+  });
 }

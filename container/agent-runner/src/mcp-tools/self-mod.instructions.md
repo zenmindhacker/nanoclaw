@@ -11,8 +11,12 @@ install_packages({ apt: ["ffmpeg"], npm: ["@xenova/transformers"], reason: "Audi
 ```
 
 **When to use this vs workspace `pnpm install`:**
-- `pnpm install` if you only need it temporarily to do one task. Will not be available in subsequent truns.
+- `pnpm install` if you only need it temporarily to do one task. Will not be available in subsequent turns.
 - `install_packages` persists for all future turns. Use especially if the user specifically asks you to add a capability
+
+**After approval — how to verify (do not use `npm list -g`):**
+- Apt: run the binary, or `dpkg -l <pkg>`
+- Npm packages are installed with `pnpm install -g` into `/pnpm/global/5/node_modules` (CLI bins land on `PATH` via `PNPM_HOME=/pnpm`). Confirm with `ls /pnpm/global/5/node_modules/<pkg>` or `node -e "require('<pkg>')"` — `npm list -g` only shows npm's own prefix and will look empty even when install succeeded.
 
 ### MCP servers (`add_mcp_server`)
 

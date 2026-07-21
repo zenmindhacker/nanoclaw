@@ -107,6 +107,7 @@ export function createChannelDeliveryAdapter(): ChannelDeliveryAdapter {
       content: string,
       files?: OutboundFile[],
       instance?: string,
+      platformId?: string,
     ): Promise<string | undefined | null> {
       const adapter = getChannelAdapterExact(instance ?? channelType);
       if (!adapter?.completeSessionActivity) return null;
@@ -115,6 +116,7 @@ export function createChannelDeliveryAdapter(): ChannelDeliveryAdapter {
         kind,
         content: JSON.parse(content),
         files,
+        platformId,
       });
     },
     async cancelSessionActivity(sessionId: string, channelType: string, instance?: string): Promise<void> {

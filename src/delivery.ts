@@ -72,6 +72,7 @@ export interface ChannelDeliveryAdapter {
     kind: string,
     content: string,
     files?: OutboundFile[],
+    platformId?: string,
   ): Promise<string | undefined | null>;
   cancelSessionActivity?(sessionId: string, channelType: string): Promise<void>;
   appendSessionActivity?(sessionId: string, channelType: string, content: string): Promise<boolean>;
@@ -255,9 +256,12 @@ async function drainSession(session: Session): Promise<void> {
     if (undelivered.length === 0) return;
 
     // Slack stream should only complete on the last deliverable chat message in
-    // this drain. Mid-turn send_message rows must use postMessage so the stream
-    // stays open for the final reply (and the assistant status card does not error).
-    const streamEligible = undelivered.filter((m) => isSlackStreamEligible(m));
+    // this drain that targets the wake conversation. Mid-turn send_message rows
+    // and cross-destination posts (e.g. DM session → #channel) must use
+    // postMessage — the assistant stream is bound to the wake thread, so
+    // completing it with another platform_id would mark the channel message
+    // delivered while the text lands in the DM.
+    const streamEligible = undelivered.filter((m) => isSlackStreamEligible(m, session));
     const lastStreamMessageId = streamEligible.length > 0 ? streamEligible[streamEligible.length - 1].id : null;
 
     // Ensure platform_message_id column exists (migration for existing sessions)
@@ -313,8 +317,16 @@ async function drainSession(session: Session): Promise<void> {
   }
 }
 
-function isSlackStreamEligible(msg: { kind: string; channel_type: string | null; content: string }): boolean {
-  if (msg.kind !== 'chat' || msg.channel_type !== 'slack') return false;
+function isSlackStreamEligible(
+  msg: { kind: string; channel_type: string | null; platform_id: string | null; content: string },
+  session: Session,
+): boolean {
+  if (msg.kind !== 'chat' || msg.channel_type !== 'slack' || !msg.platform_id) return false;
+  const originMg = session.messaging_group_id ? getMessagingGroup(session.messaging_group_id) : undefined;
+  // Cross-destination send_message must not complete the wake-bound stream.
+  if (!originMg || originMg.channel_type !== msg.channel_type || originMg.platform_id !== msg.platform_id) {
+    return false;
+  }
   try {
     const content = JSON.parse(msg.content) as Record<string, unknown>;
     return extractDeliverableText(content) !== null;
@@ -474,6 +486,7 @@ async function deliverMessage(
       msg.kind,
       msg.content,
       files,
+      msg.platform_id ?? undefined,
     );
     if (streamedId !== null) {
       log.info('Message delivered via session activity', {

@@ -547,6 +547,10 @@ export async function buildAgentGroupImage(agentGroupId: string): Promise<void> 
     // install silently broken.
     const allowlist = npmPackages.map((p) => `echo 'only-built-dependencies[]=${p}' >> /root/.npmrc`).join(' && ');
     dockerfile += `RUN ${allowlist} && pnpm install -g ${npmPackages.join(' ')}\n`;
+    // pnpm globals live under PNPM_HOME, not npm's prefix — without NODE_PATH,
+    // `node -e "require('pkg')"` and `npm list -g` look empty even when install
+    // succeeded. Bins are already on PATH via PNPM_HOME.
+    dockerfile += 'ENV NODE_PATH="/pnpm/global/5/node_modules"\n';
   }
   dockerfile += 'USER node\n';
 

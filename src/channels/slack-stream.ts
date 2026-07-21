@@ -276,6 +276,21 @@ export function attachSlackSessionActivity(
       return null;
     }
 
+    // Stream is bound to the wake conversation. Cross-destination outbound
+    // (named destination / other channel) must fall through to postMessage.
+    if (message.platformId) {
+      const decoded = decodeSlackThreadId(state.streamThreadId);
+      const streamPlatformId = decoded ? `slack:${decoded.channel}` : null;
+      if (streamPlatformId && message.platformId !== streamPlatformId) {
+        log.debug('Slack stream skip — outbound targets different platform', {
+          sessionId,
+          streamPlatformId,
+          outboundPlatformId: message.platformId,
+        });
+        return null;
+      }
+    }
+
     const content = message.content as Record<string, unknown>;
     const text = extractDeliverableText(content);
     if (!text) {

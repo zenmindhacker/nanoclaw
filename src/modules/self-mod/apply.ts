@@ -63,7 +63,7 @@ export const applyInstallPackages: ApprovalHandler = async ({ session, payload, 
       channelType: 'agent',
       threadId: null,
       content: JSON.stringify({
-        text: `Packages installed (${pkgs}) and container rebuilt. Verify the new packages are available (e.g. run them or check versions) and report the result to the user.`,
+        text: `Packages installed (${pkgs}) and container rebuilt. Verify and report to the user. Apt: run the binary or \`dpkg -l <pkg>\`. Npm (pnpm globals under /pnpm — NOT \`npm list -g\`): CLI bins are on PATH; libraries via \`node -e "require('<pkg>')"\` or \`ls /pnpm/global/5/node_modules/<pkg>\`.`,
         sender: 'system',
         senderId: 'system',
       }),

@@ -354,6 +354,85 @@ describe('deliverSessionMessages — instance resolution', () => {
   });
 });
 
+describe('deliverSessionMessages — Slack stream vs cross-destination', () => {
+  it('posts cross-destination Slack chat via deliver, not session activity', async () => {
+    createAgentGroup({
+      id: 'ag-1',
+      name: 'Test Agent',
+      folder: 'test-agent',
+      agent_provider: null,
+      created_at: now(),
+    });
+    createMessagingGroup({
+      id: 'mg-dm',
+      channel_type: 'slack',
+      platform_id: 'slack:D1',
+      name: 'DM',
+      is_group: 0,
+      unknown_sender_policy: 'public',
+      created_at: now(),
+    });
+    createMessagingGroup({
+      id: 'mg-channel',
+      channel_type: 'slack',
+      platform_id: 'slack:C1',
+      name: 'ai-bot',
+      is_group: 1,
+      unknown_sender_policy: 'public',
+      created_at: now(),
+    });
+    createMessagingGroupAgent({
+      id: 'mga-dm',
+      messaging_group_id: 'mg-dm',
+      agent_group_id: 'ag-1',
+      engage_mode: 'pattern',
+      engage_pattern: '.',
+      sender_scope: 'all',
+      ignored_message_policy: 'drop',
+      session_mode: 'per-thread',
+      priority: 0,
+      created_at: now(),
+    });
+    createMessagingGroupAgent({
+      id: 'mga-ch',
+      messaging_group_id: 'mg-channel',
+      agent_group_id: 'ag-1',
+      engage_mode: 'pattern',
+      engage_pattern: '.',
+      sender_scope: 'all',
+      ignored_message_policy: 'drop',
+      session_mode: 'shared',
+      priority: 0,
+      created_at: now(),
+    });
+
+    const { session } = resolveSession('ag-1', 'mg-dm', 'slack:D1:111.222', 'per-thread');
+    const outDb = new Database(outboundDbPath('ag-1', session.id));
+    outDb
+      .prepare(
+        `INSERT INTO messages_out (id, timestamp, kind, platform_id, channel_type, thread_id, content)
+         VALUES ('out-channel', datetime('now'), 'chat', 'slack:C1', 'slack', NULL, ?)`,
+      )
+      .run(JSON.stringify({ text: 'chronicle for the channel' }));
+    outDb.close();
+
+    const delivered: Array<{ via: string; platformId: string }> = [];
+    setDeliveryAdapter({
+      async completeSessionActivity() {
+        delivered.push({ via: 'stream', platformId: 'stream' });
+        return 'stream-msg-id';
+      },
+      async deliver(_ct, platformId) {
+        delivered.push({ via: 'postMessage', platformId });
+        return 'plat-channel';
+      },
+    });
+
+    await deliverSessionMessages(session);
+    expect(delivered).toEqual([{ via: 'postMessage', platformId: 'slack:C1' }]);
+  });
+});
+
 describe('deliverSessionMessages — permission check', () => {
   it('rejects delivery to an unauthorized channel destination', async () => {
     seedAgentAndChannel();

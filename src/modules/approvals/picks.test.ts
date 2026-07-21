@@ -139,6 +139,23 @@ describe('pickApprovalDelivery', () => {
     expect(result?.userId).toBe('telegram:111');
   });
 
+  it('prefers the origin DM when it belongs to an eligible approver', async () => {
+    await mountMockAdapter('slack', async (h) => `slack:D-${h}`);
+    seedUser('slack:U-owner', 'slack');
+    seedUser('slack:U-admin', 'slack');
+
+    // Resolve both DMs into user_dms + messaging_groups
+    const owner = await pickApprovalDelivery(['slack:U-owner'], 'slack');
+    const admin = await pickApprovalDelivery(['slack:U-admin'], 'slack');
+    expect(owner).toBeTruthy();
+    expect(admin).toBeTruthy();
+
+    // Even though admin is first in the list, origin chat is the owner's DM.
+    const result = await pickApprovalDelivery(['slack:U-admin', 'slack:U-owner'], 'slack', owner!.messagingGroup.id);
+    expect(result?.userId).toBe('slack:U-owner');
+    expect(result?.messagingGroup.id).toBe(owner!.messagingGroup.id);
+  });
+
   it('returns null when nobody is reachable', async () => {
     seedUser('telegram:111', 'telegram');
     expect(await pickApprovalDelivery(['telegram:111'], 'telegram')).toBeNull();
