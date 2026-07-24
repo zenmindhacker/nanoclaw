@@ -77,6 +77,8 @@ Keep channel-specific state (e.g. Christina’s cycle dates) in the active group
 
 ## Server deploy
 
+Canonical path (see [AGENTS.md](../AGENTS.md)): **local edit → Tier 0 → commit → push `origin/main` → `scripts/deploy-remote.sh`**. Do not rsync/scp host or container source onto Cleo/Silas and leave it uncommitted — that breaks the next pull and desyncs the other agent.
+
 On each server: `git pull --ff-only`, `pnpm install --frozen-lockfile`, `pnpm run build`, restart `nanoclaw`, rebuild container image when Dockerfile changes. Post-upgrade smoke: [post-upgrade.md](post-upgrade.md).
 
 ## Credential lanes
