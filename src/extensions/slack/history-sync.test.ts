@@ -5,7 +5,7 @@ import path from 'path';
 import Database from 'better-sqlite3';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { decodeSlackThreadId } from '../../channels/slack-stream.js';
+import { decodeSlackThreadId, normalizeEmptySlackThreadId } from '../../channels/slack-stream.js';
 import type { MessagingGroup } from '../../types.js';
 
 const TEST_DIR = path.join(os.tmpdir(), `nanoclaw-history-sync-test-${process.getuid?.() ?? process.pid}`);
@@ -45,6 +45,18 @@ describe('Slack history sync helpers', () => {
   it('decodeSlackThreadId parses bare channel ids', () => {
     const decoded = decodeSlackThreadId('slack:D0AFGMS9UE6');
     expect(decoded).toEqual({ channel: 'D0AFGMS9UE6', threadTs: '' });
+  });
+
+  it('normalizeEmptySlackThreadId fills agent_view DM roots from slackStreamThreadTs', () => {
+    expect(
+      normalizeEmptySlackThreadId('slack:D0AFGMS9UE6:', {
+        content: JSON.stringify({ id: '1784920192.499089', slackStreamThreadTs: '1784920192.499089' }),
+      }),
+    ).toBe('slack:D0AFGMS9UE6:1784920192.499089');
+  });
+
+  it('normalizeEmptySlackThreadId leaves real threads alone', () => {
+    expect(normalizeEmptySlackThreadId(THREAD_ID, { id: 'other' })).toBe(THREAD_ID);
   });
 
   it('history message ids are stable per Slack ts', () => {

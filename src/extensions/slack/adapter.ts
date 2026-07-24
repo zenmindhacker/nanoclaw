@@ -89,6 +89,8 @@ registerChannelAdapter('slack', {
     const env = readEnvFile(['SLACK_BOT_TOKEN', 'SLACK_SIGNING_SECRET']);
     if (!env.SLACK_BOT_TOKEN) return null;
     installSlackHttpTrace();
+    // agentView is Chat SDK ≥4.34; until we bump, we normalize empty
+    // `slack:D…:` thread ids ourselves (see normalizeEmptySlackThreadId).
     const slackAdapter = createSlackAdapter({
       botToken: env.SLACK_BOT_TOKEN,
       signingSecret: env.SLACK_SIGNING_SECRET,

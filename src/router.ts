@@ -18,6 +18,7 @@
  * for policy refusals.
  */
 import { getChannelAdapter } from './channels/channel-registry.js';
+import { normalizeEmptySlackThreadId } from './channels/slack-stream.js';
 import { gateCommand } from './command-gate.js';
 import { getAgentGroup } from './db/agent-groups.js';
 import { recordDroppedMessage } from './db/dropped-messages.js';
@@ -216,6 +217,15 @@ export async function routeInbound(event: InboundEvent): Promise<void> {
   const adapter = getChannelAdapter(event.instance ?? event.channelType);
   if (adapter && !adapter.supportsThreads) {
     event = { ...event, threadId: null };
+  }
+
+  // Slack agent DMs: Chat SDK may stamp `slack:D…:` (empty ts). Fill from the
+  // message ts so per-thread sessions + replies share the agent_view thread root.
+  if (event.channelType === 'slack' && event.threadId) {
+    const normalized = normalizeEmptySlackThreadId(event.threadId, event.message);
+    if (normalized && normalized !== event.threadId) {
+      event = { ...event, threadId: normalized };
+    }
   }
 
   const isMention = event.message.isMention === true;

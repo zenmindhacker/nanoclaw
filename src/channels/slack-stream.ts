@@ -41,6 +41,43 @@ export function decodeSlackThreadId(threadId: string): { channel: string; thread
   return { channel: rest.slice(0, sep), threadTs: rest.slice(sep + 1) };
 }
 
+const SLACK_TS_RE = /^\d+\.\d+$/;
+
+/**
+ * Slack's agent DM experience (`agent_view`) threads each user message: the
+ * message's own `ts` is the thread root. Chat SDK often delivers that as
+ * `slack:D…:` (empty threadTs) plus `slackStreamThreadTs` / message id.
+ * Without filling the ts, NanoClaw posts the reply at DM root while the
+ * assistant stream/status stays under the user message.
+ */
+export function normalizeEmptySlackThreadId(
+  threadId: string | null | undefined,
+  message?: { id?: string; content?: string },
+): string | null {
+  if (!threadId) return threadId ?? null;
+  const decoded = decodeSlackThreadId(threadId);
+  if (!decoded || decoded.threadTs) return threadId;
+
+  let ts: string | undefined;
+  if (message?.content) {
+    try {
+      const content = JSON.parse(message.content) as Record<string, unknown>;
+      if (typeof content.slackStreamThreadTs === 'string' && SLACK_TS_RE.test(content.slackStreamThreadTs)) {
+        ts = content.slackStreamThreadTs;
+      } else if (typeof content.id === 'string' && SLACK_TS_RE.test(content.id)) {
+        ts = content.id;
+      }
+    } catch {
+      /* ignore malformed content */
+    }
+  }
+  if (!ts && typeof message?.id === 'string' && SLACK_TS_RE.test(message.id)) {
+    ts = message.id;
+  }
+  if (!ts) return threadId;
+  return `slack:${decoded.channel}:${ts}`;
+}
+
 /** Async iterable fed incrementally until the final outbound reply completes the stream. */
 export class AsyncStreamFeed implements AsyncIterable<string | StreamChunk> {
   private queue: (string | StreamChunk)[] = [];

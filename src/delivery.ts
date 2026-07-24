@@ -28,6 +28,7 @@ import { clearOutbox, openInboundDb, openOutboundDb, readOutboxFiles } from './s
 import { registerMentionStickyThreadAfterOutbound } from './router.js';
 import { pauseTypingRefreshAfterDelivery, setTypingAdapter, stopTypingRefresh } from './modules/typing/index.js';
 import { extractDeliverableText } from './channels/session-activity.js';
+import { normalizeEmptySlackThreadId } from './channels/slack-stream.js';
 import type { OutboundFile } from './channels/adapter.js';
 import type { Session } from './types.js';
 
@@ -93,6 +94,9 @@ function resolveSlackDmThreadFallback(
   inDb: Database.Database,
 ): string | null {
   if (msg.thread_id || msg.channel_type !== 'slack' || !msg.platform_id) {
+    if (msg.channel_type === 'slack' && msg.thread_id) {
+      return normalizeEmptySlackThreadId(msg.thread_id, undefined);
+    }
     return msg.thread_id;
   }
 
@@ -126,14 +130,22 @@ function resolveSlackDmThreadFallback(
     .get(msg.channel_type, msg.platform_id) as { thread_id: string | null } | undefined;
 
   if (row?.thread_id) {
+    const inbound = inDb
+      .prepare(
+        `SELECT id, content FROM messages_in
+         WHERE channel_type = ? AND platform_id = ? AND thread_id = ?
+         ORDER BY seq DESC LIMIT 1`,
+      )
+      .get(msg.channel_type, msg.platform_id, row.thread_id) as { id: string; content: string } | undefined;
+    const filled = normalizeEmptySlackThreadId(row.thread_id, inbound ?? undefined);
     log.debug('Filled missing Slack DM thread_id from latest inbound', {
       messageId: msg.id,
-      threadId: row.thread_id,
+      threadId: filled,
     });
-    return row.thread_id;
+    return filled;
   }
 
-  return msg.thread_id;
+  return normalizeEmptySlackThreadId(msg.thread_id, undefined);
 }
 
 /**
@@ -434,7 +446,18 @@ async function deliverMessage(
     deliverInstance = mg.instance;
   }
 
-  const deliveryThreadId = resolveSlackDmThreadFallback(msg, session, inDb);
+  let deliveryThreadId = resolveSlackDmThreadFallback(msg, session, inDb);
+  if (msg.channel_type === 'slack') {
+    // Prefer session/inbound thread, then upgrade empty agent-DM `slack:D…:` ids.
+    const inboundForTs = inDb
+      .prepare(
+        `SELECT id, content FROM messages_in
+         WHERE channel_type = 'slack' AND platform_id = ?
+         ORDER BY seq DESC LIMIT 1`,
+      )
+      .get(msg.platform_id) as { id: string; content: string } | undefined;
+    deliveryThreadId = normalizeEmptySlackThreadId(deliveryThreadId, inboundForTs ?? undefined);
+  }
 
   // Track pending questions for ask_user_question flow.
   // Guarded: without the interactive module, `pending_questions` doesn't
@@ -513,6 +536,11 @@ async function deliverMessage(
         }
       }
       return streamedId;
+    }
+    // Stream incomplete / non-streamable — tear down assistant status so
+    // "Analyzing…" does not stick after a postMessage fallback.
+    if (deliveryAdapter.cancelSessionActivity) {
+      await deliveryAdapter.cancelSessionActivity(session.id, msg.channel_type);
     }
   }
 
