@@ -60,5 +60,7 @@ pnpm exec tsx scripts/seed-scheduled-tasks.ts || true
 SILAS
 fi
 
+# Per-agent report path: /tmp is shared on cleo-lc (cian + christina).
+REPORT="/tmp/upgrade-report-${AGENT}.json"
 echo "==> Post-upgrade smoke (tier $TIER)"
-ssh "$HOST" "cd $REMOTE_DIR && pnpm run post-upgrade -- --agent $AGENT --tier $TIER --json-out /tmp/upgrade-report.json && cat /tmp/upgrade-report.json"
+ssh "$HOST" "cd $REMOTE_DIR && pnpm run post-upgrade -- --agent $AGENT --tier $TIER --json-out $REPORT && cat $REPORT"
