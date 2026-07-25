@@ -6,7 +6,15 @@ import { query as sdkQuery, type HookCallback, type PreCompactHookInput } from '
 
 import { clearContainerToolInFlight, setContainerToolInFlight } from '../db/connection.js';
 import { registerProvider } from './provider-registry.js';
-import type { AgentProvider, AgentQuery, McpServerConfig, ProviderEvent, ProviderOptions, QueryInput } from './types.js';
+import {
+  toolProgressLabel,
+  type AgentProvider,
+  type AgentQuery,
+  type McpServerConfig,
+  type ProviderEvent,
+  type ProviderOptions,
+  type QueryInput,
+} from './types.js';
 
 function log(msg: string): void {
   console.error(`[claude-provider] ${msg}`);
@@ -430,12 +438,42 @@ export class ClaudeProvider implements AgentProvider {
 
     async function* translateEvents(): AsyncGenerator<ProviderEvent> {
       let messageCount = 0;
+      const openTools = new Map<string, { toolName: string; title: string; taskId: string }>();
       for await (const message of sdkResult) {
         if (aborted) return;
         messageCount++;
 
         // Yield activity for every SDK event so the poll loop knows the agent is working
         yield { type: 'activity' };
+
+        if (message.type === 'assistant') {
+          const content = (message as { message?: { content?: unknown } }).message?.content;
+          if (Array.isArray(content)) {
+            for (const block of content) {
+              const b = block as { type?: string; name?: string; id?: string };
+              if (b.type === 'tool_use' && typeof b.name === 'string' && typeof b.id === 'string') {
+                const { title, taskId } = toolProgressLabel(b.name);
+                const entry = { toolName: b.name, title, taskId: `${taskId}-${b.id.slice(-6)}` };
+                openTools.set(b.id, entry);
+                yield { type: 'tool_start', ...entry };
+              }
+            }
+          }
+        } else if (message.type === 'user') {
+          const content = (message as { message?: { content?: unknown } }).message?.content;
+          if (Array.isArray(content)) {
+            for (const block of content) {
+              const b = block as { type?: string; tool_use_id?: string; is_error?: boolean };
+              if (b.type === 'tool_result' && typeof b.tool_use_id === 'string') {
+                const open = openTools.get(b.tool_use_id);
+                if (open) {
+                  openTools.delete(b.tool_use_id);
+                  yield { type: 'tool_end', ...open, ok: b.is_error !== true };
+                }
+              }
+            }
+          }
+        }
 
         if (message.type === 'system' && message.subtype === 'init') {
           yield { type: 'init', continuation: message.session_id };

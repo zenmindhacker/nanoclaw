@@ -4,7 +4,14 @@ import fs from 'fs';
 import { createOpencodeClient, type OpencodeClient } from '@opencode-ai/sdk';
 
 import { registerProvider } from './provider-registry.js';
-import type { AgentProvider, AgentQuery, ProviderEvent, ProviderOptions, QueryInput } from './types.js';
+import {
+  toolProgressLabel,
+  type AgentProvider,
+  type AgentQuery,
+  type ProviderEvent,
+  type ProviderOptions,
+  type QueryInput,
+} from './types.js';
 import { mcpServersToOpenCodeConfig } from './mcp-to-opencode.js';
 
 function log(msg: string): void {
@@ -479,6 +486,7 @@ export class OpenCodeProvider implements AgentProvider {
 
         const partTextByMessageId = new Map<string, string>();
         const roleByMessageId = new Map<string, string>();
+        const startedToolCalls = new Set<string>();
         let lastEventAt = Date.now();
         let eventTimedOut = false;
         const timeoutCheck = setInterval(() => {
@@ -517,9 +525,36 @@ export class OpenCodeProvider implements AgentProvider {
                 break;
               }
               case 'message.part.updated': {
-                const part = ev.properties.part as { type?: string; messageID?: string; text?: string } | undefined;
+                const part = ev.properties.part as {
+                  type?: string;
+                  messageID?: string;
+                  text?: string;
+                  callID?: string;
+                  tool?: string;
+                  state?: { status?: string };
+                } | undefined;
                 if (part?.type === 'text' && part.messageID && part.text) {
                   partTextByMessageId.set(part.messageID, part.text);
+                } else if (part?.type === 'tool' && typeof part.tool === 'string') {
+                  const { title, taskId: baseId } = toolProgressLabel(part.tool);
+                  const suffix = (part.callID ?? part.messageID ?? '').slice(-6);
+                  const taskId = suffix ? `${baseId}-${suffix}` : baseId;
+                  const status = part.state?.status;
+                  if (status === 'pending' || status === 'running') {
+                    if (!startedToolCalls.has(taskId)) {
+                      startedToolCalls.add(taskId);
+                      yield { type: 'tool_start', toolName: part.tool, title, taskId };
+                    }
+                  } else if (status === 'completed' || status === 'error') {
+                    startedToolCalls.delete(taskId);
+                    yield {
+                      type: 'tool_end',
+                      toolName: part.tool,
+                      title,
+                      taskId,
+                      ok: status === 'completed',
+                    };
+                  }
                 }
                 break;
               }

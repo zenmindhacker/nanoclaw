@@ -69,6 +69,8 @@ export const ABSOLUTE_CEILING_MS = 30 * 60 * 1000;
 export const CLAIM_STUCK_MS = 60 * 1000;
 const MAX_TRIES = 5;
 const BACKOFF_BASE_MS = 5000;
+/** Cap cold wakes per sweep tick so startup backlog cannot spawn dozens of containers. */
+export const MAX_CONCURRENT_WAKES = 3;
 
 export type StuckDecision =
   | { action: 'ok' }
@@ -148,9 +150,17 @@ async function sweep(): Promise<void> {
   }
 
   try {
-    const sessions = getActiveSessions();
+    // Prefer recently-active sessions so a live Slack mention beats zombie
+    // backlog after history-sync / deploy restarts.
+    const sessions = [...getActiveSessions()].sort((a, b) => {
+      const ta = a.last_active ? parseSqliteUtc(a.last_active) : 0;
+      const tb = b.last_active ? parseSqliteUtc(b.last_active) : 0;
+      return tb - ta;
+    });
+    let wakesLeft = MAX_CONCURRENT_WAKES;
     for (const session of sessions) {
-      await sweepSession(session);
+      const woke = await sweepSession(session, wakesLeft > 0);
+      if (woke) wakesLeft -= 1;
     }
   } catch (err) {
     log.error('Host sweep error', { err });
@@ -172,19 +182,20 @@ async function sweep(): Promise<void> {
   setTimeout(sweep, SWEEP_INTERVAL_MS);
 }
 
-async function sweepSession(session: Session): Promise<void> {
+/** @returns true when this sweep tick cold-started a container for due work */
+async function sweepSession(session: Session, allowWake: boolean): Promise<boolean> {
   const agentGroup = getAgentGroup(session.agent_group_id);
-  if (!agentGroup) return;
+  if (!agentGroup) return false;
 
   const inPath = inboundDbPath(agentGroup.id, session.id);
-  if (!fs.existsSync(inPath)) return;
+  if (!fs.existsSync(inPath)) return false;
 
   let inDb: Database.Database;
   let outDb: Database.Database | null = null;
   try {
     inDb = openInboundDb(agentGroup.id, session.id);
   } catch {
-    return;
+    return false;
   }
 
   try {
@@ -193,6 +204,7 @@ async function sweepSession(session: Session): Promise<void> {
     // outbound.db might not exist yet (container hasn't started)
   }
 
+  let justWoke = false;
   try {
     // 1. Sync processing_ack → messages_in status
     if (outDb) {
@@ -206,13 +218,16 @@ async function sweepSession(session: Session): Promise<void> {
     // would keep bumping process_after into the future, dueCount would stay 0,
     // and the wake would never fire.
     const dueCount = countDueMessages(inDb);
-    let justWoke = false;
     if (dueCount > 0 && !isContainerRunning(session.id)) {
-      log.info('Waking container for due messages', { sessionId: session.id, count: dueCount });
-      // wakeContainer never throws — transient spawn failures (OneCLI down,
-      // etc.) return false and leave messages pending for the next tick.
-      await wakeContainer(session);
-      justWoke = true;
+      if (!allowWake) {
+        log.debug('Deferred wake — concurrency cap', { sessionId: session.id, count: dueCount });
+      } else {
+        log.info('Waking container for due messages', { sessionId: session.id, count: dueCount });
+        // wakeContainer never throws — transient spawn failures (OneCLI down,
+        // etc.) return false and leave messages pending for the next tick.
+        await wakeContainer(session);
+        justWoke = true;
+      }
     }
 
     const alive = isContainerRunning(session.id);
@@ -239,6 +254,7 @@ async function sweepSession(session: Session): Promise<void> {
     const { handleRecurrence } = await import('./modules/scheduling/recurrence.js');
     await handleRecurrence(inDb, session);
     // MODULE-HOOK:scheduling-recurrence:end
+    return justWoke;
   } finally {
     inDb.close();
     outDb?.close();

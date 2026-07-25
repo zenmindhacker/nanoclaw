@@ -16,7 +16,13 @@ import { getActiveSessions } from '../../db/sessions.js';
 import { readEnvFile } from '../../env.js';
 import { log } from '../../log.js';
 import { resolveGroupFolderPath } from '../../group-folder.js';
-import { inboundDbPath, openInboundDb, resolveSession, writeSessionMessage } from '../../session-manager.js';
+import {
+  effectiveSessionMode,
+  inboundDbPath,
+  openInboundDb,
+  resolveSession,
+  writeSessionMessage,
+} from '../../session-manager.js';
 import type { MessagingGroup, MessagingGroupAgent, Session } from '../../types.js';
 import type { InboundEvent } from '../../channels/adapter.js';
 
@@ -157,19 +163,22 @@ async function insertHistoryMessage(
     threadId,
     content: buildHistoryContent(msg, isBot, mg.is_group !== 0),
     trigger: 0,
+    // Context-only: never leave pending rows that can confuse audits or
+    // accumulate forever. Host wake already gates on trigger=1.
+    status: 'completed',
   });
   return true;
 }
 
-function effectiveSessionMode(
+function historySyncSessionMode(
   agent: MessagingGroupAgent,
   mg: MessagingGroup,
 ): 'shared' | 'per-thread' | 'agent-shared' {
-  let mode = agent.session_mode;
-  if (mode !== 'agent-shared' && mg.is_group !== 0) {
-    mode = 'per-thread';
-  }
-  return mode;
+  return effectiveSessionMode(agent.session_mode, {
+    channelType: mg.channel_type,
+    isGroup: mg.is_group !== 0,
+    adapterSupportsThreads: true,
+  });
 }
 
 async function fetchThreadMessages(channelId: string, threadTs: string): Promise<SlackMessage[]> {
@@ -407,7 +416,7 @@ export async function syncSlackAgentsForMessagingGroup(
   if (mg.channel_type !== 'slack') return;
   const agents = getMessagingGroupAgents(mg.id);
   for (const agent of agents) {
-    const mode = effectiveSessionMode(agent, mg);
+    const mode = historySyncSessionMode(agent, mg);
     const lookupThread = mode === 'per-thread' ? threadId : null;
     const { session } = resolveSession(agent.agent_group_id, mg.id, lookupThread, mode);
     await syncSessionFromSlack(session);
@@ -427,7 +436,7 @@ export async function syncMentionStickyThreadAfterOutbound(
   if (!threadId || mg.channel_type !== 'slack') return;
   const stickyAgents = getMessagingGroupAgents(mg.id).filter((a) => a.engage_mode === 'mention-sticky');
   for (const agent of stickyAgents) {
-    const mode = effectiveSessionMode(agent, mg);
+    const mode = historySyncSessionMode(agent, mg);
     const { session } = resolveSession(agent.agent_group_id, mg.id, threadId, mode);
     await syncSessionFromSlack(session);
   }

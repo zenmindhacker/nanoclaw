@@ -518,21 +518,28 @@ async function deliverMessage(
         platformId: msg.platform_id,
         platformMsgId: streamedId,
       });
+      // Persist delivery before non-critical bookkeeping so a sticky/DB throw
+      // cannot cause drainSession to retry a send that already hit Slack.
+      markDelivered(inDb, msg.id, streamedId ?? null);
       clearOutbox(session.agent_group_id, session.id, msg.id);
       if (msg.kind === 'chat' && msg.platform_id) {
-        const originMg = session.messaging_group_id ? getMessagingGroup(session.messaging_group_id) : undefined;
-        const streamMg =
-          originMg && originMg.channel_type === msg.channel_type && originMg.platform_id === msg.platform_id
-            ? originMg
-            : getMessagingGroupByPlatform(msg.channel_type, msg.platform_id);
-        if (streamMg) {
-          registerMentionStickyThreadAfterOutbound(
-            streamMg,
-            msg.channel_type,
-            msg.platform_id,
-            deliveryThreadId,
-            streamMg.instance,
-          );
+        try {
+          const originMg = session.messaging_group_id ? getMessagingGroup(session.messaging_group_id) : undefined;
+          const streamMg =
+            originMg && originMg.channel_type === msg.channel_type && originMg.platform_id === msg.platform_id
+              ? originMg
+              : getMessagingGroupByPlatform(msg.channel_type, msg.platform_id);
+          if (streamMg) {
+            registerMentionStickyThreadAfterOutbound(
+              streamMg,
+              msg.channel_type,
+              msg.platform_id,
+              deliveryThreadId,
+              streamMg.instance,
+            );
+          }
+        } catch (err) {
+          log.warn('Post-delivery sticky bookkeeping failed', { messageId: msg.id, err });
         }
       }
       return streamedId;
@@ -561,22 +568,27 @@ async function deliverMessage(
     fileCount: files?.length,
   });
 
+  markDelivered(inDb, msg.id, platformMsgId ?? null);
   clearOutbox(session.agent_group_id, session.id, msg.id);
 
   if (msg.kind === 'chat' && msg.platform_id) {
-    const originMg = session.messaging_group_id ? getMessagingGroup(session.messaging_group_id) : undefined;
-    const deliveredMg =
-      originMg && originMg.channel_type === msg.channel_type && originMg.platform_id === msg.platform_id
-        ? originMg
-        : getMessagingGroupByPlatform(msg.channel_type, msg.platform_id);
-    if (deliveredMg) {
-      registerMentionStickyThreadAfterOutbound(
-        deliveredMg,
-        msg.channel_type,
-        msg.platform_id,
-        deliveryThreadId,
-        deliverInstance,
-      );
+    try {
+      const originMg = session.messaging_group_id ? getMessagingGroup(session.messaging_group_id) : undefined;
+      const deliveredMg =
+        originMg && originMg.channel_type === msg.channel_type && originMg.platform_id === msg.platform_id
+          ? originMg
+          : getMessagingGroupByPlatform(msg.channel_type, msg.platform_id);
+      if (deliveredMg) {
+        registerMentionStickyThreadAfterOutbound(
+          deliveredMg,
+          msg.channel_type,
+          msg.platform_id,
+          deliveryThreadId,
+          deliverInstance,
+        );
+      }
+    } catch (err) {
+      log.warn('Post-delivery sticky bookkeeping failed', { messageId: msg.id, err });
     }
   }
 

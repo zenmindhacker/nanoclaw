@@ -29,8 +29,11 @@ import { composeGroupClaudeMd } from './claude-md-compose.js';
 import { getAgentGroup } from './db/agent-groups.js';
 import { getDb, hasTable } from './db/connection.js';
 import { initGroupFilesystem } from './group-init.js';
+import { getChannelAdapterExact } from './channels/channel-registry.js';
+import { getMessagingGroup } from './db/messaging-groups.js';
 import { stopTypingRefresh } from './modules/typing/index.js';
 import { log } from './log.js';
+import { getSession } from './db/sessions.js';
 import { getDefaultMounts, validateAdditionalMounts } from './modules/mount-security/index.js';
 // Provider host-side config barrel — each provider that needs host-side
 // container setup self-registers on import.
@@ -194,6 +197,7 @@ async function spawnContainer(session: Session): Promise<void> {
     activeContainers.delete(session.id);
     markContainerStopped(session.id);
     stopTypingRefresh(session.id);
+    void cancelSessionActivityForSession(session.id);
     // code null = killed by signal (normal shutdown path), not a boot failure.
     if (code !== 0 && code !== null && stderrTail.length > 0) {
       log.warn('Container exited non-zero', { sessionId: session.id, code, containerName, stderrTail });
@@ -206,8 +210,21 @@ async function spawnContainer(session: Session): Promise<void> {
     activeContainers.delete(session.id);
     markContainerStopped(session.id);
     stopTypingRefresh(session.id);
+    void cancelSessionActivityForSession(session.id);
     log.error('Container spawn error', { sessionId: session.id, err });
   });
+}
+
+/** Tear down Slack assistant status/stream when a container dies mid-turn. */
+async function cancelSessionActivityForSession(sessionId: string): Promise<void> {
+  try {
+    const sess = getSession(sessionId);
+    const mg = sess?.messaging_group_id ? getMessagingGroup(sess.messaging_group_id) : undefined;
+    const adapter = getChannelAdapterExact(mg?.instance ?? mg?.channel_type ?? 'slack');
+    await adapter?.cancelSessionActivity?.(sessionId);
+  } catch (err) {
+    log.debug('cancelSessionActivity on container exit failed', { sessionId, err });
+  }
 }
 
 /** Kill a container for a session. */

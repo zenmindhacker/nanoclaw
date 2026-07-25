@@ -91,7 +91,7 @@ function main(): void {
       continue;
     }
 
-    // 1. Force DM wiring to per-thread
+    // 1. Force Slack DM wiring to shared (agent_view: one session per DM)
     const wiring = db
       .prepare(
         `SELECT id, session_mode FROM messaging_group_agents
@@ -102,17 +102,15 @@ function main(): void {
       console.error(`SKIP: no wiring for ${fix.folder} / ${fix.messagingGroupId}`);
       continue;
     }
-    if (wiring.session_mode !== 'per-thread') {
+    if (wiring.session_mode !== 'shared' && wiring.session_mode !== 'agent-shared') {
       if (dryRun) {
-        console.log(`DRY:session_mode ${wiring.id} ${wiring.session_mode} → per-thread`);
+        console.log(`DRY:session_mode ${wiring.id} ${wiring.session_mode} → shared`);
       } else {
-        db.prepare(`UPDATE messaging_group_agents SET session_mode = 'per-thread' WHERE id = ?`).run(
-          wiring.id,
-        );
-        console.log(`OK:session_mode ${wiring.id} → per-thread`);
+        db.prepare(`UPDATE messaging_group_agents SET session_mode = 'shared' WHERE id = ?`).run(wiring.id);
+        console.log(`OK:session_mode ${wiring.id} → shared`);
       }
     } else {
-      console.log(`OK:session_mode already per-thread (${wiring.id})`);
+      console.log(`OK:session_mode already ${wiring.session_mode} (${wiring.id})`);
     }
 
     // 2. Ensure null-thread notify session
@@ -129,7 +127,7 @@ function main(): void {
       if (dryRun) {
         console.log(`DRY:create null-thread notify session for ${fix.folder}`);
       } else {
-        const { session } = resolveSession(ag.id, fix.messagingGroupId, null, 'per-thread');
+        const { session } = resolveSession(ag.id, fix.messagingGroupId, null, 'shared');
         initSessionFolder(ag.id, session.id);
         notifySession = { id: session.id };
         console.log(`OK:created notify session ${session.id}`);
@@ -229,7 +227,7 @@ function main(): void {
     }
   }
 
-  // Cleo DM: per-thread only (cron lives on slack_scheduled, not the DM)
+  // Cleo DM: shared (cron lives on slack_scheduled; agent_view needs one DM session)
   if (!onlyFolder || onlyFolder === 'dm-with-cian' || onlyFolder === 'cleo') {
     const cleoAg = getAgentGroupByFolder('dm-with-cian');
     if (!cleoAg) {
@@ -246,15 +244,15 @@ function main(): void {
         .all(cleoAg.id) as Array<{ id: string; session_mode: string; platform_id: string }>;
 
       for (const row of cleoDm) {
-        if (row.session_mode === 'per-thread') {
-          console.log(`OK:cleo DM ${row.platform_id} already per-thread`);
+        if (row.session_mode === 'shared' || row.session_mode === 'agent-shared') {
+          console.log(`OK:cleo DM ${row.platform_id} already ${row.session_mode}`);
           continue;
         }
         if (dryRun) {
-          console.log(`DRY:cleo DM ${row.platform_id} ${row.session_mode} → per-thread`);
+          console.log(`DRY:cleo DM ${row.platform_id} ${row.session_mode} → shared`);
         } else {
-          db.prepare(`UPDATE messaging_group_agents SET session_mode = 'per-thread' WHERE id = ?`).run(row.id);
-          console.log(`OK:cleo DM ${row.platform_id} → per-thread`);
+          db.prepare(`UPDATE messaging_group_agents SET session_mode = 'shared' WHERE id = ?`).run(row.id);
+          console.log(`OK:cleo DM ${row.platform_id} → shared`);
         }
       }
     }

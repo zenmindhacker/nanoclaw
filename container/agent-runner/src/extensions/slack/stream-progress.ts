@@ -27,7 +27,7 @@ export const reportStreamProgress: McpToolDefinition = {
   tool: {
     name: 'report_stream_progress',
     description:
-      'Report observable work on Slack (tool call, export, API step). Updates the live Thinking Steps timeline — not a separate chat message. Do not use for reasoning or chain-of-thought.',
+      'Report a high-level milestone on Slack Thinking Steps (not individual tools — those auto-report). Not a separate chat message. Do not use for reasoning or chain-of-thought.',
     inputSchema: {
       type: 'object' as const,
       properties: {

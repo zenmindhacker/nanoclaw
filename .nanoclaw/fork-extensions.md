@@ -42,6 +42,14 @@ container/agent-runner/src/extensions/
 
 Wired via one line in `mcp-tools/index.ts`: `import '../extensions/index.js'`.
 
+## Slack DM policy (agent_view)
+
+Slack `agent_view` makes each user DM message its own thread root. NanoClaw policy:
+
+- **Session mode**: Slack DMs stay `shared` (router `effectiveSessionMode`; production wirings via `scripts/force-slack-dm-shared.ts`). Do not wire DMs as `per-thread`.
+- **Reply targeting**: `normalizeEmptySlackThreadId` fills empty `slack:D…:` roots for postMessage / assistant stream only — never as a session key.
+- **Progress**: tool start/end auto-write `stream_progress`; `report_stream_progress` is for high-level narration only.
+
 ## What stays outside extensions
 
 | File | Location | Reason |

@@ -29,7 +29,7 @@ type SlackStreamAdapter = Adapter & {
       recipientTeamId?: string;
       taskDisplayMode?: 'timeline' | 'plan';
     },
-  ): Promise<{ id?: string } | undefined>;
+  ): Promise<{ id?: string } | null | undefined>;
   setAssistantStatus?(channel: string, threadTs: string, status: string): Promise<void>;
 };
 
@@ -44,11 +44,12 @@ export function decodeSlackThreadId(threadId: string): { channel: string; thread
 const SLACK_TS_RE = /^\d+\.\d+$/;
 
 /**
- * Slack's agent DM experience (`agent_view`) threads each user message: the
- * message's own `ts` is the thread root. Chat SDK often delivers that as
- * `slack:D…:` (empty threadTs) plus `slackStreamThreadTs` / message id.
- * Without filling the ts, NanoClaw posts the reply at DM root while the
- * assistant stream/status stays under the user message.
+ * Fill empty agent_view DM thread roots for *reply targeting* only
+ * (postMessage / assistant stream bind to the user message ts).
+ *
+ * Do not use the filled ts as a session key for Slack DMs — those stay on
+ * `shared` session mode via effectiveSessionMode so each message does not
+ * mint a new NanoClaw session.
  */
 export function normalizeEmptySlackThreadId(
   threadId: string | null | undefined,
@@ -109,12 +110,17 @@ export class AsyncStreamFeed implements AsyncIterable<string | StreamChunk> {
   }
 }
 
+const STATUS_KEEPALIVE_MS = 90_000;
+
 interface SlackStreamSession {
   feed: AsyncStreamFeed;
   streamThreadId: string;
-  streamPromise: Promise<{ id?: string } | undefined>;
+  streamPromise: Promise<{ id?: string } | null | undefined>;
   /** In-progress Thinking Steps — closed on complete/cancel so cards never stick. */
   openTasks: Map<string, string>;
+  /** Last status phrase title (without "is ") for keep-alive refresh. */
+  lastStatusTitle: string;
+  keepAliveTimer: ReturnType<typeof setInterval> | null;
 }
 
 function pushTaskUpdate(state: SlackStreamSession, progress: StreamTaskProgress): void {
@@ -186,10 +192,18 @@ export function attachSlackSessionActivity(
     }
   }
 
+  function stopKeepAlive(state: SlackStreamSession): void {
+    if (state.keepAliveTimer) {
+      clearInterval(state.keepAliveTimer);
+      state.keepAliveTimer = null;
+    }
+  }
+
   function cancelSession(sessionId: string, reason: string): void {
     const state = sessions.get(sessionId);
     if (!state) return;
     sessions.delete(sessionId);
+    stopKeepAlive(state);
     closeOpenTasks(state, 'error');
     state.feed.end();
     void state.streamPromise.catch((err) => {
@@ -209,10 +223,21 @@ export function attachSlackSessionActivity(
     const meta = parseSlackStreamMeta(rawMeta);
     if (meta.isGroup) return;
 
-    const recipientUserId = meta.slackRecipientUserId;
-    const recipientTeamId = meta.slackRecipientTeamId;
+    const recipientUserId =
+      meta.slackRecipientUserId ||
+      (typeof rawMeta.senderId === 'string' && /^U[A-Z0-9]+$/i.test(rawMeta.senderId) ? rawMeta.senderId : undefined) ||
+      (typeof rawMeta.user === 'string' ? rawMeta.user : undefined);
+    const recipientTeamId =
+      meta.slackRecipientTeamId ||
+      (typeof rawMeta.team === 'string' ? rawMeta.team : undefined) ||
+      process.env.SLACK_TEAM_ID ||
+      undefined;
     if (!recipientUserId || !recipientTeamId) {
-      log.debug('Slack stream skipped — missing recipient metadata', { sessionId: ctx.sessionId });
+      log.debug('Slack stream skipped — missing recipient metadata', {
+        sessionId: ctx.sessionId,
+        hasUser: !!recipientUserId,
+        hasTeam: !!recipientTeamId,
+      });
       return;
     }
 
@@ -231,11 +256,22 @@ export function attachSlackSessionActivity(
 
     const existing = sessions.get(ctx.sessionId);
     if (existing) {
-      log.debug('Slack stream already active; keeping existing stream for follow-up', {
+      if (existing.streamThreadId === streamThreadId) {
+        log.debug('Slack stream already active; keeping existing stream for follow-up', {
+          sessionId: ctx.sessionId,
+          streamThreadId: existing.streamThreadId,
+        });
+        return;
+      }
+      // Shared DM session can wake under a new agent_view message ts — replace
+      // the stream so status/completion bind to the current user message.
+      log.info('Slack stream thread changed; replacing active stream', {
         sessionId: ctx.sessionId,
-        streamThreadId: existing.streamThreadId,
+        previous: existing.streamThreadId,
+        next: streamThreadId,
       });
-      return;
+      cancelSession(ctx.sessionId, 'thread-changed');
+      await clearAssistantStatus(existing.streamThreadId);
     }
 
     // assistant.threads.setStatus — Slack renders "AppName {status}" (e.g. "is thinking...").
@@ -268,7 +304,28 @@ export function attachSlackSessionActivity(
         throw err;
       });
 
-    sessions.set(ctx.sessionId, { feed, streamThreadId, streamPromise, openTasks: new Map() });
+    const state: SlackStreamSession = {
+      feed,
+      streamThreadId,
+      streamPromise,
+      openTasks: new Map(),
+      lastStatusTitle: '',
+      keepAliveTimer: null,
+    };
+    if (slackAdapter.setAssistantStatus) {
+      state.keepAliveTimer = setInterval(() => {
+        const decodedKeep = decodeSlackThreadId(state.streamThreadId);
+        if (!decodedKeep?.threadTs) return;
+        void slackAdapter.setAssistantStatus!(
+          decodedKeep.channel,
+          decodedKeep.threadTs,
+          formatAssistantStatusPhrase(state.lastStatusTitle),
+        ).catch((err) => {
+          log.debug('Slack assistant status keep-alive failed', { sessionId: ctx.sessionId, err });
+        });
+      }, STATUS_KEEPALIVE_MS);
+    }
+    sessions.set(ctx.sessionId, state);
     void streamPromise
       .then(() => {
         log.debug('Slack stream finished', { sessionId: ctx.sessionId });
@@ -286,6 +343,7 @@ export function attachSlackSessionActivity(
     pushTaskUpdate(state, progress);
 
     if (progress.status === 'in_progress' && slackAdapter.setAssistantStatus) {
+      state.lastStatusTitle = progress.title;
       const decoded = decodeSlackThreadId(state.streamThreadId);
       if (decoded?.threadTs) {
         try {
@@ -336,6 +394,7 @@ export function attachSlackSessionActivity(
     }
 
     closeOpenTasks(state, 'complete');
+    stopKeepAlive(state);
     state.feed.push({ type: 'markdown_text', text });
     state.feed.end();
 

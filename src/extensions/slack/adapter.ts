@@ -70,8 +70,22 @@ function enrichSlackInboundContent(
   raw: Record<string, unknown> | undefined,
 ): void {
   if (!raw) return;
-  const user = raw.user;
-  const team = raw.team ?? raw.team_id;
+  const user =
+    (typeof raw.user === 'string' && raw.user) ||
+    (typeof serialized.senderId === 'string' && serialized.senderId.startsWith('U')
+      ? serialized.senderId
+      : undefined) ||
+    (typeof serialized.author === 'object' &&
+    serialized.author &&
+    typeof (serialized.author as { userId?: string }).userId === 'string'
+      ? (serialized.author as { userId: string }).userId
+      : undefined);
+  const team =
+    (typeof raw.team === 'string' && raw.team) ||
+    (typeof raw.team_id === 'string' && raw.team_id) ||
+    (typeof raw.source_team === 'string' && raw.source_team) ||
+    (typeof raw.user_team === 'string' && raw.user_team) ||
+    undefined;
   const threadTs = raw.thread_ts ?? raw.ts;
   if (typeof user === 'string' && user) {
     serialized.slackRecipientUserId = user;
@@ -89,11 +103,12 @@ registerChannelAdapter('slack', {
     const env = readEnvFile(['SLACK_BOT_TOKEN', 'SLACK_SIGNING_SECRET']);
     if (!env.SLACK_BOT_TOKEN) return null;
     installSlackHttpTrace();
-    // agentView is Chat SDK ≥4.34; until we bump, we normalize empty
-    // `slack:D…:` thread ids ourselves (see normalizeEmptySlackThreadId).
     const slackAdapter = createSlackAdapter({
       botToken: env.SLACK_BOT_TOKEN,
       signingSecret: env.SLACK_SIGNING_SECRET,
+      // agent_view: each DM message is its own thread root. NanoClaw keeps a
+      // shared DM session and uses normalizeEmptySlackThreadId for reply ts.
+      agentView: true,
     });
     const postMessage = slackAdapter.postMessage.bind(slackAdapter);
     slackAdapter.postMessage = async (threadId, message) => {

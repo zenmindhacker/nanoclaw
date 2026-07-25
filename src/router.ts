@@ -27,12 +27,11 @@ import {
   getMessagingGroupAgents,
   getMessagingGroupWithAgentCount,
 } from './db/messaging-groups.js';
-import { findSessionForAgent } from './db/sessions.js';
+import { findSessionForAgent, getSession } from './db/sessions.js';
 import { startTypingRefresh, stopTypingRefresh } from './modules/typing/index.js';
 import { log } from './log.js';
-import { resolveSession, writeSessionMessage, writeOutboundDirect } from './session-manager.js';
+import { effectiveSessionMode, resolveSession, writeOutboundDirect, writeSessionMessage } from './session-manager.js';
 import { wakeContainer } from './container-runner.js';
-import { getSession } from './db/sessions.js';
 import type { AgentGroup, MessagingGroup, MessagingGroupAgent } from './types.js';
 import type { InboundEvent } from './channels/adapter.js';
 
@@ -219,8 +218,10 @@ export async function routeInbound(event: InboundEvent): Promise<void> {
     event = { ...event, threadId: null };
   }
 
-  // Slack agent DMs: Chat SDK may stamp `slack:D…:` (empty ts). Fill from the
-  // message ts so per-thread sessions + replies share the agent_view thread root.
+  // Slack agent_view DMs: Chat SDK may stamp `slack:D…:` (empty ts). Fill from
+  // the message ts so *replies* land under the user message. Session keying for
+  // Slack DMs stays shared (see effectiveSessionMode) — do not treat this as a
+  // per-message session id.
   if (event.channelType === 'slack' && event.threadId) {
     const normalized = normalizeEmptySlackThreadId(event.threadId, event.message);
     if (normalized && normalized !== event.threadId) {
@@ -478,16 +479,14 @@ async function deliverToAgent(
   adapterSupportsThreads: boolean,
   wake: boolean,
 ): Promise<void> {
-  // Apply the adapter thread policy: threaded adapter in a group chat →
-  // per-thread session regardless of wiring. agent-shared preserved (it's
-  // a cross-channel directive the adapter doesn't know about). DMs collapse
-  // sub-threads to one session (is_group=0 short-circuit).
-  let effectiveSessionMode = agent.session_mode;
-  if (adapterSupportsThreads && effectiveSessionMode !== 'agent-shared' && mg.is_group !== 0) {
-    effectiveSessionMode = 'per-thread';
-  }
+  // Apply channel/adapter session policy (group→per-thread, Slack DM→shared).
+  const sessionMode = effectiveSessionMode(agent.session_mode, {
+    channelType: mg.channel_type,
+    isGroup: mg.is_group !== 0,
+    adapterSupportsThreads,
+  });
 
-  const { session, created } = resolveSession(agent.agent_group_id, mg.id, event.threadId, effectiveSessionMode);
+  const { session, created } = resolveSession(agent.agent_group_id, mg.id, event.threadId, sessionMode);
 
   // The inbound row's (channel_type, platform_id, thread_id) is the address
   // the agent's reply will be delivered to. Normally it mirrors the source
@@ -615,11 +614,12 @@ export function registerMentionStickyThreadAfterOutbound(
   if (stickyAgents.length === 0) return;
 
   for (const agent of stickyAgents) {
-    let effectiveSessionMode = agent.session_mode;
-    if (effectiveSessionMode !== 'agent-shared' && mg.is_group !== 0) {
-      effectiveSessionMode = 'per-thread';
-    }
-    resolveSession(agent.agent_group_id, mg.id, threadId, effectiveSessionMode);
+    const sessionMode = effectiveSessionMode(agent.session_mode, {
+      channelType: mg.channel_type,
+      isGroup: mg.is_group !== 0,
+      adapterSupportsThreads: true,
+    });
+    resolveSession(agent.agent_group_id, mg.id, threadId, sessionMode);
   }
 
   void adapter.subscribe(platformId, threadId).catch((err) => {

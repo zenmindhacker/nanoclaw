@@ -12,7 +12,12 @@ import path from 'path';
 import { getCurrentInReplyTo } from '../current-batch.js';
 import { findByName, getAllDestinations } from '../destinations.js';
 import { getInboundDb } from '../db/connection.js';
-import { getMessageIdBySeq, getRoutingBySeq, writeMessageOut } from '../db/messages-out.js';
+import {
+  getMessageIdBySeq,
+  getRoutingBySeq,
+  hasRecentDuplicateOutbound,
+  writeMessageOut,
+} from '../db/messages-out.js';
 import { getSessionRouting } from '../db/session-routing.js';
 import { isTopLevelNotifyTurn } from '../top-level-notify.js';
 import { registerTools } from './server.js';
@@ -174,6 +179,15 @@ export const sendMessage: McpToolDefinition = {
 
     const routing = resolveRouting(args.to as string | undefined);
     if ('error' in routing) return err(routing.error);
+
+    if (
+      routing.channel_type &&
+      routing.platform_id &&
+      hasRecentDuplicateOutbound(routing.channel_type, routing.platform_id, text)
+    ) {
+      log(`send_message: skipped duplicate → ${routing.resolvedName}`);
+      return ok(`Skipped duplicate message to ${routing.resolvedName} (same text sent recently)`);
+    }
 
     const id = generateId();
     const seq = writeMessageOut({

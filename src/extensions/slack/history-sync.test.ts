@@ -92,12 +92,16 @@ describe('Slack history sync integration', () => {
     } as Response;
   }
 
-  function readInboundRows(agentGroupId: string, sessionId: string): Array<{ id: string; trigger: number }> {
+  function readInboundRows(
+    agentGroupId: string,
+    sessionId: string,
+  ): Array<{ id: string; trigger: number; status: string }> {
     const db = new Database(inboundDbPath(agentGroupId, sessionId), { readonly: true });
     try {
-      return db.prepare('SELECT id, trigger FROM messages_in ORDER BY timestamp ASC').all() as Array<{
+      return db.prepare('SELECT id, trigger, status FROM messages_in ORDER BY timestamp ASC').all() as Array<{
         id: string;
         trigger: number;
+        status: string;
       }>;
     } finally {
       db.close();
@@ -221,6 +225,7 @@ describe('Slack history sync integration', () => {
       const rows = readInboundRows('ag-cleo', session.id);
       expect(rows).toHaveLength(2);
       expect(rows.every((r) => r.trigger === 0)).toBe(true);
+      expect(rows.every((r) => r.status === 'completed')).toBe(true);
       expect(rows.map((r) => r.id)).toEqual(['slack-sync:1781715627.799729', 'slack-sync:1781727827.028319']);
 
       const repliesCall = fetchMock.mock.calls.find(([url]) => String(url).includes('conversations.replies'));

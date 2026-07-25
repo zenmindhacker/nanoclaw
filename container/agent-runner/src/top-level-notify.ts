@@ -14,8 +14,9 @@ export function isTopLevelNotifyTurn(): boolean {
            AND (thread_id IS NULL OR thread_id = '')
          LIMIT 1`,
       )
-      .get() as { ok: number } | undefined;
-    return row !== undefined;
+      .get() as { ok: number } | null | undefined;
+    // bun:sqlite / better-sqlite3 return null (not undefined) when no row matches.
+    return row != null;
   } catch {
     return false;
   }

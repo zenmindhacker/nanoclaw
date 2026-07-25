@@ -131,21 +131,28 @@ export function getRoutingBySeq(
   return outRow ?? null;
 }
 
-/** True when the same channel destination already has this exact text outbound. */
+/** True when the same channel destination already has this exact text outbound recently. */
 export function hasRecentDuplicateOutbound(
   channelType: string,
   platformId: string,
   text: string,
-  limit = 5,
+  opts: { limit?: number; withinSeconds?: number } = {},
 ): boolean {
   const normalized = text.trim();
+  if (!normalized) return false;
+  const limit = opts.limit ?? 20;
+  const withinSeconds = opts.withinSeconds ?? 120;
   const rows = getOutboundDb()
     .prepare(
-      `SELECT content FROM messages_out
+      `SELECT content, timestamp FROM messages_out
        WHERE channel_type = ? AND platform_id = ?
+         AND datetime(timestamp) >= datetime('now', ?)
        ORDER BY seq DESC LIMIT ?`,
     )
-    .all(channelType, platformId, limit) as { content: string }[];
+    .all(channelType, platformId, `-${withinSeconds} seconds`, limit) as {
+    content: string;
+    timestamp: string;
+  }[];
   for (const row of rows) {
     try {
       const parsed = JSON.parse(row.content) as { text?: string };

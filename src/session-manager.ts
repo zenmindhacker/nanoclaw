@@ -82,6 +82,28 @@ function generateId(): string {
 }
 
 /**
+ * Apply adapter/channel policy on top of the wiring's session_mode.
+ *
+ * - Group chats on threaded adapters → force `per-thread` (unless agent-shared).
+ * - Slack DMs → force `shared` (unless agent-shared). Under Slack agent_view,
+ *   every user message is its own thread root; per-thread mode would mint a
+ *   new session per message. Thread ids are still used for reply targeting.
+ */
+export function effectiveSessionMode(
+  sessionMode: 'shared' | 'per-thread' | 'agent-shared',
+  opts: {
+    channelType: string;
+    isGroup: boolean;
+    adapterSupportsThreads?: boolean;
+  },
+): 'shared' | 'per-thread' | 'agent-shared' {
+  if (sessionMode === 'agent-shared') return 'agent-shared';
+  if (!opts.isGroup && opts.channelType === 'slack') return 'shared';
+  if (opts.adapterSupportsThreads !== false && opts.isGroup) return 'per-thread';
+  return sessionMode;
+}
+
+/**
  * Find or create a session for a messaging group + thread.
  *
  * Session modes:
@@ -226,6 +248,8 @@ export function writeSessionMessage(
      * Dying containers (past first poll) skip these rows.
      */
     onWake?: 0 | 1;
+    /** Default `pending`. Use `completed` for history-sync context rows. */
+    status?: 'pending' | 'completed' | 'processing' | 'failed';
   },
 ): void {
   // Extract base64 attachment data, save to inbox, replace with file paths
@@ -245,6 +269,7 @@ export function writeSessionMessage(
       recurrence: message.recurrence ?? null,
       trigger: message.trigger ?? 1,
       sourceSessionId: message.sourceSessionId ?? null,
+      status: message.status,
       onWake: message.onWake ?? 0,
     });
   } finally {

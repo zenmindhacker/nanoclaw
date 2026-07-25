@@ -135,8 +135,39 @@ export type ProviderEvent =
   | { type: 'error'; message: string; retryable: boolean; classification?: string }
   | { type: 'progress'; message: string }
   /**
+   * Tool started/finished — host turns these into Slack Thinking Steps /
+   * assistant status without requiring the model to call report_stream_progress.
+   */
+  | { type: 'tool_start'; toolName: string; title: string; taskId: string }
+  | { type: 'tool_end'; toolName: string; title: string; taskId: string; ok: boolean }
+  /**
    * Liveness signal. Providers MUST yield this on every underlying SDK
    * event (tool call, thinking, partial message, anything) so the
    * poll-loop's idle timer stays honest during long tool runs.
    */
   | { type: 'activity' };
+
+/** Human title + stable task id for Slack progress cards. */
+export function toolProgressLabel(toolName: string): { title: string; taskId: string } {
+  const bare = toolName.replace(/^mcp__[^_]+__/, '').replace(/^mcp__/, '');
+  const spaced = bare
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/[_-]+/g, ' ')
+    .trim();
+  const lower = spaced.toLowerCase();
+  const titleMap: Record<string, string> = {
+    bash: 'Running command',
+    read: 'Reading file',
+    write: 'Writing file',
+    edit: 'Editing file',
+    glob: 'Finding files',
+    grepp: 'Searching code',
+    grep: 'Searching code',
+    webfetch: 'Fetching page',
+    websearch: 'Searching the web',
+    task: 'Running sub-agent',
+  };
+  const title = titleMap[lower] ?? (spaced ? spaced.charAt(0).toUpperCase() + spaced.slice(1) : toolName);
+  const taskId = `tool-${bare.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 48) || 'work'}`;
+  return { title, taskId };
+}

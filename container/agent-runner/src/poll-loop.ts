@@ -559,7 +559,25 @@ function notifyExchangeComplete(
   }
 }
 
-function handleEvent(event: ProviderEvent, _routing: RoutingContext): void {
+function writeToolStreamProgress(
+  routing: RoutingContext,
+  title: string,
+  taskId: string,
+  status: 'in_progress' | 'complete' | 'error',
+): void {
+  if (routing.channelType !== 'slack') return;
+  writeMessageOut({
+    id: generateId(),
+    in_reply_to: routing.inReplyTo,
+    kind: 'stream_progress',
+    platform_id: routing.platformId,
+    channel_type: routing.channelType,
+    thread_id: routing.threadId,
+    content: JSON.stringify({ title, taskId, status }),
+  });
+}
+
+function handleEvent(event: ProviderEvent, routing: RoutingContext): void {
   switch (event.type) {
     case 'init':
       log(`Session: ${event.continuation}`);
@@ -574,6 +592,14 @@ function handleEvent(event: ProviderEvent, _routing: RoutingContext): void {
       break;
     case 'progress':
       log(`Progress: ${event.message}`);
+      break;
+    case 'tool_start':
+      log(`Tool start: ${event.toolName} — ${event.title}`);
+      writeToolStreamProgress(routing, event.title, event.taskId, 'in_progress');
+      break;
+    case 'tool_end':
+      log(`Tool end: ${event.toolName} — ${event.ok ? 'ok' : 'error'}`);
+      writeToolStreamProgress(routing, event.title, event.taskId, event.ok ? 'complete' : 'error');
       break;
   }
 }

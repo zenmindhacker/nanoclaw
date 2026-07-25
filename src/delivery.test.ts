@@ -24,6 +24,14 @@ vi.mock('./config.js', async () => {
   return { ...actual, DATA_DIR: '/tmp/nanoclaw-test-delivery' };
 });
 
+vi.mock('./router.js', async () => {
+  const actual = await vi.importActual<typeof import('./router.js')>('./router.js');
+  return {
+    ...actual,
+    registerMentionStickyThreadAfterOutbound: vi.fn(actual.registerMentionStickyThreadAfterOutbound),
+  };
+});
+
 const TEST_DIR = '/tmp/nanoclaw-test-delivery';
 
 import {
@@ -152,6 +160,37 @@ describe('deliverSessionMessages — concurrent invocations', () => {
     await deliverSessionMessages(session);
 
     expect(callCount).toBe(1);
+  });
+
+  it('marks delivered even when sticky bookkeeping throws after send', async () => {
+    const router = await import('./router.js');
+    vi.mocked(router.registerMentionStickyThreadAfterOutbound).mockImplementation(() => {
+      throw new Error('sticky boom');
+    });
+
+    seedAgentAndChannel();
+    const { session } = resolveSession('ag-1', 'mg-1', null, 'shared');
+    insertOutbound('ag-1', session.id, 'out-sticky-throw');
+
+    let callCount = 0;
+    setDeliveryAdapter({
+      async deliver() {
+        callCount++;
+        return 'plat-sticky';
+      },
+    });
+
+    await deliverSessionMessages(session);
+    await deliverSessionMessages(session);
+
+    expect(callCount).toBe(1);
+    const inDb = openInboundDb('ag-1', session.id);
+    expect(getDeliveredIds(inDb).has('out-sticky-throw')).toBe(true);
+    inDb.close();
+
+    vi.mocked(router.registerMentionStickyThreadAfterOutbound).mockImplementation(
+      (await vi.importActual<typeof import('./router.js')>('./router.js')).registerMentionStickyThreadAfterOutbound,
+    );
   });
 });
 
