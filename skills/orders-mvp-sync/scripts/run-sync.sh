@@ -40,10 +40,21 @@ fi
 
 cd "$REPO"
 if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  git pull --ff-only || {
-    echo "ERROR: git pull --ff-only failed in $REPO" >&2
-    exit 3
-  }
+  GIT_TOKEN=""
+  if GIT_TOKEN="$(read_cred github-transcript-token 2>/dev/null)"; then
+    :
+  fi
+  if [[ -n "$GIT_TOKEN" ]]; then
+    git -c "url.https://x-access-token:${GIT_TOKEN}@github.com/.insteadOf=https://github.com/" pull --ff-only || {
+      echo "ERROR: git pull --ff-only failed in $REPO" >&2
+      exit 3
+    }
+  else
+    git pull --ff-only || {
+      echo "ERROR: git pull --ff-only failed in $REPO (no github-transcript-token)" >&2
+      exit 3
+    }
+  fi
 fi
 
 if [[ ! -f "$REPO/.env" ]]; then

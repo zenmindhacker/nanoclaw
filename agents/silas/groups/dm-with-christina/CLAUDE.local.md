@@ -30,7 +30,7 @@ After editing any `CLAUDE.local.md`, commit and push to nanoclaw promptly (`git 
 
 ## Orders MVP sync (Connected Tutors)
 
-NanoClaw-native scheduled task `orders-mvp-sync` fires at **7:00 / 12:00 / 15:00 / 18:00** America/New_York (`script: null` — you run the work).
+NanoClaw-native scheduled task `orders-mvp-sync` fires at **7:00 / 12:00 / 15:00 / 18:00** America/New_York wall time (`script: null` — you run the work). On Silas the host TZ is UTC, so the cron is `0 11,16,19,22 * * *` (EDT; +1h in EST).
 
 ```bash
 bash /workspace/extra/skills/orders-mvp-sync/scripts/run-sync.sh
