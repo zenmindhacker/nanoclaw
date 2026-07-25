@@ -15,6 +15,8 @@ bash /workspace/extra/skills/orders-mvp-sync/scripts/run-sync.sh
 
 Welcome email + Quo SMS run by default (`sync_welcome`). Use `--skip-welcome` only as an emergency bypass if Cian asks.
 
+Receipt PDFs need **pandoc** + **chromium** in the Silas container (`ncl groups config add-package --apt pandoc` + rebuild). Chromium uses `--no-sandbox` automatically under Docker.
+
 ## What it does
 
 1. `git pull --ff-only` on `/workspace/extra/repos/connected-tutoring`

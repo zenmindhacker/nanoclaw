@@ -1,7 +1,12 @@
 {
   "mcpServers": {},
   "packages": {
-    "apt": [],
+    "apt": [
+      "poppler-utils",
+      "python3",
+      "python3-venv",
+      "pandoc"
+    ],
     "npm": []
   },
   "additionalMounts": [],
