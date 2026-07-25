@@ -123,7 +123,7 @@ test -d ~/repos/family && git -C ~/repos/family remote get-url origin
 systemctl --user restart nanoclaw
 ```
 
-**Cycle briefing** is Silas-only (`cycle-daily-briefing` → `dm-with-christina`). Expect exactly one pending task at `0 11 * * *` UTC on canonical session `sess-1782170556889-ydslvi`.
+**Cycle briefing** is Silas-only (`cycle-daily-briefing` → `dm-with-christina`). Expect exactly one pending task at `0 7 * * *` America/New_York on the Christina DM notify session.
 
 ### Silas Tier 1 infra checks (added 2026-06)
 
@@ -136,7 +136,7 @@ systemctl --user restart nanoclaw
 | `host.family-repo-writable` | Host can create/delete a probe file in `~/repos/family` |
 | `git.family-repo-auth` | `git ls-remote` against `zenmindhacker/family` succeeds through the live OneCLI gateway proxy (catches wrong auth scheme / expired or revoked GitHub secret) |
 | `host.cycle-task-audit` | Exactly one pending `cycle-daily-briefing` |
-| `host.cycle-canonical-session` | Pending task on `sess-1782170556889-ydslvi` at 11:00 UTC |
+| `host.cycle-canonical-session` | Pending cycle task at 07:00 America/New_York on Christina DM notify session |
 | `host.cycle-no-0600-pending` | No duplicate 06:00 UTC cycle briefing |
 | `host.torrentday-health-json` | Unified health JSON parses; warn if `recommendation !== ok` |
 | `composition.silas-no-legacy-groups` | No `christina_dm`, `slack_christina-dm`, etc. under `agents/silas/groups/` |
