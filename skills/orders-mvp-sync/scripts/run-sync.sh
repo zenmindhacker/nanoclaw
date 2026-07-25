@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # orders-mvp sync helper for Silas (agent-invoked — NOT a NanoClaw pre-task script).
-# Loads host credentials, points Google CLIs at shadow-google, runs sync_all --skip-welcome.
+# Loads host credentials, points Google CLIs at shadow-google, runs sync_all (welcome ON).
 set -euo pipefail
 
 REPO="${CT_REPO:-/workspace/extra/repos/connected-tutoring}"
@@ -78,17 +78,21 @@ export_cred TEACHWORKS_API_KEY teachworks.api_key
 export_cred TEACHWORKS_WEB_EMAIL teachworks.web_email
 export_cred TEACHWORKS_WEB_PASSWORD teachworks.web_password
 
-for cli in "$CT_SHEETS_CT" "$CT_DRIVE_CT"; do
+for cli in "$CT_SHEETS_CT" "$CT_DRIVE_CT" "$CT_SEND_EMAIL"; do
   if [[ ! -f "$cli" ]]; then
     echo "ERROR: Google CLI missing: $cli" >&2
     exit 5
   fi
 done
+if [[ -z "${QUO_API_KEY:-}" ]]; then
+  echo "ERROR: QUO_API_KEY missing (welcome SMS)" >&2
+  exit 6
+fi
 
 cd "$REPO/orders-mvp"
-echo "==> orders-mvp sync_all --skip-welcome (phase 1)"
+echo "==> orders-mvp sync_all (welcome email/SMS enabled)"
 set +e
-python3 sync_all.py --skip-welcome "$@"
+python3 sync_all.py "$@"
 rc=$?
 set -e
 echo "==> sync_all exit_code=$rc"

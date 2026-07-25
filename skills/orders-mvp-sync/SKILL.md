@@ -13,15 +13,15 @@ Agent-invoked helper for the Connected Tutors Master Tracker pipeline. **Not** a
 bash /workspace/extra/skills/orders-mvp-sync/scripts/run-sync.sh
 ```
 
-Phase 1 always passes `--skip-welcome`. Do not re-run with welcome unless Cian asks.
+Welcome email + Quo SMS run by default (`sync_welcome`). Use `--skip-welcome` only as an emergency bypass if Cian asks.
 
 ## What it does
 
 1. `git pull --ff-only` on `/workspace/extra/repos/connected-tutoring`
-2. Exports Google CLI env (`CT_SHEETS_CT`, `CT_DRIVE_CT`, `CT_GOOGLE_REGISTRY=shadow-google`, …)
-3. Loads optional host credential files (`quo.api_key`, `esignatures-cognitive` / CTCI account, TeachWorks)
+2. Exports Google CLI env (`CT_SHEETS_CT`, `CT_DRIVE_CT`, `CT_SEND_EMAIL`, `CT_GOOGLE_REGISTRY=shadow-google`, …)
+3. Loads host credential files (`quo.api_key` required, `esignatures-cognitive` / CTCI account, TeachWorks)
 4. Requires repo `.env` with `GA_ODYSSEY_USERNAME` / `GA_ODYSSEY_PASSWORD`
-5. Runs `python3 sync_all.py --skip-welcome`
+5. Runs `python3 sync_all.py` (welcome ON)
 
 ## After run
 
@@ -35,7 +35,7 @@ Parse stdout for `--- PIPELINE_REPORT ---` JSON.
 | GA **appends** (new orders) | Updated/unchanged sheet refreshes |
 | Odyssey fulfillments > 0 | “folders skipped (already exist)” |
 | New student Info docs / new onboarding folders | Attendance/roster rollups on a clean run |
-| Welcome sends (when enabled) | “all green” / one-line OK chatter |
+| Welcome email/SMS sends | “all green” / one-line OK chatter |
 
 ## Host secrets (christina@cleo-lc)
 
