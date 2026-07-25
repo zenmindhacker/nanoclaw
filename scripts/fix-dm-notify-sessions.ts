@@ -1,6 +1,6 @@
 /**
  * Ensure Slack DM agents have a null-thread "notify" session for cron/briefings,
- * dedupe cycle tasks onto that session, and set DM wiring to per-thread.
+ * dedupe cycle tasks onto that session, and set DM wiring to shared.
  *
  * Usage:
  *   pnpm exec tsx scripts/fix-dm-notify-sessions.ts --dry-run

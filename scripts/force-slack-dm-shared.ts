@@ -11,12 +11,22 @@
  *   pnpm exec tsx scripts/force-slack-dm-shared.ts           # apply
  *   pnpm exec tsx scripts/force-slack-dm-shared.ts --dry-run
  */
-import { closeDb, getDb } from '../src/db/index.js';
+import fs from 'fs';
+import path from 'path';
+
+import { DATA_DIR } from '../src/config.js';
+import { closeDb, initDb } from '../src/db/connection.js';
 
 const dryRun = process.argv.includes('--dry-run');
 
 function main(): void {
-  const db = getDb();
+  const v2DbPath = path.join(DATA_DIR, 'v2.db');
+  if (!fs.existsSync(v2DbPath)) {
+    console.error('v2.db not found');
+    process.exit(1);
+  }
+
+  const db = initDb(v2DbPath);
   const rows = db
     .prepare(
       `SELECT mga.id, mga.session_mode, mga.agent_group_id, mg.platform_id, mg.name
