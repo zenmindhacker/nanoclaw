@@ -48,6 +48,13 @@
       "recurrence": "0 11 * * *",
       "prompt": "Deliver Christina's daily cycle briefing to Christina. The pre-task script attached today's briefing in scriptOutput.\n\nYou MUST call send_message with the FULL briefing text from scriptOutput (warm, supportive tone). Do not reply with only 'Standing by', internal notes, or completion claims without sending the briefing body. The host drops agent output that lacks a deliverable message.\n\nDo not re-run cycle_briefing.mjs unless scriptOutput is missing.",
       "script": "cd /workspace/agent && node cycle_briefing.mjs --task-json $(TZ=America/New_York date +%Y-%m-%d)"
+    },
+    {
+      "id": "orders-mvp-sync",
+      "agentFolder": "dm-with-christina",
+      "recurrence": "0 7,12,15,18 * * *",
+      "script": null,
+      "prompt": "Run the Connected Tutors orders-mvp sync and report to #sysops.\n\n1. Execute:\n```bash\nbash /workspace/extra/skills/orders-mvp-sync/scripts/run-sync.sh\n```\n2. Read the output for `--- PIPELINE_REPORT ---` JSON (and any traceback).\n3. Welcome is skipped in phase 1 — do not re-run with welcome unless Cian asks.\n4. Post to #sysops: status, what changed (GA append/update, fulfillments, roster), errors with concrete remediation.\n5. If exit_code != 0 or a step failed: lead with failure + failed step; try safe remediations you can do (git pull, oauth-health check, re-run once if clearly transient). Do not invent Odyssey/sheet state.\n6. If ok and nothing meaningful changed: one-line OK to #sysops."
     }
   ],
   "pendingCleo": [

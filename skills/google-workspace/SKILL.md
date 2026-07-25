@@ -38,6 +38,16 @@ const token = getAccessToken('shadow-google');
 
 **Do not** refresh or write token JSON from containers. If expired: `ncl oauth-refresh-one --id shadow-google`.
 
+## Sheets / Drive CLIs (orders-mvp)
+
+```bash
+# Default registry: shadow-google (override with CT_GOOGLE_REGISTRY)
+node /workspace/extra/skills/google-workspace/bin/sheets-ct.mjs get-range --sheet "Orders" --range A1:Z5
+node /workspace/extra/skills/google-workspace/bin/drive-ct.mjs list --folder FOLDER_ID
+```
+
+Point `orders-mvp` at these via `CT_SHEETS_CT` / `CT_DRIVE_CT` (see `skills/orders-mvp-sync`).
+
 ## Send email (script)
 
 ```bash
@@ -45,10 +55,11 @@ node /workspace/extra/skills/google-workspace/bin/send-email.mjs \
   --registry shadow-google \
   --to tutor@example.com \
   --subject "Reminder" \
-  --body "..."
+  --body "..." \
+  --attach /path/receipt.pdf
 ```
 
-Silas agents must confirm with Christina before send (see group `CLAUDE.local.md`).
+Silas agents must confirm with Christina before ad-hoc send (see group `CLAUDE.local.md`). Scheduled orders-mvp welcome uses the same helper when enabled.
 
 ## Auth (host, one-time / re-consent)
 

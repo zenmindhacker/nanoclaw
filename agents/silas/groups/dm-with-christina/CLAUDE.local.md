@@ -28,6 +28,18 @@ After editing any `CLAUDE.local.md`, commit and push to nanoclaw promptly (`git 
 
 ---
 
+## Orders MVP sync (Connected Tutors)
+
+NanoClaw-native scheduled task `orders-mvp-sync` fires at **7:00 / 12:00 / 15:00 / 18:00** America/New_York (`script: null` — you run the work).
+
+```bash
+bash /workspace/extra/skills/orders-mvp-sync/scripts/run-sync.sh
+```
+
+Phase 1 uses `--skip-welcome`. Parse `--- PIPELINE_REPORT ---`, post to **#sysops**, intervene on failures. Skill docs: `/workspace/extra/skills/orders-mvp-sync/SKILL.md`. Confirm with `list_tasks`.
+
+---
+
 ## Cycle & Health Tracking
 
 One of your most important ongoing responsibilities in this channel.
