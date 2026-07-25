@@ -19,7 +19,7 @@ Phase 1 always passes `--skip-welcome`. Do not re-run with welcome unless Cian a
 
 1. `git pull --ff-only` on `/workspace/extra/repos/connected-tutoring`
 2. Exports Google CLI env (`CT_SHEETS_CT`, `CT_DRIVE_CT`, `CT_GOOGLE_REGISTRY=shadow-google`, …)
-3. Loads optional host credential files (`quo.api_key`, `esignatures-tutoring`, TeachWorks)
+3. Loads optional host credential files (`quo.api_key`, `esignatures-cognitive` / CTCI account, TeachWorks)
 4. Requires repo `.env` with `GA_ODYSSEY_USERNAME` / `GA_ODYSSEY_PASSWORD`
 5. Runs `python3 sync_all.py --skip-welcome`
 
@@ -37,7 +37,7 @@ Parse stdout for `--- PIPELINE_REPORT ---` JSON. Post to **#sysops**:
 |-------------------------------------------------------|-----|
 | (Google) `shadow-google-token.json` | host OAuth |
 | `quo.api_key` | `QUO_API_KEY` |
-| `esignatures-tutoring` | `ESIGNATURES_API_TOKEN` |
+| `esignatures-cognitive` (CTCI shared account) | `ESIGNATURES_API_TOKEN` |
 | `teachworks.api_key` | `TEACHWORKS_API_KEY` |
 | `teachworks.web_email` / `teachworks.web_password` | TW web login |
 | Repo `~/repos/connected-tutoring/.env` | `GA_ODYSSEY_*` |

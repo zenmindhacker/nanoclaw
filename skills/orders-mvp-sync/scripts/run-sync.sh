@@ -69,7 +69,11 @@ export CT_GOOGLE_ACCESS_TOKEN="${CT_GOOGLE_ACCESS_TOKEN:-${GW_LIB}/access-token.
 export CT_GOOGLE_REGISTRY="${CT_GOOGLE_REGISTRY:-shadow-google}"
 
 export_cred QUO_API_KEY quo.api_key
-export_cred ESIGNATURES_API_TOKEN esignatures-tutoring
+# Connected Tutors (and all CT orgs) share the Cognitive Tech / CTCI eSignatures account.
+export_cred ESIGNATURES_API_TOKEN esignatures-cognitive
+if [[ -z "${ESIGNATURES_API_TOKEN:-}" ]]; then
+  export_cred ESIGNATURES_API_TOKEN esignatures.cognitive
+fi
 export_cred TEACHWORKS_API_KEY teachworks.api_key
 export_cred TEACHWORKS_WEB_EMAIL teachworks.web_email
 export_cred TEACHWORKS_WEB_PASSWORD teachworks.web_password
