@@ -91,3 +91,21 @@ Same household movie library as Cian — use **movie-night** and **torrentday** 
 5. Then movie-night candidates / download
 
 **Triggers:** movie night, find a movie, something to watch, what do we have.
+
+## AnyList Shopping & Recipe Protocol
+
+When adding items to the Grocery list, use `categoryMatchId` so items sort to the right category. Never use "packs" — always specify count + lbs for meat/produce (e.g., "Chicken thighs — 24 thighs, ~7 lbs").
+
+**Default household quantities (5-6 adults):**
+- GF pasta night: 2 boxes (1 lb each) + 2 jars sauce + 1.5 lb meat
+- Chicken: 2 bone-in thighs per person, specify count + lb (never "packs")
+- Ground meat: ~0.5 lb per person for mixed dishes (chili, meatballs, hash)
+- Beef roast/brisket: ~0.75 lb per person (uncooked weight)
+
+**Category match keys for Grocery:** produce, meat, dairy, frozen-foods, cooking-and-baking, condiments-oils-and-salad-dressings, breakfast-and-cereal, beverages.
+
+**Recipe imports:** Every recipe gets cost/serving in title, macros (cal/P/C/F) in notes, AI photo, and fiber tip. See `RECIPE_IMPORT_PROTOCOL.md` and `import_recipe_standard.mjs`. ALWAYS consult `/workspace/extra/repos/family/cooking/kitchen-compass.md` for flavor balancing, spice scaling, and recipe improvement notes.
+
+**Meal planning:** Use `saveMealEvent` with recipe ID, date, and Dinner label. See `queue_budget_meal_plan.mjs` for the pattern.
+
+**Grocery price tracking:** Update `grocery-price-reference.md` after every grocery trip. When Christina shares a receipt photo, extract all prices.
