@@ -17,6 +17,8 @@ Welcome email + Quo SMS run by default (`sync_welcome`). Use `--skip-welcome` on
 
 Receipt PDFs need **pandoc** + **chromium** in the Silas container (`ncl groups config add-package --apt pandoc` + rebuild). Chromium uses `--no-sandbox` automatically under Docker.
 
+**Single-flight:** `run-sync.sh` writes a shared run id + takes a flock on the repo mount. A new run preempts lingering ones — older `sync_all` processes exit at the next step with `[SUPERSEDED]` (not an error).
+
 ## What it does
 
 1. `git pull --ff-only` on `/workspace/extra/repos/connected-tutoring`

@@ -90,6 +90,28 @@ if [[ -z "${QUO_API_KEY:-}" ]]; then
 fi
 
 cd "$REPO/orders-mvp"
+
+# Cross-container single-flight: claim a new run id first so any in-flight
+# sync_all (other Silas containers) exits at the next step boundary, then
+# take an exclusive flock on the shared repo mount.
+LOCK_FILE="$REPO/orders-mvp/.orders-mvp-sync.lock"
+RUN_ID_FILE="$REPO/orders-mvp/.orders-mvp-sync.runid"
+RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$-${RANDOM:-0}"
+printf '%s\n' "$RUN_ID" >"$RUN_ID_FILE"
+export CT_SYNC_RUN_ID="$RUN_ID"
+echo "==> claiming sync run id=$RUN_ID (preempts lingering runs)"
+
+exec 9>"$LOCK_FILE"
+if ! flock -n 9; then
+  echo "==> prior sync still holds lock — waiting up to 120s for it to yield..."
+  if ! flock -w 120 9; then
+    echo "ERROR: could not acquire orders-mvp sync lock after 120s" >&2
+    exit 7
+  fi
+fi
+# Re-assert after wait in case another waiter raced.
+printf '%s\n' "$RUN_ID" >"$RUN_ID_FILE"
+
 echo "==> orders-mvp sync_all (welcome email/SMS enabled)"
 set +e
 python3 sync_all.py "$@"
