@@ -38,6 +38,8 @@ bash /workspace/extra/skills/orders-mvp-sync/scripts/run-sync.sh
 
 Welcome email/SMS is **enabled**. Parse `--- PIPELINE_REPORT ---`. **Report only NEW deltas or errors** to `#ai-bot` (`to: "ai-bot"`) — stay silent on clean no-news runs. Full rundown only if Cian asks. Skill: `/workspace/extra/skills/orders-mvp-sync/SKILL.md`. Confirm with `list_tasks`.
 
+**Code sync:** Pipeline code = `connected-tutoring` (`orders-mvp/…`). Wrapper/skill = nanoclaw (`skills/orders-mvp-sync/…`). After any edit, commit + push immediately (see `/workspace/global/CLAUDE.md` → Git Repos). Do not leave host-only patches. `run-sync.sh` already pulls `connected-tutoring` before each sync.
+
 ---
 
 ## Cycle & Health Tracking

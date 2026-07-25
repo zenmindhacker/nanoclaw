@@ -147,15 +147,39 @@ Run `linear-router tutor init` once if the cache is missing. Credential: `LINEAR
 ## Git Repos
 
 Shared repos are mounted at `/workspace/extra/repos/` (read-write for all groups).
+NanoClaw itself (skills, agent docs, scheduled-task prompts) lives at `/workspace` → host `~/nanoclaw`.
 
-**Standing rule:** Whenever you write or edit files inside any repo, always commit and push immediately after — silently, without asking. Use a sensible commit message. Christina should never need to think about git.
+**Standing rule:** Whenever you write or edit tracked files in any repo, **commit and push immediately** — silently, without asking. Use a sensible commit message. Christina should never need to think about git. Cian's laptop and this host must not drift.
 
 **Never** create or write to `lane-family-ops` — that path is retired. Use `family` instead.
 
 Available repos:
 - `/workspace/extra/repos/family` — household content (chore-quest, movie-night profiles, family protocols)
 - `/workspace/extra/repos/coaching` — coaching notes and transcripts (`christina/`, `kevin/`)
-- `/workspace/extra/repos/connected-tutoring` — Connected Tutoring business
+- `/workspace/extra/repos/connected-tutoring` — Connected Tutoring business (orders-mvp pipeline)
+- `/workspace` (nanoclaw checkout) — skills under `/workspace/extra/skills/…`, agent `CLAUDE*.md`, schedule manifests
+
+### Keep the three copies in sync
+
+Source of truth is **GitHub `main`**. Three checkouts must match for pipeline work:
+
+| Copy | Path |
+|------|------|
+| GitHub | `zenmindhacker/connected-tutoring`, `zenmindhacker/nanoclaw` |
+| Cian laptop | his local clones |
+| This host | `~/repos/connected-tutoring`, `~/nanoclaw` (container: `/workspace/extra/repos/…`, `/workspace/extra/skills/…`) |
+
+**If you change code:**
+1. Edit only in the right repo (`connected-tutoring` for `orders-mvp/…`; `nanoclaw` for `skills/orders-mvp-sync/…` or agent docs).
+2. `git status` — confirm you are on `main` and see your edits.
+3. `git pull --rebase origin main` (or `--ff-only` if no local commits yet).
+4. `git add` the intentional files only — **do not** commit runtime junk (`.env`, OAuth tokens, `usage-audit.json`, receipt PDFs under `parent-documents/generated/`, `slack_history.json`, OneCLI temp files).
+5. Commit with a clear message; **push to `origin main`**.
+6. Tell Cian in one line that you pushed (repo + short why) so his laptop can pull.
+
+**If you only need latest code to run a job:** prefer `bash /workspace/extra/skills/orders-mvp-sync/scripts/run-sync.sh` — it `git pull --ff-only`s `connected-tutoring` before sync. For nanoclaw skill/prompt updates, pull on the host nanoclaw checkout (or ask Cian) — container skill mounts follow host `~/nanoclaw`.
+
+**Never** leave pipeline or skill fixes only on the host disk. An unpushed edit is invisible to Cian and will be overwritten by the next pull.
 
 ### Git push (christina@cleo host)
 
@@ -168,14 +192,14 @@ git remote get-url origin   # must be https://github.com/zenmindhacker/....git �
 
 Push using the credentials file (mounted at `/workspace/extra/credentials/github-transcript-token`):
 ```bash
-git pull --rebase origin main
-export GITHUB_TOKEN_FILE=/workspace/extra/credentials/github-transcript-token
-export GIT_ASKPASS=/tmp/git-askpass.sh
-# GIT_ASKPASS script: Username → x-access-token, Password → contents of GITHUB_TOKEN_FILE
-git push origin main
+TOKEN_FILE=/workspace/extra/credentials/github-transcript-token
+# fallback if nested under services/
+[[ -f "$TOKEN_FILE" ]] || TOKEN_FILE=/workspace/extra/credentials/services/github-transcript-token
+git -c "url.https://x-access-token:$(tr -d '\n' <"$TOKEN_FILE")@github.com/.insteadOf=https://github.com/" pull --rebase origin main
+git -c "url.https://x-access-token:$(tr -d '\n' <"$TOKEN_FILE")@github.com/.insteadOf=https://github.com/" push origin main
 ```
 
-Always `git pull --rebase` before push.
+Always pull (rebase or ff-only) before push. If pull conflicts on host-only dirty files, stash or leave those files unstaged — never force-push `main`.
 
 ---
 

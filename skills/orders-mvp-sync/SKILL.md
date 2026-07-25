@@ -19,6 +19,16 @@ Receipt PDFs need **pandoc** + **chromium** in the Silas container (`ncl groups 
 
 **Single-flight:** `run-sync.sh` writes a shared run id + takes a flock on the repo mount. A new run preempts lingering ones — older `sync_all` processes exit at the next step with `[SUPERSEDED]` (not an error).
 
+## Code ownership / sync
+
+| What | Repo | Path |
+|------|------|------|
+| Pipeline (`sync_all`, welcome, Odyssey, …) | `connected-tutoring` | `orders-mvp/` |
+| This wrapper + skill docs | `nanoclaw` | `skills/orders-mvp-sync/` |
+| Schedule prompt | `nanoclaw` | `scripts/scheduled-tasks.manifest.json` (+ live task patch) |
+
+`run-sync.sh` pulls **connected-tutoring** before each run. Edits to this skill require a **nanoclaw** commit + push (host `~/nanoclaw` / laptop clone) — do not leave host-only skill patches. Full git rules: agent `CLAUDE.md` → Git Repos.
+
 ## What it does
 
 1. `git pull --ff-only` on `/workspace/extra/repos/connected-tutoring`
