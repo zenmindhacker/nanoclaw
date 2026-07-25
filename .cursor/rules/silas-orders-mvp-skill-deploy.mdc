@@ -1,0 +1,32 @@
+---
+description: Laptop → GitHub → Silas deploy for orders-mvp-sync skill / schedule
+globs: skills/orders-mvp-sync/**/*,scripts/scheduled-tasks.manifest.json,scripts/patch-orders-mvp-report-prompt.ts
+alwaysApply: false
+---
+
+# Silas orders-mvp-sync skill deploy (laptop)
+
+Pipeline Python lives in **connected-tutoring** `orders-mvp/`. This repo only owns the wrapper/skill/schedule.
+
+## Loop
+
+1. Edit locally under `skills/orders-mvp-sync/` or the scheduled-task manifest/prompt helpers.
+2. When ready: commit + push `nanoclaw` `main` (only if the user asked to commit/ship).
+3. Update Silas host checkout:
+
+```bash
+ssh cleo-silas 'TOKEN=$(tr -d "\n" <"$HOME/.config/nanoclaw/credentials/services/github-transcript-token")
+cd ~/nanoclaw
+git -c "url.https://x-access-token:${TOKEN}@github.com/.insteadOf=https://github.com/" pull --ff-only
+git rev-parse --short HEAD'
+```
+
+4. If you changed the **live** `orders-mvp-sync` task prompt (not only the manifest), also:
+
+```bash
+ssh cleo-silas 'cd ~/nanoclaw && pnpm exec tsx scripts/patch-orders-mvp-report-prompt.ts'
+```
+
+5. Pipeline code changes belong in connected-tutoring — push that repo and pull `~/repos/connected-tutoring` on Silas (or rely on `run-sync.sh`’s pull).
+
+Container skill mounts follow host `~/nanoclaw` — a host pull is enough; no image rebuild for script/markdown skill edits.
