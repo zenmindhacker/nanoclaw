@@ -25,11 +25,17 @@ Phase 1 always passes `--skip-welcome`. Do not re-run with welcome unless Cian a
 
 ## After run
 
-Parse stdout for `--- PIPELINE_REPORT ---` JSON. Post to **#sysops**:
+Parse stdout for `--- PIPELINE_REPORT ---` JSON.
 
-- Failures first + failed step + safe remediations (oauth-health, re-pull, one retry if clearly transient)
-- Meaningful changes (GA append/update, fulfillments, roster)
-- One-line OK when nothing changed
+**Default: silent.** Post to **#sysops** (`to: "sysops"`) only for NEW deltas or errors. Full step/count rundown only when Cian asks.
+
+| Post | Skip |
+|------|------|
+| Failures / degraded (failed step + safe remediations) | Inventory totals (“31 rows”, “53 entitlements”) |
+| GA **appends** (new orders) | Updated/unchanged sheet refreshes |
+| Odyssey fulfillments > 0 | “folders skipped (already exist)” |
+| New student Info docs / new onboarding folders | Attendance/roster rollups on a clean run |
+| Welcome sends (when enabled) | “all green” / one-line OK chatter |
 
 ## Host secrets (christina@cleo-lc)
 
