@@ -15,6 +15,16 @@ bash /workspace/extra/skills/orders-mvp-sync/scripts/run-sync.sh
 
 Welcome email + Quo SMS run by default (`sync_welcome`). Use `--skip-welcome` only as an emergency bypass if Cian asks.
 
+### Friday tutor TW completion reminders
+
+Scheduled Fridays 16:00 ET (`orders-mvp-tutor-tw-reminders`, NanoClaw v2). Wrapper:
+
+```bash
+bash /workspace/extra/skills/orders-mvp-sync/scripts/run-tutor-completion-reminders.sh
+```
+
+Refreshes Master Tracker `TW Lessons`, then emails each tutor (hello@) past incomplete TW lessons with the [Complete Lessons](https://intercom.help/teachworks-e2d272c6e669/en/articles/11472097-completing-lessons) help link.
+
 Receipt PDFs need **pandoc** + **chromium** in the Silas container (`ncl groups config add-package --apt pandoc` + rebuild). Chromium uses `--no-sandbox` automatically under Docker.
 
 **Single-flight:** `run-sync.sh` writes a shared run id + takes a flock on the repo mount. A new run preempts lingering ones — older `sync_all` processes exit at the next step with `[SUPERSEDED]` (not an error).
