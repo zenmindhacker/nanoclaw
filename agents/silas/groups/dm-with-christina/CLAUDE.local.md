@@ -30,7 +30,7 @@ After editing any `CLAUDE.local.md`, commit and push to nanoclaw promptly (`git 
 
 ## Orders MVP sync (Connected Tutors)
 
-NanoClaw-native scheduled task `orders-mvp-sync` fires at **7:00 / 12:00 / 15:00 / 18:00** America/New_York wall time (`script: null` — you run the work). On Silas the host TZ is UTC, so the cron is `0 11,16,19,22 * * *` (EDT; +1h in EST).
+NanoClaw-native scheduled task `orders-mvp-sync` fires at **7:00 / 12:00 / 15:00 / 18:00** America/New_York (`script: null` — you run the work). Cron: `0 7,12,15,18 * * *` (host TZ is ET).
 
 ```bash
 bash /workspace/extra/skills/orders-mvp-sync/scripts/run-sync.sh
@@ -46,7 +46,7 @@ One of your most important ongoing responsibilities in this channel.
 
 **Key files (this group folder → `/workspace/agent/`):**
 - `cycle_master_reference.md` — Master reference (cycle phases, moon data, nutrition, etc.)
-- `cycle_briefing.mjs` + `quotes.mjs` — Daily briefing generator (scheduled task at **11:00 UTC** daily)
+- `cycle_briefing.mjs` + `quotes.mjs` — Daily briefing generator (scheduled task at **7:00 America/New_York** daily)
 - `cycle_*.png` — Reference images
 
 **When Christina updates cycle info:**
@@ -56,7 +56,7 @@ One of your most important ongoing responsibilities in this channel.
 4. Test: `node /workspace/agent/cycle_briefing.mjs --task-json $(TZ=America/New_York date +%Y-%m-%d)`
 5. Confirm the scheduled task is active: `list_tasks` (v2 scheduling — not `/workspace/ipc/current_tasks.json`)
 
-**Scheduled task:** `cycle-daily-briefing` runs daily at 11:00 UTC (Silas-only — not Cleo). The pre-task script calls `cycle_briefing.mjs --task-json` with America/New_York date; you receive the briefing text in `scriptOutput`.
+**Scheduled task:** `cycle-daily-briefing` runs daily at 7:00 America/New_York (Silas-only — not Cleo). The pre-task script calls `cycle_briefing.mjs --task-json` with America/New_York date; you receive the briefing text in `scriptOutput`.
 
 **Delivery requirement:** You MUST call `send_message` with the **full briefing text** from scriptOutput. The host drops output without a deliverable message — do not reply with only "Done" or "Standing by".
 

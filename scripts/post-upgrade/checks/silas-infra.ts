@@ -154,8 +154,8 @@ export function runSilasInfraChecks(ctx: RunContext): CheckResult[] {
           detail: r.stderr || 'grep returned empty',
         };
       }
-      if (!r.stdout.includes('0 11 * * *') && !r.stdout.includes('11:00')) {
-        return { status: 'fail', message: 'Canonical cycle task not at 11:00 UTC', detail: r.stdout.slice(0, 300) };
+      if (!r.stdout.includes('0 7 * * *') && !r.stdout.includes('07:00') && !r.stdout.includes('7:00')) {
+        return { status: 'fail', message: 'Canonical cycle task not at 07:00 America/New_York', detail: r.stdout.slice(0, 300) };
       }
       return { status: 'pass', message: r.stdout.trim().slice(0, 120) };
     }),

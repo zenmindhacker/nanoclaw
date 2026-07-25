@@ -31,7 +31,8 @@ const FIXES: AgentFix[] = [
   {
     folder: 'dm-with-christina',
     messagingGroupId: 'mg-1779388264578-jk5zho',
-    cycleRecurrence: '0 11 * * *',
+    // 7:00 America/New_York (host TZ). Formerly 11:00 UTC when Silas ran with TZ=UTC.
+    cycleRecurrence: '0 7 * * *',
     cycleTaskId: 'cycle-daily-briefing',
     cyclePrompt:
       "Deliver Christina's daily cycle briefing to Christina. The pre-task script attached today's briefing in scriptOutput.\n\nYou MUST call send_message with the FULL briefing text from scriptOutput (warm, supportive tone). Do not reply with only 'Standing by', internal notes, or completion claims without sending the briefing body. The host drops agent output that lacks a deliverable message.\n\nDo not re-run cycle_briefing.mjs unless scriptOutput is missing.",

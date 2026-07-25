@@ -44,4 +44,4 @@ Parse stdout for `--- PIPELINE_REPORT ---` JSON. Post to **#sysops**:
 
 ## Scheduled task
 
-NanoClaw v2 native — `orders-mvp-sync` in `scripts/scheduled-tasks.manifest.json`, `script: null`, recurrence `0 11,16,19,22 * * *` (UTC on Silas host ≈ 7am / 12pm / 3pm / 6pm America/New_York during EDT).
+NanoClaw v2 native — `orders-mvp-sync` in `scripts/scheduled-tasks.manifest.json`, `script: null`, recurrence `0 7,12,15,18 * * *` (America/New_York host TZ).
