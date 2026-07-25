@@ -36,7 +36,7 @@ NanoClaw-native scheduled task `orders-mvp-sync` fires at **7:00 / 12:00 / 15:00
 bash /workspace/extra/skills/orders-mvp-sync/scripts/run-sync.sh
 ```
 
-Phase 1 uses `--skip-welcome`. Parse `--- PIPELINE_REPORT ---`. **Report only NEW deltas or errors** to `#sysops` (`to: "sysops"`) — stay silent on clean no-news runs. Full rundown only if Cian asks. Skill: `/workspace/extra/skills/orders-mvp-sync/SKILL.md`. Confirm with `list_tasks`.
+Phase 1 uses `--skip-welcome`. Parse `--- PIPELINE_REPORT ---`. **Report only NEW deltas or errors** to `#ai-bot` (`to: "ai-bot"`) — stay silent on clean no-news runs. Full rundown only if Cian asks. Skill: `/workspace/extra/skills/orders-mvp-sync/SKILL.md`. Confirm with `list_tasks`.
 
 ---
 

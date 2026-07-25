@@ -1,6 +1,6 @@
 ---
 name: orders-mvp-sync
-description: Run Connected Tutors orders-mvp pipeline sync (GA orders, Odyssey fulfill, cases, roster) and report to #sysops. Used by Silas scheduled task.
+description: Run Connected Tutors orders-mvp pipeline sync (GA orders, Odyssey fulfill, cases, roster) and report deltas/errors to #ai-bot. Used by Silas scheduled task.
 ---
 
 # orders-mvp-sync
@@ -27,7 +27,7 @@ Phase 1 always passes `--skip-welcome`. Do not re-run with welcome unless Cian a
 
 Parse stdout for `--- PIPELINE_REPORT ---` JSON.
 
-**Default: silent.** Post to **#sysops** (`to: "sysops"`) only for NEW deltas or errors. Full step/count rundown only when Cian asks.
+**Default: silent.** Post to **#ai-bot** (`to: "ai-bot"`) only for NEW deltas or errors. Full step/count rundown only when Cian asks.
 
 | Post | Skip |
 |------|------|
