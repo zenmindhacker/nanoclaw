@@ -51,15 +51,16 @@ Receipt PDFs need **pandoc** + **chromium** in the Silas container (`ncl groups 
 
 Parse stdout for `--- PIPELINE_REPORT ---` JSON (and any traceback / `Warning:` lines above it).
 
-**Default: silent.** Post to **#ai-bot** (`to: "ai-bot"`) only for NEW deltas or errors/warns. Full step/count rundown only when Cian asks.
+Always post to **#ai-bot** (`to: "ai-bot"`). Full step/count rundown only when Cian asks.
 
 | Post | Skip |
 |------|------|
-| Failures / degraded (analyze + recommend — see below) | Inventory totals (“31 rows”, “53 entitlements”) |
-| GA **appends** (new orders) | Updated/unchanged sheet refreshes |
-| Odyssey fulfillments > 0 | “folders skipped (already exist)” |
-| New student Info docs / new onboarding folders | Attendance/roster rollups on a clean run |
-| Welcome email/SMS sends | “all green” / one-line OK chatter |
+| Clean / no NEW: exactly one line — `Ran the CT sync: Nothing to report` | Inventory totals (“31 rows”, “53 entitlements”) |
+| Failures / degraded (analyze + recommend — see below) | Updated/unchanged sheet refresh counts |
+| GA **appends** (new orders) | “folders skipped (already exist)” |
+| Odyssey fulfillments > 0 | Attendance/roster rollups on a clean run |
+| New student Info docs / new onboarding folders | Multi-line “all green” rundowns |
+| Welcome email/SMS sends | Extra chatter in the wake DM beyond the #ai-bot post |
 
 ## Diagnose & recommend (do not auto-fix)
 

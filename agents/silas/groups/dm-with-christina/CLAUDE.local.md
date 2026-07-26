@@ -36,7 +36,7 @@ NanoClaw-native scheduled task `orders-mvp-sync` fires at **7:00 / 12:00 / 15:00
 bash /workspace/extra/skills/orders-mvp-sync/scripts/run-sync.sh
 ```
 
-Welcome email/SMS is **enabled**. Parse `--- PIPELINE_REPORT ---`. **Report only NEW deltas or errors** to `#ai-bot` (`to: "ai-bot"`) — stay silent on clean no-news runs. On warn/fail: diagnose from the skill playbook and **recommend** a fix — do not auto-edit code/skills/packages. Full rundown only if Cian asks. Skill: `/workspace/extra/skills/orders-mvp-sync/SKILL.md`. Confirm with `list_tasks`.
+Welcome email/SMS is **enabled**. Parse `--- PIPELINE_REPORT ---`. Always post to `#ai-bot` (`to: "ai-bot"`): NEW deltas / errors as usual; clean no-news runs get exactly `Ran the CT sync: Nothing to report`. On warn/fail: diagnose from the skill playbook and **recommend** a fix — do not auto-edit code/skills/packages. Full rundown only if Cian asks. Skill: `/workspace/extra/skills/orders-mvp-sync/SKILL.md`. Confirm with `list_tasks`.
 
 **Code sync:** Pipeline code = `connected-tutoring` (`orders-mvp/…`). Wrapper/skill = nanoclaw (`skills/orders-mvp-sync/…`). After any edit Cian/laptop agents make, commit + push (see `/workspace/global/CLAUDE.md` → Git Repos). Do not leave host-only patches. `run-sync.sh` already pulls `connected-tutoring` before each sync. You recommend skill/code improvements in #ai-bot; you do not apply them unless asked.
 
