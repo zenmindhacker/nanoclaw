@@ -49,17 +49,57 @@ Receipt PDFs need **pandoc** + **chromium** in the Silas container (`ncl groups 
 
 ## After run
 
-Parse stdout for `--- PIPELINE_REPORT ---` JSON.
+Parse stdout for `--- PIPELINE_REPORT ---` JSON (and any traceback / `Warning:` lines above it).
 
-**Default: silent.** Post to **#ai-bot** (`to: "ai-bot"`) only for NEW deltas or errors. Full step/count rundown only when Cian asks.
+**Default: silent.** Post to **#ai-bot** (`to: "ai-bot"`) only for NEW deltas or errors/warns. Full step/count rundown only when Cian asks.
 
 | Post | Skip |
 |------|------|
-| Failures / degraded (failed step + safe remediations) | Inventory totals (“31 rows”, “53 entitlements”) |
+| Failures / degraded (analyze + recommend — see below) | Inventory totals (“31 rows”, “53 entitlements”) |
 | GA **appends** (new orders) | Updated/unchanged sheet refreshes |
 | Odyssey fulfillments > 0 | “folders skipped (already exist)” |
 | New student Info docs / new onboarding folders | Attendance/roster rollups on a clean run |
 | Welcome email/SMS sends | “all green” / one-line OK chatter |
+
+## Diagnose & recommend (do not auto-fix)
+
+On `status: "degraded"` / `"failed"`, or a hard traceback that aborted the run:
+
+1. Name the failed/warn **step** and quote the short `detail` / stderr (trim stack noise).
+2. Match against the playbook below.
+3. Post to **#ai-bot**: what happened → impact (blocking vs cosmetic) → **recommended fix for Cian** (concrete command or file to change).
+4. **Do not** apply the fix yourself unless Cian explicitly asks. That means: no editing `connected-tutoring` / this skill on the host, no `install_packages`, no secret edits, no Odyssey re-fulfill, no “silent” code patches.
+5. **Allowed without asking:** report git HEAD of the repo mount; one retry of `run-sync.sh` only if the playbook says the failure is clearly transient (proxy timeout / 5xx); `oauth-health` style read-only checks if available.
+6. **Skill gap:** if a failure mode is not in this playbook, still recommend a fix — and append a short proposed SKILL.md snippet (playbook row) in the same #ai-bot post so Cian can merge it into nanoclaw. Do not write that snippet onto the host skill yourself.
+
+### Playbook
+
+| Signal (stdout / step detail) | Likely meaning | Recommend to Cian |
+|------------------------------|----------------|-------------------|
+| `[SUPERSEDED]` | Newer sync preempted this run (single-flight) | Ignore — not an error |
+| `status formatting not applied` / `Roster meta fetch failed` / `Roster meta JSON parse failed` | Roster **rows** wrote; conditional-format pass failed (Sheets meta/proxy glitch). Cosmetic | Note degraded. If it repeats after next pull: check OneCLI/Google proxy; pipeline harden lives in `orders-mvp/build_roster.py` `_apply_status_formatting` |
+| `TypeError: … meta …` / `Cannot read properties of undefined (reading 'sheets')` during formatting | Same path as above; old code lacked HTTP/JSON guards | Confirm `connected-tutoring` pulled latest `main`; if still after pull, escalate with full Warning line |
+| `pandoc: not found` / receipt PDF / welcome HTML→PDF | Container missing pandoc | `ncl groups config add-package --apt pandoc` for Silas group + rebuild (do not invent other packages) |
+| Chromium / `No usable sandbox` / PDF render fail | Browser sandbox under Docker | Code should pass `--no-sandbox` in `orders-mvp/orders_mvp/receipt_pdf.py`; if missing on pulled HEAD, recommend that patch |
+| Missing `QUO_API_KEY` / Quo SMS fail | Host secret | Ensure `~/.config/nanoclaw/credentials/services/quo.api_key` mounted into env for the wrapper |
+| `ESIGNATURES` / eSignatures auth | Host secret | `esignatures-cognitive` (CTCI) under credentials/services |
+| `TEACHWORKS` / 401 from TW | Host secret or stale key | `teachworks.api_key` (+ web email/password if web path) |
+| `GA_ODYSSEY_USERNAME` / Odyssey login | Repo `.env` | `~/repos/connected-tutoring/.env` on host must have Odyssey creds |
+| `invalid_grant` / 401 Google / sheets fetch unauthorized | OAuth token | Re-auth / refresh `shadow-google` host token; do not paste tokens into Slack |
+| flock / “another sync” / long overlap | Concurrent runners | Wait for next schedule slot; if stuck, ask Cian before killing processes |
+| Welcome send fail for one student | Per-student email/SMS/PDF | Include student name + error; do **not** re-send all welcomes |
+| Step `error` + non-optional | Hard pipeline failure | Stop after recommend; do not invent sheet/Odyssey state |
+
+### #ai-bot error post shape
+
+Keep it short:
+
+```
+orders-mvp: degraded — build_roster (cosmetic)
+• Warning: status formatting not applied (Roster meta fetch failed HTTP 502: …)
+• Impact: Roster rows OK; colors/notes may be stale
+• Recommend: no action if one-off; if repeats, check Google/OneCLI proxy / pull latest build_roster harden
+```
 
 ## Host secrets (christina@cleo-lc)
 
