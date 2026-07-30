@@ -43,8 +43,8 @@ Receipt PDFs need **pandoc** + **chromium** in the Silas container (`ncl groups 
 
 1. `git pull --ff-only` on `/workspace/extra/repos/connected-tutoring`
 2. Exports Google CLI env (`CT_SHEETS_CT`, `CT_DRIVE_CT`, `CT_SEND_EMAIL`, `CT_GOOGLE_REGISTRY=shadow-google`, …)
-3. Loads host credential files (`quo.api_key` required, `esignatures-cognitive` / CTCI account, TeachWorks)
-4. Requires repo `.env` with `GA_ODYSSEY_USERNAME` / `GA_ODYSSEY_PASSWORD`
+3. Loads host credential files (`quo.api_key` required, `esignatures-cognitive` / CTCI account, TeachWorks, per-platform `odyssey.*`)
+4. Requires at least one Odyssey platform credential pair under `credentials/services/` (e.g. `odyssey.ga.username` + `odyssey.ga.password`)
 5. Runs `python3 sync_all.py` (welcome ON)
 
 ## After run
@@ -85,7 +85,7 @@ On `status: "degraded"` / `"failed"`, or a hard traceback that aborted the run:
 | Missing `QUO_API_KEY` / Quo SMS fail | Host secret | Ensure `~/.config/nanoclaw/credentials/services/quo.api_key` mounted into env for the wrapper |
 | `ESIGNATURES` / eSignatures auth | Host secret | `esignatures-cognitive` (CTCI) under credentials/services |
 | `TEACHWORKS` / 401 from TW | Host secret or stale key | `teachworks.api_key` (+ web email/password if web path) |
-| `GA_ODYSSEY_USERNAME` / Odyssey login | Repo `.env` | `~/repos/connected-tutoring/.env` on host must have Odyssey creds |
+| Odyssey login fail / missing platform creds | Host secret | Add `odyssey.<id>.username` + `odyssey.<id>.password` under `credentials/services/` (no SSO; each state different password). Legacy TX/UT use `admin@conscioustutoring.com` until hello@ accounts are approved. |
 | `invalid_grant` / 401 Google / sheets fetch unauthorized | OAuth token | Re-auth / refresh `shadow-google` host token; do not paste tokens into Slack |
 | flock / “another sync” / long overlap | Concurrent runners | Wait for next schedule slot; if stuck, ask Cian before killing processes |
 | Welcome send fail for one student | Per-student email/SMS/PDF | Include student name + error; do **not** re-send all welcomes |
@@ -111,7 +111,8 @@ orders-mvp: degraded — build_roster (cosmetic)
 | `esignatures-cognitive` (CTCI shared account) | `ESIGNATURES_API_TOKEN` |
 | `teachworks.api_key` | `TEACHWORKS_API_KEY` |
 | `teachworks.web_email` / `teachworks.web_password` | TW web login |
-| Repo `~/repos/connected-tutoring/.env` | `GA_ODYSSEY_*` |
+| `odyssey.ga.username` / `odyssey.ga.password` | `GA_ODYSSEY_*` |
+| `odyssey.ga_new.*` / `odyssey.ut.*` / `odyssey.tx.*` / `odyssey.wy.*` / `odyssey.mo.*` / `odyssey.la.*` | Matching `*_ODYSSEY_*` env pairs |
 
 ## Scheduled task
 

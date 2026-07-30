@@ -57,11 +57,6 @@ if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   fi
 fi
 
-if [[ ! -f "$REPO/.env" ]]; then
-  echo "ERROR: missing $REPO/.env (need GA_ODYSSEY_USERNAME / GA_ODYSSEY_PASSWORD)" >&2
-  exit 4
-fi
-
 export CT_SHEETS_CT="${CT_SHEETS_CT:-${GW_BIN}/sheets-ct.mjs}"
 export CT_DRIVE_CT="${CT_DRIVE_CT:-${GW_BIN}/drive-ct.mjs}"
 export CT_SEND_EMAIL="${CT_SEND_EMAIL:-${GW_BIN}/send-email.mjs}"
@@ -77,6 +72,37 @@ fi
 export_cred TEACHWORKS_API_KEY teachworks.api_key
 export_cred TEACHWORKS_WEB_EMAIL teachworks.web_email
 export_cred TEACHWORKS_WEB_PASSWORD teachworks.web_password
+
+# Odyssey: per-platform host files (no SSO). Same names as laptop secrets skill.
+export_cred GA_ODYSSEY_USERNAME odyssey.ga.username
+export_cred GA_ODYSSEY_PASSWORD odyssey.ga.password
+export_cred GA_NEW_ODYSSEY_USERNAME odyssey.ga_new.username
+export_cred GA_NEW_ODYSSEY_PASSWORD odyssey.ga_new.password
+export_cred UT_ODYSSEY_USERNAME odyssey.ut.username
+export_cred UT_ODYSSEY_PASSWORD odyssey.ut.password
+export_cred TX_ODYSSEY_USERNAME odyssey.tx.username
+export_cred TX_ODYSSEY_PASSWORD odyssey.tx.password
+export_cred WY_ODYSSEY_USERNAME odyssey.wy.username
+export_cred WY_ODYSSEY_PASSWORD odyssey.wy.password
+export_cred MO_ODYSSEY_USERNAME odyssey.mo.username
+export_cred MO_ODYSSEY_PASSWORD odyssey.mo.password
+export_cred LA_ODYSSEY_USERNAME odyssey.la.username
+export_cred LA_ODYSSEY_PASSWORD odyssey.la.password
+
+odyssey_pairs=0
+for prefix in GA GA_NEW UT TX WY MO LA; do
+  u_var="${prefix}_ODYSSEY_USERNAME"
+  p_var="${prefix}_ODYSSEY_PASSWORD"
+  if [[ -n "${!u_var:-}" && -n "${!p_var:-}" ]]; then
+    odyssey_pairs=$((odyssey_pairs + 1))
+  fi
+done
+if [[ "$odyssey_pairs" -eq 0 ]]; then
+  echo "ERROR: no Odyssey platform credentials found under credentials/services/odyssey.*" >&2
+  echo "Expected pairs like odyssey.ga.username + odyssey.ga.password (host-owned static files)." >&2
+  exit 4
+fi
+echo "==> Odyssey platforms with credentials: $odyssey_pairs"
 
 for cli in "$CT_SHEETS_CT" "$CT_DRIVE_CT" "$CT_SEND_EMAIL"; do
   if [[ ! -f "$cli" ]]; then
