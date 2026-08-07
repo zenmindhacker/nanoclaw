@@ -10,7 +10,7 @@ import { execFileSync } from "child_process";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const CATEGORY_META = {
-  all: { ids: [], label: "All", group: "movies", useWhen: "Broad search when category is unknown" },
+  all: { ids: [], label: "All", group: "movies", useWhen: "Broad search when category is unknown — use this for documentaries, or when a title may not be in movX265" },
   movX265: { ids: [48], label: "Movies x265/HEVC", group: "movies", useWhen: "Single films — efficient 1080p encodes (household default for one-offs)" },
   movHD: { ids: [11], label: "Movies HD x264", group: "movies", useWhen: "Single films, remuxes, HDR, or when x265 search is thin" },
   movPACKS: { ids: [13], label: "Movie Packs", group: "movies", useWhen: "Collection/boxset/franchise packs — REQUIRED for pack requests" },
@@ -22,6 +22,7 @@ const CATEGORY_META = {
   movMP4: { ids: [21], label: "Movies MP4", group: "movies", useWhen: "MP4 container releases" },
   movNonEnglish: { ids: [22], label: "Movies Non-English", group: "movies", useWhen: "Foreign-language films" },
   movXVID: { ids: [1], label: "Movies XviD", group: "movies", useWhen: "Legacy XviD" },
+  docs: { ids: [30], label: "Documentaries", group: "movies", useWhen: "Documentaries (The Great Hack, etc.) — NOT in movX265; use docs or all" },
   tvX265: { ids: [34], label: "TV x265", group: "tv", useWhen: "TV episodes x265" },
   tvHDx264: { ids: [7], label: "TV HD x264", group: "tv", useWhen: "TV episodes x264" },
   tvPACKS: { ids: [14], label: "TV Packs", group: "tv", useWhen: "Full season / series packs" },
@@ -116,7 +117,12 @@ export function parseReleaseName(name) {
 }
 
 function buildJsonUrl(cfg, { categories = [48], query = "", free = false, sort = "" }) {
-  const parts = [...categories, "1", `q=${encodeURIComponent(query)}`];
+  // Unfiltered search (category "all"): t.json?q=... — do NOT append a bare "1",
+  // which TorrentDay treats as category 1 (movXVID) and silently drops docs/etc.
+  const parts =
+    categories.length > 0
+      ? [...categories, "1", `q=${encodeURIComponent(query)}`]
+      : [`q=${encodeURIComponent(query)}`];
   if (free) parts.push("free=on");
   if (sort) parts.push(`o=${sort}`);
   return `${cfg.baseUrl}/t.json?${parts.join(";")}`;
@@ -274,8 +280,8 @@ function usage() {
   console.log(`Usage: torrentday.mjs <command> [options]
 
 Commands:
-  search <query> [--category movX265] [--json] [--limit N]
-  search-imdb <tt1234567> [--category movX265] [--json]
+  search <query> [--category movX265|docs|all] [--json] [--limit N]
+  search-imdb <tt1234567> [--category movX265|docs|all] [--json]
   download <torrent-id> [-o path.torrent]
   parse "<release name>"
   health [--json]

@@ -23,6 +23,8 @@ Private tracker search and download for the household TorrentDay account.
 torrentday.sh categories [--json]
 torrentday.sh search "Goodfellas" --category movX265 [--json] [--limit 10]
 torrentday.sh search "star trek" --category movPACKS [--json]
+torrentday.sh search "The Great Hack" --category docs [--json]
+torrentday.sh search "The Great Hack" --category all [--json]   # when category is unknown
 torrentday.sh search-imdb tt0099685 --category movX265
 torrentday.sh download <torrent-id> -o /tmp/movie.torrent
 torrentday.sh parse "Goodfellas.1990.1080p.x265-LAMA"
@@ -38,15 +40,18 @@ Run `torrentday.sh categories --json` for the full list. Key movie categories:
 
 | Name | ID | Use when |
 |------|-----|----------|
-| `movX265` | 48 | Single films, x265/HEVC |
+| `movX265` | 48 | Single films, x265/HEVC (**default** — misses docs) |
 | `movHD` | 11 | Single films x264, remuxes |
 | **`movPACKS`** | **13** | **Collection/boxset/franchise packs** |
 | `mov4k` | 96 | 4K/UHD |
-| `all` | — | Broad search |
+| **`docs`** | **30** | **Documentaries** (not in movX265) |
+| `all` | — | Unfiltered search — use when title may be a doc or category is unknown |
 
-Comma-separated: `--category movX265,movHD`
+Comma-separated: `--category movX265,movHD,docs`
 
-Browse/search URLs use `t?<id>=1&q=...&cata=yes` (packs: `t?13=1&q=...`).
+**Gotcha:** Default `--category movX265` only hits Movies x265. Documentaries live in category 30 (`docs`). If a title looks like a documentary (or movX265 returns nothing), retry with `--category docs` or `--category all` before telling the user it isn't on TorrentDay.
+
+Browse/search URLs use `t?<id>=1&q=...&cata=yes` (packs: `t?13=1&q=...`; docs: `t?30=1&q=...`).
 
 ## Auth recovery
 
