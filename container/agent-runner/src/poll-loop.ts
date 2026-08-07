@@ -494,7 +494,8 @@ export async function processQuery(
             // <message> envelope: deliver the notice instead of dropping it as
             // scratchpad, and skip the re-wrap nudge — it would just re-hammer
             // the failing gateway turn after turn.
-            deliverErrorResult(event.text, routing);
+            log('Error result with no <message> envelope — delivering to channel');
+            deliverBareResult(event.text, routing);
             notifyExchangeComplete(onExchangeComplete, {
               prompt: archivePrompts[0] ?? initialPrompt,
               result: event.text,
@@ -504,11 +505,25 @@ export async function processQuery(
             archivePrompts.shift();
           } else {
             const willRetryWrapping = hasUnwrapped && !unwrappedNudged;
+            // One nudge already fired and the model still returned bare text —
+            // deliver to the inbound channel rather than silently dropping.
+            // Same path as deliverErrorResult; keeps chat usable when OpenCode
+            // ignores the <message to="..."> contract.
+            const willFallbackDeliver = hasUnwrapped && unwrappedNudged;
+            if (willFallbackDeliver) {
+              const fallbackText = stripInternalTags(event.text);
+              if (fallbackText) {
+                log(
+                  'Unwrapped output persisted after wrap-retry nudge — delivering bare text to inbound channel',
+                );
+                deliverBareResult(fallbackText, routing);
+              }
+            }
             notifyExchangeComplete(onExchangeComplete, {
               prompt: archivePrompts[0] ?? initialPrompt,
               result: event.text,
               continuation: queryContinuation ?? initialContinuation,
-              status: hasUnwrapped ? 'undelivered' : 'completed',
+              status: willFallbackDeliver ? 'completed' : hasUnwrapped ? 'undelivered' : 'completed',
             });
             if (willRetryWrapping) {
               unwrappedNudged = true;
@@ -606,13 +621,11 @@ function handleEvent(event: ProviderEvent, routing: RoutingContext): void {
 
 /**
  * Deliver a turn's text straight to the channel the batch arrived on. Used when
- * a turn ends in a provider error (e.g. a non-retryable 403 billing_error) with
- * no <message> envelope: the notice would otherwise be dropped as scratchpad.
- * This is the same user-facing write the outer catch block does, minus the
- * `Error:` prefix — the provider's text is already a user-facing message.
+ * a turn ends with no usable <message> envelope — either a provider error
+ * (e.g. non-retryable 403 billing_error) or a wrap-retry that still came back
+ * as bare text. Without this the notice/answer is dropped as scratchpad.
  */
-function deliverErrorResult(text: string, routing: RoutingContext): void {
-  log('Error result with no <message> envelope — delivering to channel');
+function deliverBareResult(text: string, routing: RoutingContext): void {
   writeMessageOut({
     id: generateId(),
     in_reply_to: routing.inReplyTo,

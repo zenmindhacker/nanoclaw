@@ -427,7 +427,7 @@ describe('error result with no <message> envelope', () => {
     expect(pushes).toHaveLength(0);
   });
 
-  it('still nudges (and does not deliver) a normal unwrapped result', async () => {
+  it('still nudges (and does not deliver) a normal unwrapped result on first try', async () => {
     const { query, pushes } = makeResultQuery({ type: 'result', text: 'bare text, no envelope' });
 
     await processQuery(query, ERR_ROUTING, ['m1'], 'claude', undefined, 'prompt', undefined);
@@ -436,7 +436,83 @@ describe('error result with no <message> envelope', () => {
     expect(pushes).toHaveLength(1);
     expect(pushes[0]).toContain('was not delivered');
   });
+
+  it('delivers bare text to the inbound channel after a failed wrap-retry nudge', async () => {
+    const { query, pushes } = makePushAwareQuery(['bare text first try', 'bare text after nudge']);
+
+    await processQuery(query, ERR_ROUTING, ['m1'], 'claude', undefined, 'prompt', undefined);
+
+    expect(pushes).toHaveLength(1);
+    expect(pushes[0]).toContain('was not delivered');
+    const out = getUndeliveredMessages();
+    expect(out).toHaveLength(1);
+    expect(JSON.parse(out[0].content).text).toBe('bare text after nudge');
+    expect(out[0].platform_id).toBe('chan-1');
+    expect(out[0].channel_type).toBe('discord');
+  });
+
+  it('strips <internal> tags before falling back to bare delivery', async () => {
+    const { query } = makePushAwareQuery([
+      '<internal>thinking</internal>should not deliver yet',
+      '<internal>still thinking</internal>final answer for the user',
+    ]);
+
+    await processQuery(query, ERR_ROUTING, ['m1'], 'claude', undefined, 'prompt', undefined);
+
+    const out = getUndeliveredMessages();
+    expect(out).toHaveLength(1);
+    expect(JSON.parse(out[0].content).text).toBe('final answer for the user');
+  });
 });
+
+/**
+ * Yields one result per entry in `texts`. The first result is immediate; each
+ * subsequent result waits for a `query.push()` (the wrap-retry nudge), then
+ * ends the stream so processQuery can return.
+ */
+function makePushAwareQuery(texts: string[]): { query: AgentQuery; pushes: string[] } {
+  const pushes: string[] = [];
+  let waiting: (() => void) | null = null;
+  let pendingPushes = 0;
+  let ended = false;
+
+  async function* events(): AsyncGenerator<ProviderEvent> {
+    yield { type: 'init', continuation: 'sess-1' };
+    for (let i = 0; i < texts.length; i++) {
+      if (i > 0) {
+        while (pendingPushes === 0 && !ended) {
+          await new Promise<void>((resolve) => {
+            waiting = resolve;
+          });
+          waiting = null;
+        }
+        if (ended && pendingPushes === 0) break;
+        pendingPushes--;
+      }
+      yield { type: 'result', text: texts[i] };
+    }
+  }
+
+  return {
+    pushes,
+    query: {
+      push: (m: string) => {
+        pushes.push(m);
+        pendingPushes++;
+        waiting?.();
+      },
+      end: () => {
+        ended = true;
+        waiting?.();
+      },
+      events: events(),
+      abort: () => {
+        ended = true;
+        waiting?.();
+      },
+    },
+  };
+}
 
 describe('duplicate outbound suppression', () => {
   it('skips a final <message> block when send_message already sent the same text', async () => {
